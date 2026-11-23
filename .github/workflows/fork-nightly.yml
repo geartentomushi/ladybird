@@ -170,6 +170,8 @@ jobs:
     runs-on: ubuntu-24.04
     container: *ci_container
     timeout-minutes: 60
+    outputs:
+      harness-exit: ${{ steps.harness.outputs.exit-code }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -180,22 +182,35 @@ jobs:
           name: nightly-runtime
 
       - name: Run top-100 sites harness
+        id: harness
         shell: bash
         run: |
           tar -xzf nightly-runtime.tar.gz
-          python3 -m venv "$RUNNER_TEMP/sites-venv"
-          source "$RUNNER_TEMP/sites-venv/bin/activate"
-          python -m pip install -r Meta/SiteSmoke/requirements.txt
+          python_bin=$(python3 Meta/Utils/python_environment.py --print-bin)
+          export PATH="$python_bin:$PATH"
           mkdir site-results
+          output="$PWD/site-results/sites.json"
+          status=0
           xvfb-run -a bash Meta/run-top-sites-smoke.sh \
-            --ladybird "$PWD/Install/bin/Ladybird" --output "$PWD/site-results/sites.json"
+            --ladybird "$PWD/Install/bin/Ladybird" --output "$output" || status=$?
+          echo "exit-code=$status" >> "$GITHUB_OUTPUT"
+          if (( status == 2 )); then
+            echo "::error::Top-100 sites harness infrastructure failed (exit 2); see the WebDriver logs."
+          fi
+          if (( status != 0 )); then
+            exit "$status"
+          fi
+          test -s "$output"
+          test -s "$output.details/results.json"
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
           name: sites
-          path: site-results/
-          if-no-files-found: error
+          path: |
+            site-results/sites.json
+            site-results/sites.json.details/
+          if-no-files-found: warn
           retention-days: 7
 
   summary:
@@ -265,7 +280,7 @@ jobs:
         env:
           WPT_RESULT: ${{ needs.wpt.result }}
           TEST262_RESULT: ${{ needs.test262.result }}
-          SITES_RESULT: ${{ needs.sites.result }}
+          SITES_RESULT: ${{ needs.sites.outputs.harness-exit == '2' && 'infrastructure-failure' || needs.sites.result }}
           BASELINE_RUN: ${{ steps.baseline.outputs.run-id }}
           BROWSER_REVISION: ${{ github.sha }}
           WPT_REVISION: ${{ needs.build.outputs.wpt-revision }}
