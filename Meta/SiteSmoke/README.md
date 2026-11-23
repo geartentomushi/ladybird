@@ -59,8 +59,13 @@ The harness keeps output directories and files private to the owner (0700 and 06
 `compare` reports per-site load-status changes and, for successful loads,
 changes in console-error counts and whether the body is nonempty. If the body
 remains nonempty but loses at least five elements and at least 30% of its
-baseline count, the comparison and gate report the drop without blocking. It exits 1
-if any reported change is a regression. Use `--json` to get the same
+baseline count, the gate reruns that site up to twice using the candidate binary.
+The drop is confirmed only if both reruns still show it, and does not block the
+gate. A recovered count clears the finding; a failed or missing measurement is
+inconclusive unless a later rerun clears it. For standalone comparisons, pass
+`--webdriver /path/to/candidate/WebDriver --rerun-output /path/to/new-directory`
+to run the same checks. An offline comparison labels suspected drops pending.
+The comparison exits 1 if any reported change is a regression. Use `--json` to get the same
 differences as JSON. Timings are saved but not graded because
 network latency and server behavior vary. Inspect screenshots and repeat a run
 before attributing changes to the engine. Commit only the baseline JSON, not the

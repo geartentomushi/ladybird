@@ -184,7 +184,41 @@ class SiteSmokeTests(unittest.TestCase):
                 ("exact-count", "body_element_count", "changed", 10, 5),
             ],
         )
+        self.assertTrue(all(row["confirmation"] == "pending" for row in changes))
         self.assertEqual(blocking, [])
+
+    def test_only_persistent_body_count_drops_are_confirmed_by_reruns(self):
+        names = ("persistent", "cleared", "inconclusive", "unchanged")
+        urls = [f"https://{name}.example/" for name in names]
+        baseline = run(*(site(url, elements=22) for url in urls))
+        current = run(
+            *(dict(site(url, elements=14 if rank < 4 else 22), rank=rank) for rank, url in enumerate(urls, 1))
+        )
+        settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
+        baseline["settings"].update(settings)
+        current["settings"].update(settings)
+        changes = smoke.compare(baseline, current)
+        attempts = [
+            site(urls[0], elements=14),
+            site(urls[1], elements=22),
+            site(urls[2], status="timeout", elements=None),
+            site(urls[0], elements=15),
+            site(urls[2], elements=14),
+        ]
+        capture = Mock(side_effect=attempts)
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(smoke.confirm_body_drops.__globals__, {"capture": capture}),
+        ):
+            smoke.confirm_body_drops(changes, current, Path("WebDriver"), Path(temporary) / "reruns")
+        self.assertEqual(
+            [(row["url"], row["confirmation"]) for row in changes],
+            list(zip(urls, ("confirmed", "cleared-on-rerun", "inconclusive"))),
+        )
+        self.assertEqual(
+            [call.args[2] for call in capture.call_args_list],
+            [(1, urls[0]), (2, urls[1]), (3, urls[2]), (1, urls[0]), (3, urls[2])],
+        )
 
     def test_compare_cli_exits_nonzero_only_when_changes_include_regressions(self):
         with tempfile.TemporaryDirectory() as temporary:
