@@ -374,6 +374,9 @@ def compare(baseline, current):
     for site in current["sites"]:
         url = site["url"]
         before = old_sites.pop(url, None)
+        if site["status"] == "harness-error":
+            changes.append({"url": url, "metric": "harness_error", "direction": "regression"})
+            continue
         if before is None:
             changes.append({"url": url, "metric": "coverage", "direction": "added"})
             continue
@@ -603,7 +606,14 @@ def gate_regressions(baseline, current, console_threshold, *, changes=None):
         if (
             change["direction"] == "regression"
             and change["metric"]
-            in ("status", "nonempty_body", "missing_screenshot", "missing_body_element_count", "total_console_errors")
+            in (
+                "status",
+                "harness_error",
+                "nonempty_body",
+                "missing_screenshot",
+                "missing_body_element_count",
+                "total_console_errors",
+            )
         )
         or change["direction"] in ("added", "removed")
     ]
@@ -615,7 +625,7 @@ def gate_evidence_findings(baseline, current, console_threshold):
     old_sites = {row["url"]: row for row in baseline["sites"]}
     for site in current["sites"]:
         before = old_sites.get(site["url"])
-        if before is None:
+        if before is None or site["status"] == "harness-error":
             continue
         for metric in ("screenshot", "body_element_count"):
             if before[metric] is not None and site[metric] is None:

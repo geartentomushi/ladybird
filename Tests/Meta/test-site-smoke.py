@@ -295,6 +295,23 @@ class SiteSmokeTests(unittest.TestCase):
                     [(f"missing_{metric}", "regression")],
                 )
 
+    def test_candidate_harness_error_blocks_once_without_missing_evidence_findings(self):
+        url = "https://example.com/"
+        baseline = run(site(url))
+        current = run(dict(site(url, "harness-error", elements=None), screenshot=None))
+        expected = [{"url": url, "metric": "harness_error", "direction": "regression"}]
+        self.assertEqual(smoke.gate_regressions(baseline, current, 5), (expected, expected))
+        with tempfile.TemporaryDirectory() as temporary:
+            before, after = (Path(temporary) / name for name in ("old.json", "new.json"))
+            before.write_text(json.dumps(baseline))
+            after.write_text(json.dumps(current))
+            with (
+                patch.object(sys, "argv", ["site-smoke.py", "compare", str(before), str(after), "--json"]),
+                contextlib.redirect_stdout(io.StringIO()) as output,
+            ):
+                self.assertEqual(smoke.main(), 1)
+            self.assertEqual(json.loads(output.getvalue()), expected)
+
     def test_gate_blocks_partial_loads_new_crashes_and_large_console_increases(self):
         baseline = run(
             site("crashed", "load-error"),
