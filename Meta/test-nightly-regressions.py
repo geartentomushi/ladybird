@@ -66,6 +66,22 @@ class NightlyRegressionsTest(unittest.TestCase):
         self.assertEqual(json.loads(regression["test"]), ["", "/example.html", "assertion"])
         self.assertEqual(regression["after"], "FAIL")
 
+    def test_report_names_are_literal_markdown_code(self):
+        name = "``[link](https://example.com) <b>bold</b>\n\n# Heading`"
+        self.write_reports()
+        self.write_json("test262.json", {"results": {name: "PASSED"}})
+        baseline = self.root / "baseline"
+        summarize(self.root / "none", self.reports, baseline, "", self.results, self.revisions)
+        self.write_json("test262.json", {"results": {name: "FAILED"}})
+        output = self.root / "output"
+        summary, hard, soft, errors = summarize(baseline, self.reports, output, "12", self.results, self.revisions)
+        self.assertEqual((hard, soft, errors), (1, 0, 0))
+        self.assertIn(
+            "- ``` ``[link](https://example.com) <b>bold</b>  # Heading` ```: PASSED → FAILED", summary.splitlines()
+        )
+        data = json.loads((output / "regressions.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["suites"]["test262"]["regressions"][0]["test"], name)
+
     def test_sites_use_committed_baseline_only_when_previous_statuses_are_missing(self):
         self.write_reports(sites="FAIL")
         site_baseline = self.root / "site-baseline.json"

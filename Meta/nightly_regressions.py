@@ -6,6 +6,7 @@ import argparse
 import html
 import json
 import os
+import re
 
 from pathlib import Path
 from typing import Optional
@@ -60,6 +61,12 @@ def regressions(suite: str, previous: dict[str, str], current: dict[str, str]) -
         for test, status in sorted(current.items())
         if previous.get(test) in passing and status not in passing and status not in SKIP_STATUSES
     ]
+
+
+def markdown_code_span(text: str) -> str:
+    text = " ".join(text.splitlines())
+    fence = "`" * (max(map(len, re.findall(r"`+", text)), default=0) + 1)
+    return f"{fence} {text} {fence}"
 
 
 def summarize(
@@ -140,8 +147,7 @@ def summarize(
         lines.extend([f"{len(current):,} results; **{len(new):,} {label}**.", ""])
         for entry in new[:25]:
             lines.append(
-                f"- <code>{html.escape(entry['test'])}</code>: "
-                f"{html.escape(entry['before'])} → {html.escape(entry['after'])}"
+                f"- {markdown_code_span(entry['test'])}: {html.escape(entry['before'])} → {html.escape(entry['after'])}"
             )
         if len(new) > 25:
             lines.append("- See regressions.json for the complete list.")
