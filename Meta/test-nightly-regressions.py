@@ -66,6 +66,24 @@ class NightlyRegressionsTest(unittest.TestCase):
         self.assertEqual(json.loads(regression["test"]), ["", "/example.html", "assertion"])
         self.assertEqual(regression["after"], "FAIL")
 
+    def test_sites_use_committed_baseline_only_when_previous_statuses_are_missing(self):
+        self.write_reports(sites="FAIL")
+        site_baseline = self.root / "site-baseline.json"
+        site_baseline.write_text(
+            json.dumps({"sites": [{"url": "https://example.com/", "status": "success"}]}), encoding="utf-8"
+        )
+        baseline = self.root / "baseline"
+        summary, hard, soft, errors = summarize(
+            self.root / "none", self.reports, baseline, "", self.results, self.revisions, site_baseline
+        )
+        self.assertEqual((hard, soft, errors), (0, 1, 0))
+        self.assertIn("committed top-sites baseline", summary)
+        summary, hard, soft, errors = summarize(
+            baseline, self.reports, self.root / "output", "12", self.results, self.revisions, site_baseline
+        )
+        self.assertEqual((hard, soft, errors), (0, 0, 0))
+        self.assertNotIn("committed top-sites baseline", summary)
+
     def test_suite_revision_change_labels_only_that_suites_regressions(self):
         self.write_reports()
         baseline = self.root / "baseline"

@@ -288,6 +288,7 @@ jobs:
         run: |
           python3 Meta/test-nightly-regressions.py
           python3 Meta/nightly_regressions.py --baseline baseline --reports reports --output summary \
+            --site-baseline Meta/SiteSmoke/baseline.json \
             --wpt "$WPT_RESULT" --test262 "$TEST262_RESULT" --sites "$SITES_RESULT" --baseline-run "$BASELINE_RUN" \
             --browser-revision "$BROWSER_REVISION" --wpt-revision "$WPT_REVISION" --test262-revision "$TEST262_REVISION"
 

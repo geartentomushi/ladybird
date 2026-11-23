@@ -11,6 +11,13 @@ from pathlib import Path
 
 PASS_STATUSES = {"wpt": {"OK", "PASS"}, "test262": {"PASSED"}, "sites": {"PASS"}}
 SKIP_STATUSES = {"NOTRUN", "SKIP", "SKIPPED"}
+SITE_BASELINE_STATUSES = {
+    "success": "PASS",
+    "timeout": "FAIL",
+    "crash": "FAIL",
+    "load-error": "FAIL",
+    "harness-error": "SKIP",
+}
 
 
 def wpt_statuses(reports: Path) -> dict[str, str]:
@@ -55,7 +62,13 @@ def regressions(suite: str, previous: dict[str, str], current: dict[str, str]) -
 
 
 def summarize(
-    baseline: Path, reports: Path, output: Path, run_id: str, results: dict[str, str], revisions: dict[str, str]
+    baseline: Path,
+    reports: Path,
+    output: Path,
+    run_id: str,
+    results: dict[str, str],
+    revisions: dict[str, str],
+    site_baseline: Path | None = None,
 ) -> tuple[str, int, int, int]:
     output.mkdir(parents=True, exist_ok=True)
     previous_label = f"nightly run {run_id}" if run_id else "none (first retained run)"
@@ -92,6 +105,12 @@ def summarize(
             previous_path = baseline / f"{suite}-statuses.json"
             found_baseline = previous_path.is_file()
             previous = read_statuses(previous_path, key="") if found_baseline else {}
+            if suite == "sites" and not found_baseline and site_baseline and site_baseline.is_file():
+                rows = json.loads(site_baseline.read_text(encoding="utf-8"))["sites"]
+                previous = {row["url"]: SITE_BASELINE_STATUSES[row["status"]] for row in rows}
+                found_baseline = True
+                detail["baseline_source"] = "committed"
+                lines.extend(["Comparison baseline: committed top-sites baseline.", ""])
         except (OSError, ValueError, TypeError, KeyError) as error:
             errors += 1
             detail["result"] = "invalid-report"
@@ -151,6 +170,7 @@ def main() -> int:
     parser.add_argument("--reports", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--baseline-run", default="")
+    parser.add_argument("--site-baseline", type=Path)
     for suite in PASS_STATUSES:
         parser.add_argument(f"--{suite}", required=True)
     for name in ("browser", "wpt", "test262"):
@@ -164,6 +184,7 @@ def main() -> int:
         args.baseline_run,
         {suite: getattr(args, suite) for suite in PASS_STATUSES},
         {name: getattr(args, f"{name}_revision") for name in ("browser", "wpt", "test262")},
+        args.site_baseline,
     )
     if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary_path, "a", encoding="utf-8") as stream:
