@@ -1,0 +1,92 @@
+# Real-site smoke tests
+
+Build Ladybird with WebDriver, then run from the checkout root on Linux or macOS
+with Python 3.9+ and the `websockets` version pinned in `requirements.txt`.
+Use a new output directory outside the checkout for each run:
+
+```sh
+python3 Meta/SiteSmoke/site-smoke.py run \
+    --webdriver Build/release/bin/WebDriver --revision "$(git rev-parse HEAD)" \
+    --output "$HOME/ladybird-site-smoke"
+python3 Meta/SiteSmoke/site-smoke.py compare \
+    Meta/SiteSmoke/baseline.json "$HOME/ladybird-site-smoke/results.json"
+```
+
+The default targets are the bare HTTPS domains from Tranco list [8PW6V][tranco],
+dated 2026-11-22. The snapshot preserves the original order, including
+infrastructure domains that may not serve a public homepage. For a smaller run,
+repeat `--url https://example.com/` with the URLs you want. `--jobs`,
+`--timeout`, and `--settle` control concurrency, the navigation deadline and the
+wait after navigation, respectively. Use the same settings for comparisons.
+
+Each site gets a fresh temporary profile with CPU painting and a 1280×800
+viewport. `results.json` includes a summary and one row per target. Load time
+measures the BiDi navigation to the load event (or elapsed time to failure),
+not browser startup or screenshot capture. HTTP errors observed on the main
+navigation and failed navigations are `load-error`; driver startup and session
+setup failures are `harness-error`. The run exits nonzero for harness errors.
+Crashes are detected from browser crash reports, WebDriver crash messages, or
+driver exit during capture. Redirect URLs are recorded without queries or fragments.
+The tool attempts to save a numbered PNG and count elements under the document
+body even on unsuccessful loads when the page still responds.
+
+Console counts cover BiDi error-level events observed through screenshot capture,
+separated into not implemented, other JavaScript exceptions, and other console
+errors. Native engine diagnostics are not console events; inspect the numbered
+driver logs for those. A successful load or nonempty body does not prove the
+site is usable: a consent prompt, verification challenge or error page can also
+render content.
+
+`compare` reports per-site load-status changes and, for successful loads,
+changes in console-error counts and whether the body is nonempty. Use `--json`
+to get the same differences as JSON. Timings are saved but not graded because
+network latency and server behavior vary. Inspect screenshots and repeat a run
+before attributing changes to the engine. Commit only the baseline JSON, not the
+screenshots or logs.
+
+## Gate a batch of fixes
+
+On Linux, use the same build prerequisites as `Meta/ladybird.py`, then run:
+
+```sh
+python3 Meta/SiteSmoke/site-smoke.py gate --output "$HOME/ladybird-fix-gate"
+```
+
+The gate builds the Release browser and test targets, checks LibWeb Text, Layout
+and Ref and the configured LibJS CTest suite, then runs the pinned list with the
+baseline's settings. It writes `gate-summary.json` and stage logs in the output
+directory. Use `--baseline` to compare with a different complete Tranco baseline,
+or `--cc`, `--cxx`, `--build-jobs`, and `--test-jobs` to control the build and
+test environment. It runs standalone, not as a CI workflow.
+
+The gate exits nonzero on build or test failure, missing results, or a site
+regression: a new crash, a previously successful load that no longer succeeds,
+lost screenshot or DOM evidence, a previously nonempty body becoming empty,
+or a per-site rise of at least five console errors on an otherwise successful
+load (configurable with `--console-error-increase`). Smaller changes still appear
+in the report. These are objective load/render signals; the gate does not
+automatically recognize a visually broken page or a challenge page that returns
+HTTP 200. Review its screenshots and rerun transient internet failures.
+
+## Build-free interface for CI
+
+```sh
+Meta/run-top-sites-smoke.sh --ladybird "$PWD/Build/release/bin/Ladybird" \
+    --output "$HOME/site-smoke-results.json"
+```
+
+Both paths must be absolute; the built `WebDriver` must be next to `Ladybird`.
+The wrapper does not build, download dependencies, or use recorded pages. It
+needs Python 3.9+, the pinned `websockets` package, and outbound access to the
+live sites. Four sites run concurrently, with a 25-second navigation deadline
+and two-second settle time per site. Allow several minutes; widespread
+timeouts take longer.
+
+The output is `{"results":{"https://example.com/":"PASS"}}`. A successful load
+is `PASS`; a timeout, crash, or load error is `FAIL`; an isolated setup error
+is `SKIP`. Site failures do not change the exit status. Invalid inputs,
+incomplete output, or failure to set up any site exit nonzero. The full
+`results.json`, screenshots and logs go in the sibling `<output>.details/`
+directory; use a new output filename or an empty details directory for each run.
+
+[tranco]: https://tranco-list.eu/list/8PW6V
