@@ -19,11 +19,18 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
+from typing import TypedDict
 from unittest.mock import Mock
 from unittest.mock import patch
 
 smoke = SimpleNamespace(**runpy.run_path(str(Path(__file__).resolve().parents[2] / "Meta/SiteSmoke/site-smoke.py")))
 tranco = SimpleNamespace(**runpy.run_path(str(Path(smoke.__file__).with_name("filter-tranco.py"))))
+
+
+class SiteOverrides(TypedDict, total=False):
+    status: str
+    elements: Optional[int]
+    console_error: int
 
 
 def site(url, status="success", elements: Optional[int] = 1, **errors):
@@ -348,7 +355,15 @@ class SiteSmokeTests(unittest.TestCase):
         )
 
     def test_paired_reruns_confirm_or_clear_existing_regressions(self):
-        scenarios = (
+        def fixture_site(url: str, overrides: SiteOverrides):
+            return site(
+                url,
+                status=overrides.get("status", "success"),
+                elements=overrides.get("elements", 1),
+                console_error=overrides.get("console_error", 0),
+            )
+
+        scenarios: tuple[tuple[str, SiteOverrides, SiteOverrides, SiteOverrides, SiteOverrides, str, bool], ...] = (
             ("empty", {"elements": 0}, {}, {"elements": 0}, {"elements": 0}, "nonempty_body", True),
             ("transient-empty", {"elements": 0}, {}, {"elements": 0}, {}, "nonempty_body", False),
             ("baseline-empty", {"elements": 0}, {"elements": 0}, {"elements": 0}, {}, "nonempty_body", False),
@@ -421,12 +436,13 @@ class SiteSmokeTests(unittest.TestCase):
             with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
                 url = f"https://{name}.example/"
                 baseline = run(site(url))
-                current = run(dict(site(url, **initial), rank=1))
+                current = run(dict(fixture_site(url, initial), rank=1))
                 settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
                 baseline["settings"].update(settings)
                 current["settings"].update(settings)
                 changes, _ = smoke.gate_regressions(baseline, current, 5)
-                capture = Mock(side_effect=[site(url, **values) for values in (fresh_baseline, first, {}, second)])
+                reruns = (fresh_baseline, first, SiteOverrides(), second)
+                capture = Mock(side_effect=[fixture_site(url, values) for values in reruns])
                 drivers = (Path("baseline"), Path("candidate"))
                 with patch.dict(smoke.confirm_findings.__globals__, {"capture": capture}):
                     smoke.confirm_findings(changes, current, *drivers, Path(temporary) / "reruns")
