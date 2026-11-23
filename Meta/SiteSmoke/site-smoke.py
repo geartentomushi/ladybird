@@ -38,6 +38,7 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 COMMAND_TIMEOUT = 10
 VIEWPORT = {"width": 1280, "height": 800}
+BIDI_MAX_MESSAGE_SIZE = 8 * 1024 * 1024
 STATUSES = ("success", "timeout", "crash", "load-error", "harness-error")
 ERROR_CATEGORIES = ("not_implemented", "javascript_exception", "console_error")
 
@@ -213,7 +214,12 @@ def capture(executable, directory, site, timeout, settle):
         with launch_driver(executable, directory, log_path) as (process, profile):
             endpoint = open_session(webdriver_port(process, log_path))
             with connect(
-                endpoint, proxy=None, compression=None, open_timeout=COMMAND_TIMEOUT, close_timeout=1
+                endpoint,
+                proxy=None,
+                compression=None,
+                max_size=BIDI_MAX_MESSAGE_SIZE,
+                open_timeout=COMMAND_TIMEOUT,
+                close_timeout=1,
             ) as socket:
                 bidi = BiDi(socket)
                 context = bidi.command("browsingContext.getTree", {"maxDepth": 0})["contexts"][0]["context"]

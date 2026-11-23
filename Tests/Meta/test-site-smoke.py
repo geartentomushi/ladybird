@@ -13,6 +13,7 @@ import unittest
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Optional
+from unittest.mock import Mock
 from unittest.mock import patch
 
 smoke = SimpleNamespace(**runpy.run_path(str(Path(__file__).resolve().parents[2] / "Meta/SiteSmoke/site-smoke.py")))
@@ -284,17 +285,20 @@ class SiteSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary)
             driver = SimpleNamespace(poll=lambda: None)
+            connect = Mock(return_value=contextlib.nullcontext(None))
             with patch.dict(
                 smoke.capture.__globals__,
                 {
                     "launch_driver": lambda *_: contextlib.nullcontext((driver, path)),
                     "webdriver_port": lambda *_: 1234,
                     "open_session": lambda *_: "ws://localhost:1234",
-                    "connect": lambda *_, **__: contextlib.nullcontext(None),
+                    "connect": connect,
                     "BiDi": lambda _: bidi,
                 },
             ):
                 row = smoke.capture(path / "WebDriver", path, (1, "https://example.com/"), 5, 2)
+        viewport = smoke.VIEWPORT
+        self.assertGreater(connect.call_args.kwargs["max_size"], viewport["width"] * viewport["height"] * 4 * 4 / 3)
         self.assertEqual(row["crashed_process"], "Browser")
         self.assertEqual(smoke.ci_results([row]), {"results": {"https://example.com/": "FAIL"}})
 
