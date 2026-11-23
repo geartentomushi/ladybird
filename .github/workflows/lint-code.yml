@@ -7,8 +7,10 @@ on:
 
 jobs:
   lint:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    if: github.repository == 'LadybirdBrowser/ladybird' || github.repository == 'geartentomushi/ladybird'
+    permissions:
+      contents: read
     container:
       image: ghcr.io/ladybirdbrowser/ladybird-ci:2026.11.21
 
@@ -32,8 +34,8 @@ jobs:
   flap:
     permissions:
       contents: read
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    if: github.repository == 'LadybirdBrowser/ladybird' || github.repository == 'geartentomushi/ladybird'
     container:
       image: ghcr.io/ladybirdbrowser/ladybird-ci:2026.11.21
 

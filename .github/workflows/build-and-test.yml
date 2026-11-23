@@ -47,6 +47,14 @@ jobs:
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
 
+      - name: Limit disk and memory usage on the GitHub-hosted runner
+        if: github.repository == 'geartentomushi/ladybird'
+        shell: bash
+        run: |
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=4" >> "$GITHUB_ENV"
+          echo "VCPKG_MAX_CONCURRENCY=4" >> "$GITHUB_ENV"
+
       - name: Build
         uses: ./.github/actions/build
         with:
@@ -92,7 +100,7 @@ jobs:
         timeout-minutes: 5
         working-directory: ${{ github.workspace }}/Build/Tests/LibWeb/test-web
         run: |
-          ../../../bin/test-web --verify-style -j10 \
+          ../../../bin/test-web --verify-style -j${{ github.repository == 'geartentomushi/ladybird' && '4' || '10' }} \
             -f Text/input/css/style-engine/ \
             -f Text/input/css/style-invalidation/
 
