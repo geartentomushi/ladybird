@@ -23,6 +23,7 @@ from unittest.mock import Mock
 from unittest.mock import patch
 
 smoke = SimpleNamespace(**runpy.run_path(str(Path(__file__).resolve().parents[2] / "Meta/SiteSmoke/site-smoke.py")))
+tranco = SimpleNamespace(**runpy.run_path(str(Path(smoke.__file__).with_name("filter-tranco.py"))))
 
 
 def site(url, status="success", elements: Optional[int] = 1, **errors):
@@ -43,10 +44,32 @@ class SiteSmokeTests(unittest.TestCase):
     def test_pinned_snapshot_preserves_unique_ranks_and_targets(self):
         source, sites = smoke.targets(None)
         self.assertIn("8PW6V (2026-11-22)", source)
-        self.assertEqual([rank for rank, _ in sites], list(range(1, 101)))
+        self.assertEqual(len(sites), 100)
+        ranks = [rank for rank, _ in sites]
+        self.assertEqual(ranks, sorted(set(ranks)))
         self.assertEqual(len({url for _, url in sites}), 100)
         self.assertEqual(sites[0], (1, "https://google.com/"))
-        self.assertEqual(sites[-1], (100, "https://nginx.com/"))
+
+    def test_tranco_filter_requires_a_successful_html_response(self):
+        for returncode, response, expected in (
+            (0, "200\ttext/html; charset=utf-8", True),
+            (0, "204\t", False),
+            (0, "200\tapplication/json", False),
+            (0, "404\ttext/html", False),
+            (60, "000\t", False),
+        ):
+            with (
+                self.subTest(response=response, returncode=returncode),
+                patch.object(
+                    tranco.subprocess, "run", return_value=SimpleNamespace(returncode=returncode, stdout=response)
+                ),
+            ):
+                self.assertEqual(tranco.probe(("2", "example.com")), expected)
+
+    def test_tranco_filter_preserves_original_rank_numbers(self):
+        rows = [("1", "unreachable.example"), ("2", "first.example"), ("4", "second.example"), ("8", "later.example")]
+        with patch.dict(tranco.select_domains.__globals__, {"probe": lambda row: row != rows[0]}):
+            self.assertEqual(tranco.select_domains(iter(rows), count=2), rows[1:3])
 
     def test_console_errors_and_navigation_are_collected_while_waiting(self):
         messages = iter(
@@ -296,7 +319,8 @@ class SiteSmokeTests(unittest.TestCase):
             details = Path(command[command.index("--output") + 1])
             _, targets = smoke.targets(None)
             rows = [
-                {"rank": rank, **site(url, smoke.STATUSES[(rank - 1) % len(smoke.STATUSES)])} for rank, url in targets
+                {"rank": rank, **site(url, smoke.STATUSES[index % len(smoke.STATUSES)])}
+                for index, (rank, url) in enumerate(targets)
             ]
             (details / "results.json").write_text(json.dumps({"sites": rows}))
             return 1
@@ -311,7 +335,7 @@ class SiteSmokeTests(unittest.TestCase):
             results = json.loads(output.read_text())["results"]
             self.assertEqual(len(results), 100)
             self.assertEqual(results["https://google.com/"], "PASS")
-            self.assertEqual(results["https://nginx.com/"], "SKIP")
+            self.assertEqual(results[smoke.targets(None)[1][4][1]], "SKIP")
             self.assertTrue((directory / "ci.json.details" / "results.json").is_file())
 
             unrelated = directory / "unrelated.json"

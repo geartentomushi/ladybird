@@ -15,10 +15,19 @@ python3 Meta/SiteSmoke/site-smoke.py compare \
 On macOS, use `--webdriver Build/release/bin/Ladybird.app/Contents/MacOS/WebDriver`
 instead. The `Ladybird` executable is in the same bundle directory.
 
-The default targets are the bare HTTPS domains from Tranco list [8PW6V][tranco],
-dated 2026-11-22. The snapshot preserves the original order, including
-infrastructure domains that may not serve a public homepage. For a smaller run,
-repeat `--url https://example.com/` with the URLs you want. `--jobs`,
+The default targets are the first 100 browsable domains from Tranco list
+[8PW6V][tranco], dated 2026-11-22, in original rank order. The filter uses
+`curl` (not Ladybird) to fetch each HTTPS homepage with TLS verification and up
+to two retries for transfer failures. It follows redirects and keeps only final
+2xx responses with a `text/html` content type. Regenerate the list with:
+
+```sh
+curl --fail --location https://tranco-list.eu/download/8PW6V/1000000 -o /tmp/tranco-8PW6V.csv
+python3 Meta/SiteSmoke/filter-tranco.py /tmp/tranco-8PW6V.csv --output Meta/SiteSmoke/tranco-top-100.csv
+```
+
+Live DNS, TLS, and HTTP responses can change; use the committed list for
+comparisons. For a smaller run, repeat `--url https://example.com/` with the URLs you want. `--jobs`,
 `--timeout`, and `--settle` control concurrency, the navigation deadline and the
 wait after navigation, respectively. Use the same settings for comparisons.
 
