@@ -8,6 +8,7 @@ import json
 import os
 
 from pathlib import Path
+from typing import Optional
 
 PASS_STATUSES = {"wpt": {"OK", "PASS"}, "test262": {"PASSED"}, "sites": {"PASS"}}
 SKIP_STATUSES = {"NOTRUN", "SKIP", "SKIPPED"}
@@ -68,7 +69,7 @@ def summarize(
     run_id: str,
     results: dict[str, str],
     revisions: dict[str, str],
-    site_baseline: Path | None = None,
+    site_baseline: Optional[Path] = None,
 ) -> tuple[str, int, int, int]:
     output.mkdir(parents=True, exist_ok=True)
     previous_label = f"nightly run {run_id}" if run_id else "none (first retained run)"
