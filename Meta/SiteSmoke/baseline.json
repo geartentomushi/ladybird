@@ -1,0 +1,1535 @@
+{
+  "schema_version": 1,
+  "revision": "c7d764826363ca1f7c6766a607707364050ae691",
+  "started_at": "2026-11-23T20:25:27+00:00",
+  "site_list": "Tranco list 8PW6V (2026-11-22): https://tranco-list.eu/list/8PW6V",
+  "settings": {
+    "jobs": 4,
+    "navigation_timeout_s": 25,
+    "settle_s": 2,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "sites": [
+    {
+      "rank": 1,
+      "url": "https://google.com/",
+      "status": "success",
+      "load_ms": 828,
+      "final_url": "https://www.google.com/",
+      "http_status": 200,
+      "body_element_count": 473,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "001.png"
+    },
+    {
+      "rank": 2,
+      "url": "https://cloudflare.com/",
+      "status": "success",
+      "load_ms": 1603,
+      "final_url": "https://www.cloudflare.com/",
+      "http_status": 200,
+      "body_element_count": 2925,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "002.png"
+    },
+    {
+      "rank": 3,
+      "url": "https://amazonaws.com/",
+      "status": "success",
+      "load_ms": 1447,
+      "final_url": "https://aws.amazon.com/",
+      "http_status": 200,
+      "body_element_count": 2429,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 3
+      },
+      "screenshot": "003.png"
+    },
+    {
+      "rank": 4,
+      "url": "https://facebook.com/",
+      "status": "success",
+      "load_ms": 960,
+      "final_url": "https://www.facebook.com/",
+      "http_status": 200,
+      "body_element_count": 328,
+      "console_errors": {
+        "not_implemented": 1,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "004.png"
+    },
+    {
+      "rank": 5,
+      "url": "https://fbcdn.net/",
+      "status": "success",
+      "load_ms": 928,
+      "final_url": "https://www.facebook.com/",
+      "http_status": 200,
+      "body_element_count": 328,
+      "console_errors": {
+        "not_implemented": 1,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "005.png"
+    },
+    {
+      "rank": 8,
+      "url": "https://microsoft.com/",
+      "status": "success",
+      "load_ms": 7440,
+      "final_url": "https://www.microsoft.com/en-us",
+      "http_status": 200,
+      "body_element_count": 1225,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 4,
+        "console_error": 1
+      },
+      "screenshot": "008.png"
+    },
+    {
+      "rank": 10,
+      "url": "https://youtube.com/",
+      "status": "success",
+      "load_ms": 2093,
+      "final_url": "https://www.youtube.com/",
+      "http_status": 200,
+      "body_element_count": 1293,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "010.png"
+    },
+    {
+      "rank": 11,
+      "url": "https://apple.com/",
+      "status": "success",
+      "load_ms": 999,
+      "final_url": "https://www.apple.com/",
+      "http_status": 200,
+      "body_element_count": 1800,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "011.png"
+    },
+    {
+      "rank": 13,
+      "url": "https://instagram.com/",
+      "status": "success",
+      "load_ms": 1231,
+      "final_url": "https://www.instagram.com/",
+      "http_status": 200,
+      "body_element_count": 340,
+      "console_errors": {
+        "not_implemented": 1,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "013.png"
+    },
+    {
+      "rank": 16,
+      "url": "https://linkedin.com/",
+      "status": "success",
+      "load_ms": 744,
+      "final_url": "https://www.linkedin.com/",
+      "http_status": 200,
+      "body_element_count": 707,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "016.png"
+    },
+    {
+      "rank": 17,
+      "url": "https://twitter.com/",
+      "status": "success",
+      "load_ms": 776,
+      "final_url": "https://x.com/",
+      "http_status": 200,
+      "body_element_count": 217,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "017.png"
+    },
+    {
+      "rank": 18,
+      "url": "https://azure.com/",
+      "status": "success",
+      "load_ms": 9287,
+      "final_url": "https://azure.microsoft.com/en-us",
+      "http_status": 200,
+      "body_element_count": 3360,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 1
+      },
+      "screenshot": "018.png"
+    },
+    {
+      "rank": 24,
+      "url": "https://mail.ru/",
+      "status": "success",
+      "load_ms": 2236,
+      "final_url": "https://account.mail.ru/login",
+      "http_status": 200,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "024.png"
+    },
+    {
+      "rank": 25,
+      "url": "https://office.com/",
+      "status": "success",
+      "load_ms": 1239,
+      "final_url": "https://m365.cloud.microsoft/",
+      "http_status": 200,
+      "body_element_count": 1019,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "025.png"
+    },
+    {
+      "rank": 27,
+      "url": "https://amazon.com/",
+      "status": "success",
+      "load_ms": 395,
+      "final_url": "https://www.amazon.com/",
+      "http_status": 202,
+      "body_element_count": 2352,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "027.png"
+    },
+    {
+      "rank": 28,
+      "url": "https://triplinkintl.com/",
+      "status": "success",
+      "load_ms": 6244,
+      "final_url": "https://www.triplinkintl.com/en/home/",
+      "http_status": 200,
+      "body_element_count": 2232,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "028.png"
+    },
+    {
+      "rank": 30,
+      "url": "https://sharepoint.com/",
+      "status": "success",
+      "load_ms": 6304,
+      "final_url": "https://www.microsoft.com/en-us/microsoft-365/sharepoint/collaboration",
+      "http_status": 200,
+      "body_element_count": 4167,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 13,
+        "console_error": 0
+      },
+      "screenshot": "030.png"
+    },
+    {
+      "rank": 33,
+      "url": "https://cloud.microsoft/",
+      "status": "success",
+      "load_ms": 1116,
+      "final_url": "https://m365.cloud.microsoft/",
+      "http_status": 200,
+      "body_element_count": 1018,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "033.png"
+    },
+    {
+      "rank": 35,
+      "url": "https://github.com/",
+      "status": "success",
+      "load_ms": 869,
+      "final_url": "https://github.com/",
+      "http_status": 200,
+      "body_element_count": 2162,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "035.png"
+    },
+    {
+      "rank": 37,
+      "url": "https://dzen.ru/",
+      "status": "success",
+      "load_ms": 1350,
+      "final_url": "https://sso.passport.yandex.ru/push",
+      "http_status": 200,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "037.png"
+    },
+    {
+      "rank": 38,
+      "url": "https://wikipedia.org/",
+      "status": "success",
+      "load_ms": 388,
+      "final_url": "https://www.wikipedia.org/",
+      "http_status": 200,
+      "body_element_count": 1159,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "038.png"
+    },
+    {
+      "rank": 39,
+      "url": "https://netflix.com/",
+      "status": "success",
+      "load_ms": 3596,
+      "final_url": "https://www.netflix.com/",
+      "http_status": 200,
+      "body_element_count": 1055,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "039.png"
+    },
+    {
+      "rank": 42,
+      "url": "https://fastly.net/",
+      "status": "success",
+      "load_ms": 611,
+      "final_url": "https://www.fastly.com/",
+      "http_status": 200,
+      "body_element_count": 1687,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "042.png"
+    },
+    {
+      "rank": 44,
+      "url": "https://whatsapp.net/",
+      "status": "success",
+      "load_ms": 939,
+      "final_url": "https://www.whatsapp.com/",
+      "http_status": 200,
+      "body_element_count": 1241,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "044.png"
+    },
+    {
+      "rank": 45,
+      "url": "https://bing.com/",
+      "status": "success",
+      "load_ms": 387,
+      "final_url": "https://www.bing.com/",
+      "http_status": 200,
+      "body_element_count": 569,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 1
+      },
+      "screenshot": "045.png"
+    },
+    {
+      "rank": 47,
+      "url": "https://x.com/",
+      "status": "success",
+      "load_ms": 556,
+      "final_url": "https://x.com/",
+      "http_status": 200,
+      "body_element_count": 217,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "047.png"
+    },
+    {
+      "rank": 49,
+      "url": "https://doubleclick.net/",
+      "status": "success",
+      "load_ms": 491,
+      "final_url": "https://marketingplatform.google.com/about/enterprise/",
+      "http_status": 200,
+      "body_element_count": 791,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "049.png"
+    },
+    {
+      "rank": 51,
+      "url": "https://googlesyndication.com/",
+      "status": "success",
+      "load_ms": 644,
+      "final_url": "https://www.google.com/",
+      "http_status": 200,
+      "body_element_count": 471,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "051.png"
+    },
+    {
+      "rank": 52,
+      "url": "https://youtu.be/",
+      "status": "success",
+      "load_ms": 1555,
+      "final_url": "https://www.youtube.com/",
+      "http_status": 200,
+      "body_element_count": 1293,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "052.png"
+    },
+    {
+      "rank": 54,
+      "url": "https://pinterest.com/",
+      "status": "success",
+      "load_ms": 1910,
+      "final_url": "https://www.pinterest.com/",
+      "http_status": 200,
+      "body_element_count": 796,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "054.png"
+    },
+    {
+      "rank": 56,
+      "url": "https://icloud.com/",
+      "status": "success",
+      "load_ms": 1347,
+      "final_url": "https://www.icloud.com/",
+      "http_status": 200,
+      "body_element_count": 67,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "056.png"
+    },
+    {
+      "rank": 58,
+      "url": "https://zoom.us/",
+      "status": "success",
+      "load_ms": 4060,
+      "final_url": "https://www.zoom.com/",
+      "http_status": 200,
+      "body_element_count": 1891,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "058.png"
+    },
+    {
+      "rank": 61,
+      "url": "https://skype.com/",
+      "status": "success",
+      "load_ms": 595,
+      "final_url": "https://teams.live.com/free",
+      "http_status": 200,
+      "body_element_count": 208,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "061.png"
+    },
+    {
+      "rank": 62,
+      "url": "https://tiktok.com/",
+      "status": "success",
+      "load_ms": 3621,
+      "final_url": "https://www.tiktok.com/",
+      "http_status": 200,
+      "body_element_count": 413,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "062.png"
+    },
+    {
+      "rank": 64,
+      "url": "https://whatsapp.com/",
+      "status": "success",
+      "load_ms": 1449,
+      "final_url": "https://www.whatsapp.com/",
+      "http_status": 200,
+      "body_element_count": 1241,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "064.png"
+    },
+    {
+      "rank": 65,
+      "url": "https://wordpress.org/",
+      "status": "success",
+      "load_ms": 1221,
+      "final_url": "https://wordpress.org/",
+      "http_status": 200,
+      "body_element_count": 436,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "065.png"
+    },
+    {
+      "rank": 68,
+      "url": "https://gandi.net/",
+      "status": "success",
+      "load_ms": 1863,
+      "final_url": "https://www.gandi.net/en-US",
+      "http_status": 200,
+      "body_element_count": 1562,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "068.png"
+    },
+    {
+      "rank": 69,
+      "url": "https://myfritz.net/",
+      "status": "success",
+      "load_ms": 3381,
+      "final_url": "https://www.myfritz.net/devices/",
+      "http_status": 200,
+      "body_element_count": 74,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "069.png"
+    },
+    {
+      "rank": 70,
+      "url": "https://googledomains.com/",
+      "status": "success",
+      "load_ms": 306,
+      "final_url": "https://domains.google/",
+      "http_status": 200,
+      "body_element_count": 42,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "070.png"
+    },
+    {
+      "rank": 71,
+      "url": "https://wa.me/",
+      "status": "success",
+      "load_ms": 599,
+      "final_url": "https://api.whatsapp.com/",
+      "http_status": 200,
+      "body_element_count": 791,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "071.png"
+    },
+    {
+      "rank": 76,
+      "url": "https://spotify.com/",
+      "status": "success",
+      "load_ms": 1305,
+      "final_url": "https://open.spotify.com/",
+      "http_status": 200,
+      "body_element_count": 2344,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "076.png"
+    },
+    {
+      "rank": 78,
+      "url": "https://amazonvideo.com/",
+      "status": "success",
+      "load_ms": 2474,
+      "final_url": "https://www.primevideo.com/",
+      "http_status": 200,
+      "body_element_count": 2866,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": "078.png"
+    },
+    {
+      "rank": 80,
+      "url": "https://b-cdn.net/",
+      "status": "success",
+      "load_ms": 1615,
+      "final_url": "https://bunny.net/",
+      "http_status": 200,
+      "body_element_count": 2050,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 9,
+        "console_error": 0
+      },
+      "screenshot": "080.png"
+    },
+    {
+      "rank": 81,
+      "url": "https://opera.com/",
+      "status": "success",
+      "load_ms": 2167,
+      "final_url": "https://www.opera.com/",
+      "http_status": 200,
+      "body_element_count": 640,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "081.png"
+    },
+    {
+      "rank": 82,
+      "url": "https://roblox.com/",
+      "status": "load-error",
+      "load_ms": 1510,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "082.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 83,
+      "url": "https://vimeo.com/",
+      "status": "success",
+      "load_ms": 2244,
+      "final_url": "https://vimeo.com/",
+      "http_status": 200,
+      "body_element_count": 4011,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "083.png"
+    },
+    {
+      "rank": 84,
+      "url": "https://ntp.org/",
+      "status": "success",
+      "load_ms": 1270,
+      "final_url": "https://www.ntp.org/",
+      "http_status": 200,
+      "body_element_count": 147,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "084.png"
+    },
+    {
+      "rank": 88,
+      "url": "https://baidu.com/",
+      "status": "success",
+      "load_ms": 6832,
+      "final_url": "https://www.baidu.com/",
+      "http_status": 200,
+      "body_element_count": 418,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "088.png"
+    },
+    {
+      "rank": 90,
+      "url": "https://blogspot.com/",
+      "status": "success",
+      "load_ms": 615,
+      "final_url": "https://www.blogger.com/about/",
+      "http_status": 200,
+      "body_element_count": 242,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "090.png"
+    },
+    {
+      "rank": 91,
+      "url": "https://workers.dev/",
+      "status": "success",
+      "load_ms": 2884,
+      "final_url": "https://www.cloudflare.com/products/workers/",
+      "http_status": 200,
+      "body_element_count": 2748,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "091.png"
+    },
+    {
+      "rank": 92,
+      "url": "https://intuit.com/",
+      "status": "success",
+      "load_ms": 3140,
+      "final_url": "https://www.intuit.com/",
+      "http_status": 200,
+      "body_element_count": 1283,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "092.png"
+    },
+    {
+      "rank": 93,
+      "url": "https://mozilla.org/",
+      "status": "success",
+      "load_ms": 815,
+      "final_url": "https://www.mozilla.org/en-US/",
+      "http_status": 200,
+      "body_element_count": 975,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "093.png"
+    },
+    {
+      "rank": 94,
+      "url": "https://nginx.org/",
+      "status": "success",
+      "load_ms": 753,
+      "final_url": "https://nginx.org/",
+      "http_status": 200,
+      "body_element_count": 163,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "094.png"
+    },
+    {
+      "rank": 96,
+      "url": "https://f5.com/",
+      "status": "success",
+      "load_ms": 3610,
+      "final_url": "https://www.f5.com/",
+      "http_status": 200,
+      "body_element_count": 1487,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 2,
+        "console_error": 0
+      },
+      "screenshot": "096.png"
+    },
+    {
+      "rank": 98,
+      "url": "https://msn.com/",
+      "status": "success",
+      "load_ms": 654,
+      "final_url": "https://www.msn.com/",
+      "http_status": 200,
+      "body_element_count": 22,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": "098.png"
+    },
+    {
+      "rank": 99,
+      "url": "https://wordpress.com/",
+      "status": "success",
+      "load_ms": 1119,
+      "final_url": "https://wordpress.com/",
+      "http_status": 200,
+      "body_element_count": 1558,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "099.png"
+    },
+    {
+      "rank": 100,
+      "url": "https://nginx.com/",
+      "status": "success",
+      "load_ms": 3299,
+      "final_url": "https://www.f5.com/products/nginx",
+      "http_status": 200,
+      "body_element_count": 1145,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 2,
+        "console_error": 0
+      },
+      "screenshot": "100.png"
+    },
+    {
+      "rank": 101,
+      "url": "https://t.me/",
+      "status": "success",
+      "load_ms": 2554,
+      "final_url": "https://telegram.org/",
+      "http_status": 200,
+      "body_element_count": 284,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "101.png"
+    },
+    {
+      "rank": 102,
+      "url": "https://t-online.de/",
+      "status": "success",
+      "load_ms": 2173,
+      "final_url": "https://www.t-online.de/",
+      "http_status": 200,
+      "body_element_count": 5193,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": "102.png"
+    },
+    {
+      "rank": 103,
+      "url": "https://sentry.io/",
+      "status": "success",
+      "load_ms": 2085,
+      "final_url": "https://sentry.io/welcome/",
+      "http_status": 200,
+      "body_element_count": 3318,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "103.png"
+    },
+    {
+      "rank": 106,
+      "url": "https://ui.com/",
+      "status": "success",
+      "load_ms": 851,
+      "final_url": "https://ui.com/",
+      "http_status": 200,
+      "body_element_count": 1400,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "106.png"
+    },
+    {
+      "rank": 108,
+      "url": "https://chatgpt.com/",
+      "status": "success",
+      "load_ms": 805,
+      "final_url": "https://chatgpt.com/",
+      "http_status": 200,
+      "body_element_count": 703,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "108.png"
+    },
+    {
+      "rank": 109,
+      "url": "https://europa.eu/",
+      "status": "success",
+      "load_ms": 1906,
+      "final_url": "https://european-union.europa.eu/select-language",
+      "http_status": 200,
+      "body_element_count": 721,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "109.png"
+    },
+    {
+      "rank": 110,
+      "url": "https://reddit.com/",
+      "status": "success",
+      "load_ms": 165,
+      "final_url": "https://www.reddit.com/",
+      "http_status": 200,
+      "body_element_count": 3001,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "110.png"
+    },
+    {
+      "rank": 111,
+      "url": "https://yandex.ru/",
+      "status": "success",
+      "load_ms": 2170,
+      "final_url": "https://sso.passport.yandex.ru/push",
+      "http_status": 200,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "111.png"
+    },
+    {
+      "rank": 112,
+      "url": "https://lencr.org/",
+      "status": "success",
+      "load_ms": 1919,
+      "final_url": "https://letsencrypt.org/docs/lencr.org/",
+      "http_status": 200,
+      "body_element_count": 232,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "112.png"
+    },
+    {
+      "rank": 116,
+      "url": "https://bit.ly/",
+      "status": "success",
+      "load_ms": 3221,
+      "final_url": "https://bitly.com/",
+      "http_status": 200,
+      "body_element_count": 2412,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "116.png"
+    },
+    {
+      "rank": 120,
+      "url": "https://webex.com/",
+      "status": "success",
+      "load_ms": 5234,
+      "final_url": "https://www.webex.com/",
+      "http_status": 200,
+      "body_element_count": 1793,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": "120.png"
+    },
+    {
+      "rank": 121,
+      "url": "https://samsung.com/",
+      "status": "success",
+      "load_ms": 3026,
+      "final_url": "https://www.samsung.com/us/",
+      "http_status": 200,
+      "body_element_count": 3811,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "121.png"
+    },
+    {
+      "rank": 122,
+      "url": "https://openai.com/",
+      "status": "success",
+      "load_ms": 1393,
+      "final_url": "https://openai.com/",
+      "http_status": 200,
+      "body_element_count": 806,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "122.png"
+    },
+    {
+      "rank": 123,
+      "url": "https://registrar-servers.com/",
+      "status": "success",
+      "load_ms": 760,
+      "final_url": "https://registrar-servers.com/",
+      "http_status": 200,
+      "body_element_count": 15,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "123.png"
+    },
+    {
+      "rank": 124,
+      "url": "https://yandex.net/",
+      "status": "success",
+      "load_ms": 4430,
+      "final_url": "https://ya.ru/",
+      "http_status": 200,
+      "body_element_count": 274,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "124.png"
+    },
+    {
+      "rank": 126,
+      "url": "https://adobe.io/",
+      "status": "success",
+      "load_ms": 1064,
+      "final_url": "https://developer.adobe.com/",
+      "http_status": 200,
+      "body_element_count": 496,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "126.png"
+    },
+    {
+      "rank": 127,
+      "url": "https://windows.com/",
+      "status": "success",
+      "load_ms": 4034,
+      "final_url": "https://www.microsoft.com/en-us/windows/",
+      "http_status": 200,
+      "body_element_count": 52,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 108
+      },
+      "screenshot": "127.png"
+    },
+    {
+      "rank": 128,
+      "url": "https://github.io/",
+      "status": "success",
+      "load_ms": 460,
+      "final_url": "https://pages.github.com/",
+      "http_status": 200,
+      "body_element_count": 471,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "128.png"
+    },
+    {
+      "rank": 130,
+      "url": "https://dropbox.com/",
+      "status": "success",
+      "load_ms": 3125,
+      "final_url": "https://www.dropbox.com/",
+      "http_status": 200,
+      "body_element_count": 1259,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "130.png"
+    },
+    {
+      "rank": 135,
+      "url": "https://android.com/",
+      "status": "success",
+      "load_ms": 2004,
+      "final_url": "https://www.android.com/",
+      "http_status": 200,
+      "body_element_count": 2470,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "135.png"
+    },
+    {
+      "rank": 136,
+      "url": "https://duckdns.org/",
+      "status": "success",
+      "load_ms": 1224,
+      "final_url": "https://www.duckdns.org/",
+      "http_status": 200,
+      "body_element_count": 100,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "136.png"
+    },
+    {
+      "rank": 137,
+      "url": "https://cloudflare-dns.com/",
+      "status": "success",
+      "load_ms": 675,
+      "final_url": "https://one.one.one.one/dns/",
+      "http_status": 200,
+      "body_element_count": 1089,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "137.png"
+    },
+    {
+      "rank": 138,
+      "url": "https://apache.org/",
+      "status": "success",
+      "load_ms": 460,
+      "final_url": "https://apache.org/",
+      "http_status": 200,
+      "body_element_count": 574,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "138.png"
+    },
+    {
+      "rank": 144,
+      "url": "https://nic.ru/",
+      "status": "success",
+      "load_ms": 1058,
+      "final_url": "https://nic.ru/",
+      "http_status": 200,
+      "body_element_count": 3,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "144.png"
+    },
+    {
+      "rank": 145,
+      "url": "https://archive.org/",
+      "status": "success",
+      "load_ms": 453,
+      "final_url": "https://archive.org/",
+      "http_status": 200,
+      "body_element_count": 2,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "145.png"
+    },
+    {
+      "rank": 147,
+      "url": "https://ipify.org/",
+      "status": "success",
+      "load_ms": 974,
+      "final_url": "https://www.ipify.org/",
+      "http_status": 200,
+      "body_element_count": 1138,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "147.png"
+    },
+    {
+      "rank": 149,
+      "url": "https://tumblr.com/",
+      "status": "success",
+      "load_ms": 2027,
+      "final_url": "https://www.tumblr.com/",
+      "http_status": 200,
+      "body_element_count": 5347,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "149.png"
+    },
+    {
+      "rank": 150,
+      "url": "https://crashlytics.com/",
+      "status": "success",
+      "load_ms": 2120,
+      "final_url": "https://firebase.google.com/products/crashlytics/",
+      "http_status": 200,
+      "body_element_count": 738,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "150.png"
+    },
+    {
+      "rank": 154,
+      "url": "https://meraki.com/",
+      "status": "success",
+      "load_ms": 2276,
+      "final_url": "https://www.cisco.com/site/us/en/about/corporate-strategy-office/acquisitions/meraki/index.html",
+      "http_status": 200,
+      "body_element_count": 3793,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "154.png"
+    },
+    {
+      "rank": 155,
+      "url": "https://samsungcloud.com/",
+      "status": "success",
+      "load_ms": 458,
+      "final_url": "https://www.samsungcloud.com/en/login",
+      "http_status": 200,
+      "body_element_count": 65,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "155.png"
+    },
+    {
+      "rank": 156,
+      "url": "https://shopify.com/",
+      "status": "success",
+      "load_ms": 762,
+      "final_url": "https://www.shopify.com/",
+      "http_status": 200,
+      "body_element_count": 1760,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "156.png"
+    },
+    {
+      "rank": 157,
+      "url": "https://ubuntu.com/",
+      "status": "success",
+      "load_ms": 3088,
+      "final_url": "https://ubuntu.com/",
+      "http_status": 200,
+      "body_element_count": 1843,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "157.png"
+    },
+    {
+      "rank": 158,
+      "url": "https://telegram.org/",
+      "status": "success",
+      "load_ms": 2067,
+      "final_url": "https://telegram.org/",
+      "http_status": 200,
+      "body_element_count": 284,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "158.png"
+    },
+    {
+      "rank": 159,
+      "url": "https://discord.gg/",
+      "status": "success",
+      "load_ms": 1754,
+      "final_url": "https://discord.com/",
+      "http_status": 200,
+      "body_element_count": 1148,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "159.png"
+    },
+    {
+      "rank": 160,
+      "url": "https://gravatar.com/",
+      "status": "success",
+      "load_ms": 965,
+      "final_url": "https://gravatar.com/",
+      "http_status": 200,
+      "body_element_count": 521,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "160.png"
+    },
+    {
+      "rank": 162,
+      "url": "https://snapchat.com/",
+      "status": "success",
+      "load_ms": 815,
+      "final_url": "https://www.snapchat.com/",
+      "http_status": 200,
+      "body_element_count": 537,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "162.png"
+    },
+    {
+      "rank": 163,
+      "url": "https://pages.dev/",
+      "status": "success",
+      "load_ms": 1292,
+      "final_url": "https://www.cloudflare.com/products/pages/",
+      "http_status": 200,
+      "body_element_count": 1984,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "163.png"
+    },
+    {
+      "rank": 167,
+      "url": "https://telekom.net/",
+      "status": "success",
+      "load_ms": 1719,
+      "final_url": "https://www.telekom.com/en",
+      "http_status": 200,
+      "body_element_count": 1464,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "167.png"
+    },
+    {
+      "rank": 168,
+      "url": "https://creativecommons.org/",
+      "status": "success",
+      "load_ms": 1342,
+      "final_url": "https://creativecommons.org/",
+      "http_status": 200,
+      "body_element_count": 323,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 0
+      },
+      "screenshot": "168.png"
+    },
+    {
+      "rank": 169,
+      "url": "https://vk.com/",
+      "status": "success",
+      "load_ms": 4858,
+      "final_url": "https://vk.ru/",
+      "http_status": 200,
+      "body_element_count": 40,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "169.png"
+    },
+    {
+      "rank": 170,
+      "url": "https://google-analytics.com/",
+      "status": "success",
+      "load_ms": 511,
+      "final_url": "https://marketingplatform.google.com/about/analytics/",
+      "http_status": 200,
+      "body_element_count": 788,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "170.png"
+    },
+    {
+      "rank": 172,
+      "url": "https://cnn.com/",
+      "status": "success",
+      "load_ms": 1987,
+      "final_url": "https://www.cnn.com/",
+      "http_status": 200,
+      "body_element_count": 4940,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 7
+      },
+      "screenshot": "172.png"
+    },
+    {
+      "rank": 173,
+      "url": "https://reg.ru/",
+      "status": "success",
+      "load_ms": 747,
+      "final_url": "https://reg.ru/",
+      "http_status": 200,
+      "body_element_count": 3,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "173.png"
+    }
+  ],
+  "summary": {
+    "sites": 100,
+    "statuses": {
+      "success": 99,
+      "timeout": 0,
+      "crash": 0,
+      "load-error": 1,
+      "harness-error": 0
+    },
+    "screenshots": 100,
+    "nonempty_bodies": 97,
+    "console_errors": {
+      "not_implemented": 3,
+      "javascript_exception": 34,
+      "console_error": 133
+    }
+  }
+}

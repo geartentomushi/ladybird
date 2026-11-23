@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html class="reftest-wait">
+<link rel="match" href="../../expected/css/webkit-font-feature-settings-alias-ref.html">
+<style>
+    @font-face {
+        font-family: "Fira Code";
+        src: url("../../../Assets/FiraCode-Latin.woff2");
+    }
+    .ligatures {
+        font: 32px "Fira Code";
+        -webkit-font-feature-settings: "calt" 0;
+    }
+</style>
+<div class="ligatures">-&gt; --&gt; &lt;=&gt; ==&gt;</div>
+<script>
+    document.fonts.ready.then(() => document.documentElement.classList.remove("reftest-wait"));
+</script>

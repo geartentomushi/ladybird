@@ -9,18 +9,19 @@
 
 use core::ffi::c_void;
 
+use ak::Utf16String;
 use libjs_rust::api::{ErrorKind, ErrorType, Trace, Vm};
 
 use super::credential::{AnyCredential, CredentialMediationRequirement};
 use super::federated_credential::{FederatedCredentialInit, FederatedCredentialRequestOptions};
 use super::password_credential::PasswordCredentialInit;
 use crate::bindings::interface::{Ref, Wrappable, allocate, cell_into_abi};
-use crate::bindings::promise::{WebIdlPromise, reject_promise_with_exception};
+use crate::bindings::promise::{WebIdlPromise, reject_promise, reject_promise_with_exception};
 use crate::bindings::{CallContext, Exception, WebIdlResult};
 use crate::dom::abort_signal::AbortSignal;
 
 /// https://w3c.github.io/webappsec-credential-management/#dictdef-credentialrequestoptions
-#[expect(dead_code, reason = "get() does not read the options yet")]
+#[expect(dead_code, reason = "get() does not retrieve credentials yet")]
 pub(crate) struct CredentialRequestOptions {
     pub(crate) federated: Option<FederatedCredentialRequestOptions>,
     pub(crate) mediation: CredentialMediationRequirement,
@@ -56,10 +57,25 @@ impl CredentialsContainer {
         &self,
         cx: &mut CallContext,
         promise: WebIdlPromise,
-        _: CredentialRequestOptions,
+        options: CredentialRequestOptions,
     ) -> WebIdlResult<()> {
-        eprintln!("FIXME: Unimplemented CredentialsContainer::get()");
-        reject_not_implemented_promise(cx.vm(), promise, "get");
+        // https://w3c.github.io/webappsec-credential-management/#algorithm-request
+        if let Some(signal) = options.signal
+            && signal.aborted()
+        {
+            reject_promise(cx.vm(), promise, signal.reason());
+            return Ok(());
+        }
+
+        // No credential type supports retrieval yet, even if its constructor is exposed.
+        reject_promise_with_exception(
+            cx.vm(),
+            promise,
+            Exception::Dom(
+                "NotSupportedError",
+                Utf16String::from_utf8("No supported credential type was requested."),
+            ),
+        );
         Ok(())
     }
 
