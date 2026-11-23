@@ -6,7 +6,15 @@ on:
   pull_request:
 
 jobs:
+  fork-commit-messages:
+    name: Fork commit messages
+    if: github.repository == 'geartentomushi/ladybird' && github.event_name == 'pull_request'
+    permissions:
+      pull-requests: read
+    uses: ./.github/workflows/lint-commits.yml
+
   lint:
+    name: ${{ github.repository == 'geartentomushi/ladybird' && 'Fork code lint' || 'lint' }}
     runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
     if: github.repository == 'LadybirdBrowser/ladybird' || github.repository == 'geartentomushi/ladybird'
     permissions:
@@ -32,6 +40,7 @@ jobs:
         run: "${GITHUB_WORKSPACE}/Meta/lint-ci.sh"
 
   flap:
+    name: ${{ github.repository == 'geartentomushi/ladybird' && 'Fork Flap checks' || 'flap' }}
     permissions:
       contents: read
     runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}

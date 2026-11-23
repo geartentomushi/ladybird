@@ -1,6 +1,6 @@
 name: Lint Commit Messages
 
-on: [pull_request_target]
+on: [pull_request_target, workflow_call]
 
 # Make sure to update Meta/lint-commit.sh to match this script when adding new checks!
 # (… but don't accept overlong 'fixup!' commit descriptions.)
@@ -8,7 +8,9 @@ on: [pull_request_target]
 jobs:
   lint:
     runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
-    if: github.repository == 'LadybirdBrowser/ladybird' || github.repository == 'geartentomushi/ladybird'
+    if: |
+      (github.repository == 'LadybirdBrowser/ladybird' && github.event_name == 'pull_request_target') ||
+      (github.repository == 'geartentomushi/ladybird' && github.event_name == 'pull_request')
     permissions:
       pull-requests: read
 
