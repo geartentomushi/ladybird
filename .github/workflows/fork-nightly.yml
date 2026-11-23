@@ -237,6 +237,8 @@ jobs:
               ...repo, workflow_id: "fork-nightly.yml", branch: "master", status: "success", per_page: 30,
             });
             for (const run of workflow_runs) {
+              if (run.event !== "schedule" && run.event !== "workflow_dispatch") continue;
+              if (run.head_repository?.full_name !== process.env.GITHUB_REPOSITORY) continue;
               if (run.run_number >= context.runNumber) continue;
               const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
                 ...repo, run_id: run.id, name: "nightly-summary",
