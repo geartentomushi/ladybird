@@ -265,6 +265,39 @@ class SiteSmokeTests(unittest.TestCase):
             (directory / "2026-11-22T00-00-00Z-WebContent-123456.txt").touch()
             self.assertEqual(smoke.crashed_process(driver, profile, {}), "WebContent")
 
+    @unittest.skipIf(smoke.ConnectionClosedOK is None, "requires websockets")
+    def test_session_close_during_settle_is_a_crash(self):
+        from websockets.frames import Close
+
+        close = Close(1000, "")
+        bidi = SimpleNamespace(errors={}, navigation={})
+        bidi.command = lambda method, *_: (
+            {"contexts": [{"context": "tab"}]}
+            if method == "browsingContext.getTree"
+            else {"url": "https://example.com/", "navigation": "navigation"}
+        )
+
+        def observe(_):
+            raise smoke.ConnectionClosedOK(close, close, True)
+
+        bidi.observe = observe
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary)
+            driver = SimpleNamespace(poll=lambda: None)
+            with patch.dict(
+                smoke.capture.__globals__,
+                {
+                    "launch_driver": lambda *_: contextlib.nullcontext((driver, path)),
+                    "webdriver_port": lambda *_: 1234,
+                    "open_session": lambda *_: "ws://localhost:1234",
+                    "connect": lambda *_, **__: contextlib.nullcontext(None),
+                    "BiDi": lambda _: bidi,
+                },
+            ):
+                row = smoke.capture(path / "WebDriver", path, (1, "https://example.com/"), 5, 2)
+        self.assertEqual(row["crashed_process"], "Browser")
+        self.assertEqual(smoke.ci_results([row]), {"results": {"https://example.com/": "FAIL"}})
+
 
 if __name__ == "__main__":
     unittest.main()

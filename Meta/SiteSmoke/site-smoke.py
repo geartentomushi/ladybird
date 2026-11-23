@@ -26,9 +26,11 @@ from pathlib import Path
 from urllib.parse import urlsplit
 
 try:
+    from websockets.exceptions import ConnectionClosedOK
     from websockets.exceptions import WebSocketException
     from websockets.sync.client import connect
 except ImportError:
+    ConnectionClosedOK = None
     WebSocketException = None
     connect = None
 
@@ -190,7 +192,7 @@ def sample_render(bidi, context, row, image_path, errors):
 
 
 def capture(executable, directory, site, timeout, settle):
-    if connect is None or WebSocketException is None:
+    if connect is None or WebSocketException is None or ConnectionClosedOK is None:
         raise DriverError("Install `websockets` as pinned in requirements.txt")
     rank, url = site
     log_path = directory / f"{rank:03d}.log"
@@ -222,6 +224,7 @@ def capture(executable, directory, site, timeout, settle):
                 )
                 row["console_errors"] = bidi.errors
                 started = time.monotonic()
+                session_closed = False
                 try:
                     nav = bidi.command(
                         "browsingContext.navigate", {"context": context, "url": url, "wait": "complete"}, timeout
@@ -240,13 +243,15 @@ def capture(executable, directory, site, timeout, settle):
                 except errors as error:
                     row["status"] = "load-error"
                     row["error"] = str(error)
+                    session_closed = isinstance(error, ConnectionClosedOK)
                 row["load_ms"] = round((time.monotonic() - started) * 1000)
                 try:
                     bidi.observe(settle)
                     sample_render(bidi, context, row, image_path, errors)
                 except errors + (ValueError,) as error:
                     row["capture_error"] = str(error)
-                if crashed := crashed_process(process, profile, row):
+                    session_closed |= isinstance(error, ConnectionClosedOK)
+                if crashed := crashed_process(process, profile, row) or ("Browser" if session_closed else None):
                     row["status"] = "crash"
                     row["crashed_process"] = crashed
     except errors as error:
