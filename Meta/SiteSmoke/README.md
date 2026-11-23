@@ -12,6 +12,9 @@ python3 Meta/SiteSmoke/site-smoke.py compare \
     Meta/SiteSmoke/baseline.json "$HOME/ladybird-site-smoke/results.json"
 ```
 
+On macOS, use `--webdriver Build/release/bin/Ladybird.app/Contents/MacOS/WebDriver`
+instead. The `Ladybird` executable is in the same bundle directory.
+
 The default targets are the bare HTTPS domains from Tranco list [8PW6V][tranco],
 dated 2026-11-22. The snapshot preserves the original order, including
 infrastructure domains that may not serve a public homepage. For a smaller run,
