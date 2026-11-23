@@ -292,6 +292,22 @@ class SiteSmokeTests(unittest.TestCase):
                 processes.start(["WebDriver"], None)
             spawn.assert_called_once()
 
+    def test_stage_forwards_the_interrupt_signal_and_waits_for_exit(self):
+        for error, signum in (
+            (KeyboardInterrupt, signal.SIGINT),
+            (smoke.TerminationRequested, signal.SIGTERM),
+        ):
+            with self.subTest(signum=signum):
+                stage = SimpleNamespace(pid=123, wait=Mock(side_effect=[error, 128 + signum]))
+                with (
+                    patch.object(smoke.subprocess, "Popen", return_value=contextlib.nullcontext(stage)),
+                    patch.object(smoke.os, "killpg") as kill,
+                ):
+                    with self.assertRaises(error):
+                        smoke.run_stage(["stage"])
+                    kill.assert_called_once_with(123, signum)
+                    self.assertEqual(stage.wait.call_count, 2)
+
     def test_recovers_crash_evidence_from_profile_and_protocol(self):
         with tempfile.TemporaryDirectory() as temporary:
             profile = Path(temporary)

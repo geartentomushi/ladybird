@@ -48,6 +48,14 @@ class DriverError(RuntimeError):
     pass
 
 
+class TerminationRequested(KeyboardInterrupt):
+    pass
+
+
+def request_termination(_signum, _frame):
+    raise TerminationRequested
+
+
 class BiDi:
     def __init__(self, socket):
         self.socket = socket
@@ -427,9 +435,10 @@ def run_stage(command, **kwargs):
     with subprocess.Popen(command, start_new_session=True, **kwargs) as process:
         try:
             return process.wait()
-        except KeyboardInterrupt:
+        except KeyboardInterrupt as error:
+            signum = signal.SIGTERM if isinstance(error, TerminationRequested) else signal.SIGINT
             with contextlib.suppress(ProcessLookupError):
-                os.killpg(process.pid, signal.SIGINT)
+                os.killpg(process.pid, signum)
             process.wait()
             raise
 
@@ -715,8 +724,12 @@ def main():
 
 
 if __name__ == "__main__":
+    signal.signal(signal.SIGTERM, request_termination)
     try:
         raise SystemExit(main())
+    except TerminationRequested:
+        print("Site smoke terminated", file=sys.stderr)
+        raise SystemExit(128 + signal.SIGTERM) from None
     except KeyboardInterrupt:
         print("Site smoke interrupted", file=sys.stderr)
         raise SystemExit(130) from None
