@@ -188,31 +188,40 @@ class SiteSmokeTests(unittest.TestCase):
         self.assertEqual(blocking, [])
 
     def test_only_persistent_body_count_drops_are_confirmed_by_reruns(self):
-        names = ("persistent", "cleared", "inconclusive", "empty", "unchanged")
+        names = ("persistent", "cleared", "inconclusive", "empty", "mixed", "site-changed", "unchanged")
         urls = [f"https://{name}.example/" for name in names]
         baseline = run(*(site(url, elements=22) for url in urls))
         current = run(
-            *(dict(site(url, elements=14 if rank < 5 else 22), rank=rank) for rank, url in enumerate(urls, 1))
+            *(dict(site(url, elements=22 if url == urls[-1] else 14), rank=rank) for rank, url in enumerate(urls, 1))
         )
         settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
         baseline["settings"].update(settings)
         current["settings"].update(settings)
         changes = smoke.compare(baseline, current)
+        captures = [
+            (0, 22, 14),
+            (1, 22, 22),
+            (2, None, 14),
+            (3, 22, 0),
+            (4, 22, 0),
+            (5, 14, 14),
+            (0, 22, 15),
+            (2, 22, 14),
+            (3, 22, 0),
+            (4, 22, 15),
+        ]
+        baseline_driver, candidate_driver = Path("BaselineWebDriver"), Path("CandidateWebDriver")
         attempts = [
-            site(urls[0], elements=14),
-            site(urls[1], elements=22),
-            site(urls[2], status="timeout", elements=None),
-            site(urls[3], elements=0),
-            site(urls[0], elements=15),
-            site(urls[2], elements=14),
-            site(urls[3], elements=0),
+            site(urls[index], status="timeout" if count is None else "success", elements=count)
+            for index, baseline_count, candidate_count in captures
+            for count in (baseline_count, candidate_count)
         ]
         capture = Mock(side_effect=attempts)
         with (
             tempfile.TemporaryDirectory() as temporary,
             patch.dict(smoke.confirm_body_drops.__globals__, {"capture": capture}),
         ):
-            smoke.confirm_body_drops(changes, current, Path("WebDriver"), Path(temporary) / "reruns")
+            smoke.confirm_body_drops(changes, current, baseline_driver, candidate_driver, Path(temporary) / "reruns")
         self.assertEqual(
             [
                 (row["url"], row["confirmation"], row["direction"])
@@ -224,12 +233,19 @@ class SiteSmokeTests(unittest.TestCase):
                 (urls[1], "cleared-on-rerun", "informational"),
                 (urls[2], "inconclusive", "informational"),
                 (urls[3], "confirmed", "changed"),
+                (urls[4], "confirmed", "changed"),
+                (urls[5], "cleared-on-rerun", "informational"),
             ],
         )
         self.assertEqual(
-            [call.args[2] for call in capture.call_args_list],
-            [(1, urls[0]), (2, urls[1]), (3, urls[2]), (4, urls[3]), (1, urls[0]), (3, urls[2]), (4, urls[3])],
+            [(call.args[0], call.args[2]) for call in capture.call_args_list],
+            [
+                (driver, (index + 1, urls[index]))
+                for index, _, _ in captures
+                for driver in (baseline_driver, candidate_driver)
+            ],
         )
+        self.assertEqual(changes[5]["clear_reason"], "baseline-also-dropped")
         _, blocking = smoke.gate_regressions(baseline, current, 5, changes=changes)
         self.assertEqual(
             blocking,
@@ -310,7 +326,9 @@ class SiteSmokeTests(unittest.TestCase):
         settings = {"jobs": 4, "navigation_timeout_s": 25, "settle_s": 2}
         baseline = dict(run(site("example")), revision="baseline", settings=settings)
         current = dict(run(site("example", "timeout")), settings=settings, summary={"sites": 1})
-        args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, test_jobs=6, console_error_increase=5)
+        args = SimpleNamespace(
+            cc=None, cxx=None, build_jobs=None, test_jobs=6, console_error_increase=5, baseline_webdriver=None
+        )
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
             commands = []
