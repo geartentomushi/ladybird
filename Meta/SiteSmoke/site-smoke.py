@@ -594,7 +594,7 @@ def main():
             print(json.dumps(changes, indent=2))
         else:
             print_comparison(changes)
-        return 0
+        return int(any(change["direction"] == "regression" for change in changes))
 
     if args.command == "gate":
         if sys.platform != "linux":

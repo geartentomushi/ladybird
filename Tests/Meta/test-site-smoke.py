@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import runpy
+import sys
 import tempfile
 import unittest
 
@@ -118,6 +119,21 @@ class SiteSmokeTests(unittest.TestCase):
         current["settings"]["jobs"] = 8
         with self.assertRaisesRegex(ValueError, "different.*settings"):
             smoke.compare(baseline, current)
+
+    def test_compare_cli_exits_nonzero_only_when_changes_include_regressions(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            old = Path(temporary) / "old.json"
+            new = Path(temporary) / "new.json"
+            old.write_text(json.dumps(run(site("example"))))
+            new.write_text(json.dumps(run(site("example", "timeout"))))
+            for before, after, status in ((old, new, 1), (new, old, 0), (old, old, 0)):
+                with patch.object(sys, "argv", ["site-smoke.py", "compare", str(before), str(after), "--json"]):
+                    with contextlib.redirect_stdout(io.StringIO()) as output:
+                        self.assertEqual(smoke.main(), status)
+                    self.assertEqual(
+                        any(row["direction"] == "regression" for row in json.loads(output.getvalue())),
+                        bool(status),
+                    )
 
     def test_gate_blocks_partial_loads_new_crashes_and_large_console_increases(self):
         baseline = run(

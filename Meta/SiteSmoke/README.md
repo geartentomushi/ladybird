@@ -38,8 +38,9 @@ site is usable: a consent prompt, verification challenge or error page can also
 render content.
 
 `compare` reports per-site load-status changes and, for successful loads,
-changes in console-error counts and whether the body is nonempty. Use `--json`
-to get the same differences as JSON. Timings are saved but not graded because
+changes in console-error counts and whether the body is nonempty. It exits 1
+if any reported change is a regression. Use `--json` to get the same
+differences as JSON. Timings are saved but not graded because
 network latency and server behavior vary. Inspect screenshots and repeat a run
 before attributing changes to the engine. Commit only the baseline JSON, not the
 screenshots or logs.
