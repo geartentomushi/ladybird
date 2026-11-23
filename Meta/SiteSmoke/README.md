@@ -57,8 +57,32 @@ render content.
 The harness keeps output directories and files private to the owner (0700 and 0600).
 
 `compare` reports per-site load-status changes and, for successful loads,
-changes in console-error counts and whether the body is nonempty. It exits 1
-if any reported change is a regression. Use `--json` to get the same
+changes in console-error counts and whether the body is nonempty. If the body
+remains nonempty but loses at least five elements and at least 30% of its
+baseline count, the gate can take up to two pairs of fresh captures, alternating
+baseline and candidate builds. Both pairs must still show a drop of that size;
+if the baseline also drops by that threshold from its original count, the site
+changed and the finding is cleared. The drop does not block the gate unless
+both candidate reruns show an empty body.
+
+The same paired captures check new timeouts and load errors, empty bodies,
+lost screenshots or DOM evidence, and console increases. The candidate must
+still fail the original check in both pairs while the baseline remains good.
+For console counts, the increase must also meet the same threshold against
+each paired baseline. A recovered candidate or a baseline that also fails the
+check clears that finding; it stays in the report as informational. Raw
+improvements and coverage changes are not rerun. An observed new crash still
+fails the gate. A missing rerun measurement is marked inconclusive unless
+another pair clears the finding; an inconclusive blocking finding still fails
+the gate.
+
+For the gate, pass `--baseline-webdriver /path/to/baseline/WebDriver`. For
+standalone comparisons, also pass `--webdriver /path/to/candidate/WebDriver`
+and `--rerun-output /path/to/new-directory`. Use the binaries that produced the
+original results, kept in separate build directories. Without the binaries,
+the original changes are reported as measured and suspected body-count drops
+are informational and marked pending.
+The comparison exits 1 if any reported change is a regression. Use `--json` to get the same
 differences as JSON. Timings are saved but not graded because
 network latency and server behavior vary. Inspect screenshots and repeat a run
 before attributing changes to the engine. Commit only the baseline JSON, not the
