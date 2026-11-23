@@ -7,6 +7,7 @@ import contextlib
 import io
 import json
 import runpy
+import signal
 import sys
 import tempfile
 import unittest
@@ -196,11 +197,11 @@ class SiteSmokeTests(unittest.TestCase):
                     directory = command[command.index("--output") + 1]
                     directory.mkdir()
                     (directory / "results.json").write_text(json.dumps(current))
-                return SimpleNamespace(returncode=0)
+                return 0
 
             with contextlib.ExitStack() as stack:
                 stack.enter_context(patch.object(smoke.subprocess, "check_output", return_value="candidate\n"))
-                stack.enter_context(patch.object(smoke.subprocess, "run", side_effect=execute))
+                stack.enter_context(patch.dict(smoke.run_gate.__globals__, {"run_stage": execute}))
                 stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
                 self.assertEqual(smoke.run_gate(args, output, baseline), 1)
             report = json.loads((output / "gate-summary.json").read_text())
@@ -257,9 +258,9 @@ class SiteSmokeTests(unittest.TestCase):
                 {"rank": rank, **site(url, smoke.STATUSES[(rank - 1) % len(smoke.STATUSES)])} for rank, url in targets
             ]
             (details / "results.json").write_text(json.dumps({"sites": rows}))
-            return SimpleNamespace(returncode=1)
+            return 1
 
-        with tempfile.TemporaryDirectory() as temporary, patch.object(smoke.subprocess, "run", side_effect=fake_run):
+        with tempfile.TemporaryDirectory() as temporary, patch.dict(smoke.run_ci.__globals__, {"run_stage": fake_run}):
             directory = Path(temporary)
             ladybird = directory / "Ladybird"
             ladybird.touch(mode=0o755)
@@ -277,6 +278,19 @@ class SiteSmokeTests(unittest.TestCase):
             smoke.public_final_url("https://user:pass@host:8443/path?token=abc#state"), "https://host:8443/path"
         )
         self.assertIsNone(smoke.public_final_url("data:text/html,secret"))
+
+    def test_cancel_kills_active_driver_groups_and_blocks_new_launches(self):
+        processes = smoke.DriverProcesses()
+        with (
+            patch.object(smoke.subprocess, "Popen", return_value=SimpleNamespace(pid=123)) as spawn,
+            patch.object(smoke.os, "killpg") as kill,
+        ):
+            processes.start(["WebDriver"], None)
+            processes.cancel()
+            kill.assert_called_once_with(123, signal.SIGKILL)
+            with self.assertRaisesRegex(smoke.DriverError, "interrupted"):
+                processes.start(["WebDriver"], None)
+            spawn.assert_called_once()
 
     def test_recovers_crash_evidence_from_profile_and_protocol(self):
         with tempfile.TemporaryDirectory() as temporary:

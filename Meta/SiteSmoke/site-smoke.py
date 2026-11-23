@@ -23,6 +23,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from datetime import timezone
 from pathlib import Path
+from threading import Lock
 from urllib.parse import urlsplit
 
 try:
@@ -100,16 +101,44 @@ class BiDi:
                 break
 
 
+def kill_driver_group(pid):
+    with contextlib.suppress(ProcessLookupError):
+        os.killpg(pid, signal.SIGKILL)
+
+
+class DriverProcesses:
+    def __init__(self):
+        self.lock = Lock()
+        self.active = set()
+        self.cancelled = False
+
+    def start(self, command, log):
+        with self.lock:
+            if self.cancelled:
+                raise DriverError("Smoke run interrupted")
+            process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
+            self.active.add(process.pid)
+            return process
+
+    def cancel(self):
+        with self.lock:
+            self.cancelled = True
+            for pid in self.active:
+                kill_driver_group(pid)
+
+    def discard(self, pid):
+        with self.lock:
+            self.active.discard(pid)
+
+
 @contextlib.contextmanager
-def launch_driver(executable, directory, log_path):
+def launch_driver(executable, directory, log_path, processes):
     with tempfile.TemporaryDirectory(prefix="profile-", dir=directory) as temporary:
         profile = Path(temporary) / "profile"
         with log_path.open("wb") as log:
-            process = subprocess.Popen(
+            process = processes.start(
                 [executable, "--headless", "--force-cpu-painting", "--port", "0", "--profile-path", profile],
-                stdout=log,
-                stderr=subprocess.STDOUT,
-                start_new_session=True,
+                log,
             )
             try:
                 yield process, profile
@@ -119,11 +148,10 @@ def launch_driver(executable, directory, log_path):
                 try:
                     process.wait(timeout=5)
                 except subprocess.TimeoutExpired:
-                    with contextlib.suppress(ProcessLookupError):
-                        os.killpg(process.pid, signal.SIGKILL)
+                    kill_driver_group(process.pid)
                     process.wait()
-                with contextlib.suppress(ProcessLookupError):
-                    os.killpg(process.pid, signal.SIGKILL)
+                kill_driver_group(process.pid)
+                processes.discard(process.pid)
 
 
 def webdriver_port(process, log_path):
@@ -192,7 +220,7 @@ def sample_render(bidi, context, row, image_path, errors):
     row["screenshot"] = image_path.name
 
 
-def capture(executable, directory, site, timeout, settle):
+def capture(executable, directory, site, timeout, settle, processes=None):
     if connect is None or WebSocketException is None or ConnectionClosedOK is None:
         raise DriverError("Install `websockets` as pinned in requirements.txt")
     rank, url = site
@@ -211,7 +239,7 @@ def capture(executable, directory, site, timeout, settle):
     }
     errors = (DriverError, OSError, WebSocketException, http.client.HTTPException)
     try:
-        with launch_driver(executable, directory, log_path) as (process, profile):
+        with launch_driver(executable, directory, log_path, processes or DriverProcesses()) as (process, profile):
             endpoint = open_session(webdriver_port(process, log_path))
             with connect(
                 endpoint,
@@ -393,6 +421,17 @@ def ci_results(sites):
     return {"results": {row["url"]: status[row["status"]] for row in sites}}
 
 
+def run_stage(command, **kwargs):
+    with subprocess.Popen(command, start_new_session=True, **kwargs) as process:
+        try:
+            return process.wait()
+        except KeyboardInterrupt:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(process.pid, signal.SIGINT)
+            process.wait()
+            raise
+
+
 def run_ci(ladybird, output):
     if not ladybird.is_absolute() or not output.is_absolute():
         raise ValueError("--ladybird and --output must be absolute paths")
@@ -407,7 +446,7 @@ def run_ci(ladybird, output):
     if output.is_dir():
         raise ValueError(f"--output must be a JSON file, not a directory: {output}")
     details = prepare_output(output.with_name(output.name + ".details"))
-    completed = subprocess.run(
+    status = run_stage(
         [
             sys.executable,
             __file__,
@@ -419,10 +458,9 @@ def run_ci(ladybird, output):
             "--output",
             str(details),
         ],
-        check=False,
     )
-    if completed.returncode not in (0, 1):
-        raise ValueError(f"Site smoke harness exited {completed.returncode}; see {details}")
+    if status not in (0, 1):
+        raise ValueError(f"Site smoke harness exited {status}; see {details}")
     _, sites = targets(None)
     results_file = details / "results.json"
     try:
@@ -448,9 +486,7 @@ def run_gate(args, output, baseline):
         log = output / f"{name}.log"
         with log.open("w") as stream:
             try:
-                status = subprocess.run(
-                    command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT
-                ).returncode
+                status = run_stage(command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT)
             except OSError as error:
                 print(error, file=stream)
                 status = 1
@@ -656,10 +692,18 @@ def main():
         },
         "sites": [],
     }
+    processes = DriverProcesses()
     with ThreadPoolExecutor(max_workers=args.jobs) as executor:
-        for row in executor.map(lambda site: capture(executable, output, site, args.timeout, args.settle), sites):
-            result["sites"].append(row)
-            print(f"{row['rank']:3d} {row['status']:13} {str(row['load_ms']):>5} ms {row['url']}", flush=True)
+        try:
+            for row in executor.map(
+                lambda site: capture(executable, output, site, args.timeout, args.settle, processes), sites
+            ):
+                result["sites"].append(row)
+                print(f"{row['rank']:3d} {row['status']:13} {str(row['load_ms']):>5} ms {row['url']}", flush=True)
+        except KeyboardInterrupt:
+            processes.cancel()
+            executor.shutdown(cancel_futures=True)
+            raise
     result["summary"] = summarize(result["sites"])
     results_file = output / "results.json"
     results_file.write_text(json.dumps(result, indent=2) + "\n")
@@ -669,4 +713,8 @@ def main():
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    try:
+        raise SystemExit(main())
+    except KeyboardInterrupt:
+        print("Site smoke interrupted", file=sys.stderr)
+        raise SystemExit(130) from None
