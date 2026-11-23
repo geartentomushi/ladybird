@@ -89,6 +89,9 @@ runs:
 
           if ${{ github.repository == 'geartentomushi/ladybird' && inputs.build_preset == 'Release' }} ; then
             CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_BUILD_TYPE=Release -DVCPKG_INSTALL_OPTIONS=--clean-after-build"
+            if ${{ inputs.toolchain == 'Clang' }} ; then
+              CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_CXX_FLAGS=-gline-tables-only"
+            fi
           fi
         elif ${{ inputs.os == 'macOS' }} ; then
           echo "host_cc=$(xcrun --find clang)" >> "$GITHUB_OUTPUT"
