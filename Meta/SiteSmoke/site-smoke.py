@@ -459,6 +459,17 @@ def confirm_body_drops(changes, current, executable, directory):
         if all(row["status"] == "success" and row["body_element_count"] is not None for row in change["reruns"]):
             change["confirmation"] = "confirmed"
             change["direction"] = "changed"
+            if all(row["body_element_count"] == 0 for row in change["reruns"]):
+                changes.append(
+                    {
+                        "url": change["url"],
+                        "metric": "nonempty_body",
+                        "direction": "regression",
+                        "before": 1,
+                        "after": 0,
+                        "confirmation": "confirmed",
+                    }
+                )
         else:
             change["confirmation"] = "inconclusive"
 
@@ -486,8 +497,9 @@ def print_comparison(changes):
         print(f"{change['direction']:13} {change['url']} {change['metric']}{delta}{confirmation}")
 
 
-def gate_regressions(baseline, current, console_threshold):
-    changes = compare(baseline, current)
+def gate_regressions(baseline, current, console_threshold, *, changes=None):
+    if changes is None:
+        changes = compare(baseline, current)
     regressions = [
         change
         for change in changes
@@ -703,8 +715,9 @@ def run_gate(args, output, baseline):
     )
     try:
         current = json.loads((sites_dir / "results.json").read_text())
-        changes, regressions = gate_regressions(baseline, current, args.console_error_increase)
+        changes = compare(baseline, current)
         confirm_body_drops(changes, current, build / "bin/WebDriver", output / "body-drop-reruns")
+        changes, regressions = gate_regressions(baseline, current, args.console_error_increase, changes=changes)
         details["summary"] = current["summary"]
         report["site_changes"] = changes
         report["site_regressions"] = regressions

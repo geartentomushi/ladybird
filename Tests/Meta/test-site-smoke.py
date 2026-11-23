@@ -188,11 +188,11 @@ class SiteSmokeTests(unittest.TestCase):
         self.assertEqual(blocking, [])
 
     def test_only_persistent_body_count_drops_are_confirmed_by_reruns(self):
-        names = ("persistent", "cleared", "inconclusive", "unchanged")
+        names = ("persistent", "cleared", "inconclusive", "empty", "unchanged")
         urls = [f"https://{name}.example/" for name in names]
         baseline = run(*(site(url, elements=22) for url in urls))
         current = run(
-            *(dict(site(url, elements=14 if rank < 4 else 22), rank=rank) for rank, url in enumerate(urls, 1))
+            *(dict(site(url, elements=14 if rank < 5 else 22), rank=rank) for rank, url in enumerate(urls, 1))
         )
         settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
         baseline["settings"].update(settings)
@@ -202,8 +202,10 @@ class SiteSmokeTests(unittest.TestCase):
             site(urls[0], elements=14),
             site(urls[1], elements=22),
             site(urls[2], status="timeout", elements=None),
+            site(urls[3], elements=0),
             site(urls[0], elements=15),
             site(urls[2], elements=14),
+            site(urls[3], elements=0),
         ]
         capture = Mock(side_effect=attempts)
         with (
@@ -212,16 +214,35 @@ class SiteSmokeTests(unittest.TestCase):
         ):
             smoke.confirm_body_drops(changes, current, Path("WebDriver"), Path(temporary) / "reruns")
         self.assertEqual(
-            [(row["url"], row["confirmation"], row["direction"]) for row in changes],
+            [
+                (row["url"], row["confirmation"], row["direction"])
+                for row in changes
+                if row["metric"] == "body_element_count"
+            ],
             [
                 (urls[0], "confirmed", "changed"),
                 (urls[1], "cleared-on-rerun", "informational"),
                 (urls[2], "inconclusive", "informational"),
+                (urls[3], "confirmed", "changed"),
             ],
         )
         self.assertEqual(
             [call.args[2] for call in capture.call_args_list],
-            [(1, urls[0]), (2, urls[1]), (3, urls[2]), (1, urls[0]), (3, urls[2])],
+            [(1, urls[0]), (2, urls[1]), (3, urls[2]), (4, urls[3]), (1, urls[0]), (3, urls[2]), (4, urls[3])],
+        )
+        _, blocking = smoke.gate_regressions(baseline, current, 5, changes=changes)
+        self.assertEqual(
+            blocking,
+            [
+                {
+                    "url": urls[3],
+                    "metric": "nonempty_body",
+                    "direction": "regression",
+                    "before": 1,
+                    "after": 0,
+                    "confirmation": "confirmed",
+                }
+            ],
         )
 
     def test_compare_cli_exits_nonzero_only_when_changes_include_regressions(self):
