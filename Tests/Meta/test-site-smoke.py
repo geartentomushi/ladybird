@@ -160,6 +160,107 @@ class SiteSmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different.*settings"):
             smoke.compare(baseline, current)
 
+    def test_large_nonempty_body_count_drops_are_reported_but_do_not_block(self):
+        baseline = run(
+            site("large-drop", elements=22),
+            site("exact-percentage", elements=20),
+            site("exact-count", elements=10),
+            site("small-count-drop", elements=10),
+            site("small-percentage-drop", elements=20),
+        )
+        current = run(
+            site("large-drop", elements=15),
+            site("exact-percentage", elements=14),
+            site("exact-count", elements=5),
+            site("small-count-drop", elements=6),
+            site("small-percentage-drop", elements=15),
+        )
+        changes, blocking = smoke.gate_regressions(baseline, current, 5)
+        self.assertEqual(
+            [(row["url"], row["metric"], row["direction"], row["before"], row["after"]) for row in changes],
+            [
+                ("large-drop", "body_element_count", "informational", 22, 15),
+                ("exact-percentage", "body_element_count", "informational", 20, 14),
+                ("exact-count", "body_element_count", "informational", 10, 5),
+            ],
+        )
+        self.assertTrue(all(row["confirmation"] == "pending" for row in changes))
+        self.assertEqual(blocking, [])
+
+    def test_only_persistent_body_count_drops_are_confirmed_by_reruns(self):
+        names = ("persistent", "cleared", "inconclusive", "empty", "mixed", "site-changed", "unchanged")
+        urls = [f"https://{name}.example/" for name in names]
+        baseline = run(*(site(url, elements=22) for url in urls))
+        current = run(
+            *(dict(site(url, elements=22 if url == urls[-1] else 14), rank=rank) for rank, url in enumerate(urls, 1))
+        )
+        settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
+        baseline["settings"].update(settings)
+        current["settings"].update(settings)
+        changes = smoke.compare(baseline, current)
+        captures = [
+            (0, 22, 14),
+            (1, 22, 22),
+            (2, None, 14),
+            (3, 22, 0),
+            (4, 22, 0),
+            (5, 14, 14),
+            (0, 22, 15),
+            (2, 22, 14),
+            (3, 22, 0),
+            (4, 22, 15),
+        ]
+        baseline_driver, candidate_driver = Path("BaselineWebDriver"), Path("CandidateWebDriver")
+        attempts = [
+            site(urls[index], status="timeout" if count is None else "success", elements=count)
+            for index, baseline_count, candidate_count in captures
+            for count in (baseline_count, candidate_count)
+        ]
+        capture = Mock(side_effect=attempts)
+        with (
+            tempfile.TemporaryDirectory() as temporary,
+            patch.dict(smoke.confirm_body_drops.__globals__, {"capture": capture}),
+        ):
+            smoke.confirm_body_drops(changes, current, baseline_driver, candidate_driver, Path(temporary) / "reruns")
+        self.assertEqual(
+            [
+                (row["url"], row["confirmation"], row["direction"])
+                for row in changes
+                if row["metric"] == "body_element_count"
+            ],
+            [
+                (urls[0], "confirmed", "changed"),
+                (urls[1], "cleared-on-rerun", "informational"),
+                (urls[2], "inconclusive", "informational"),
+                (urls[3], "confirmed", "changed"),
+                (urls[4], "confirmed", "changed"),
+                (urls[5], "cleared-on-rerun", "informational"),
+            ],
+        )
+        self.assertEqual(
+            [(call.args[0], call.args[2]) for call in capture.call_args_list],
+            [
+                (driver, (index + 1, urls[index]))
+                for index, _, _ in captures
+                for driver in (baseline_driver, candidate_driver)
+            ],
+        )
+        self.assertEqual(changes[5]["clear_reason"], "baseline-also-dropped")
+        _, blocking = smoke.gate_regressions(baseline, current, 5, changes=changes)
+        self.assertEqual(
+            blocking,
+            [
+                {
+                    "url": urls[3],
+                    "metric": "nonempty_body",
+                    "direction": "regression",
+                    "before": 1,
+                    "after": 0,
+                    "confirmation": "confirmed",
+                }
+            ],
+        )
+
     def test_compare_cli_exits_nonzero_only_when_changes_include_regressions(self):
         with tempfile.TemporaryDirectory() as temporary:
             old = Path(temporary) / "old.json"
@@ -225,7 +326,9 @@ class SiteSmokeTests(unittest.TestCase):
         settings = {"jobs": 4, "navigation_timeout_s": 25, "settle_s": 2}
         baseline = dict(run(site("example")), revision="baseline", settings=settings)
         current = dict(run(site("example", "timeout")), settings=settings, summary={"sites": 1})
-        args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, test_jobs=6, console_error_increase=5)
+        args = SimpleNamespace(
+            cc=None, cxx=None, build_jobs=None, test_jobs=6, console_error_increase=5, baseline_webdriver=None
+        )
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
             commands = []

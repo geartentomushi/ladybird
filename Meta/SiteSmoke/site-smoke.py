@@ -361,6 +361,11 @@ def summarize(sites):
     }
 
 
+def is_large_body_drop(before, after):
+    drop = before - after
+    return drop >= 5 and drop * 10 >= before * 3
+
+
 def compare(baseline, current):
     if any(baseline[field] != current[field] for field in ("schema_version", "settings")):
         raise ValueError("Baseline and current run use different schema versions or capture settings")
@@ -391,6 +396,17 @@ def compare(baseline, current):
         old_count, count = before["body_element_count"], site["body_element_count"]
         if old_count is not None and count is not None:
             metrics["nonempty_body"] = (int(old_count > 0), int(count > 0), True)
+            if count > 0 and is_large_body_drop(old_count, count):
+                changes.append(
+                    {
+                        "url": url,
+                        "metric": "body_element_count",
+                        "direction": "informational",
+                        "before": old_count,
+                        "after": count,
+                        "confirmation": "pending",
+                    }
+                )
         if before["console_errors"] is not None and site["console_errors"] is not None:
             for category in ERROR_CATEGORIES:
                 metrics[category] = (before["console_errors"][category], site["console_errors"][category], False)
@@ -400,6 +416,88 @@ def compare(baseline, current):
                 changes.append({"url": url, "metric": metric, "direction": direction, "before": old, "after": new})
     changes.extend({"url": url, "metric": "coverage", "direction": "removed"} for url in old_sites)
     return changes
+
+
+def is_http_url(url):
+    parsed = urlsplit(url)
+    return parsed.scheme in ("http", "https") and parsed.hostname and parsed.username is None
+
+
+def confirm_body_drops(changes, current, baseline_executable, executable, directory):
+    pending = [change for change in changes if change.get("confirmation") == "pending"]
+    if not pending:
+        return
+    settings = current["settings"]
+    timeout, settle = settings["navigation_timeout_s"], settings["settle_s"]
+    if settings["viewport"] != VIEWPORT or not 0 < timeout < float("inf") or not 0 <= settle < float("inf"):
+        raise ValueError("Invalid body-drop rerun capture settings")
+    ranks = {row["url"]: row["rank"] for row in current["sites"]}
+    for change in pending:
+        url = change["url"]
+        if not is_http_url(url) or not isinstance(ranks[url], int) or ranks[url] < 1:
+            raise ValueError("Invalid site in body-drop rerun")
+
+    directory = prepare_output(directory)
+    processes = DriverProcesses()
+    try:
+        for attempt in range(1, 3):
+            attempt_directory = prepare_output(directory / f"attempt-{attempt}")
+            baseline_directory = prepare_output(attempt_directory / "baseline")
+            candidate_directory = prepare_output(attempt_directory / "candidate")
+            for change in pending:
+                url = change["url"]
+                site = (ranks[url], url)
+                pair = {}
+                for label, driver, path in (
+                    ("baseline", baseline_executable, baseline_directory),
+                    ("candidate", executable, candidate_directory),
+                ):
+                    row = capture(driver, path, site, timeout, settle, processes)
+                    pair[label] = {"status": row["status"], "body_element_count": row["body_element_count"]}
+                change.setdefault("reruns", []).append(pair)
+                baseline_count, count = body_count(pair["baseline"]), body_count(pair["candidate"])
+                if baseline_count is not None and is_large_body_drop(change["before"], baseline_count):
+                    change["confirmation"] = "cleared-on-rerun"
+                    change["clear_reason"] = "baseline-also-dropped"
+                elif count is not None and (
+                    not is_large_body_drop(change["before"], count)
+                    or (baseline_count is not None and not is_large_body_drop(baseline_count, count))
+                ):
+                    change["confirmation"] = "cleared-on-rerun"
+            pending = [change for change in pending if change["confirmation"] == "pending"]
+            if not pending:
+                break
+    except KeyboardInterrupt:
+        processes.cancel()
+        raise
+    for change in pending:
+        if all(body_count(row) is not None for pair in change["reruns"] for row in pair.values()):
+            change["confirmation"] = "confirmed"
+            change["direction"] = "changed"
+            if all(body_count(pair["candidate"]) == 0 for pair in change["reruns"]):
+                changes.append(
+                    {
+                        "url": change["url"],
+                        "metric": "nonempty_body",
+                        "direction": "regression",
+                        "before": 1,
+                        "after": 0,
+                        "confirmation": "confirmed",
+                    }
+                )
+        else:
+            change["confirmation"] = "inconclusive"
+
+
+def body_count(row):
+    return row["body_element_count"] if row["status"] == "success" else None
+
+
+def resolve_webdriver(path):
+    path = path.resolve()
+    if not path.is_file() or not os.access(path, os.X_OK):
+        raise ValueError(f"Not an executable: {path}")
+    return path
 
 
 def targets(urls):
@@ -414,15 +512,20 @@ def print_comparison(changes):
     counts = Counter(change["direction"] for change in changes)
     print(
         "Changes:",
-        ", ".join(f"{key}={counts[key]}" for key in ("regression", "improvement", "changed", "added", "removed")),
+        ", ".join(
+            f"{key}={counts[key]}"
+            for key in ("regression", "improvement", "changed", "added", "removed", "informational")
+        ),
     )
     for change in changes:
         delta = f": {change['before']} → {change['after']}" if "before" in change else ""
-        print(f"{change['direction']:11} {change['url']} {change['metric']}{delta}")
+        confirmation = f" ({change['confirmation']})" if "confirmation" in change else ""
+        print(f"{change['direction']:13} {change['url']} {change['metric']}{delta}{confirmation}")
 
 
-def gate_regressions(baseline, current, console_threshold):
-    changes = compare(baseline, current)
+def gate_regressions(baseline, current, console_threshold, *, changes=None):
+    if changes is None:
+        changes = compare(baseline, current)
     regressions = [
         change
         for change in changes
@@ -638,7 +741,12 @@ def run_gate(args, output, baseline):
     )
     try:
         current = json.loads((sites_dir / "results.json").read_text())
-        changes, regressions = gate_regressions(baseline, current, args.console_error_increase)
+        changes = compare(baseline, current)
+        if args.baseline_webdriver is not None:
+            confirm_body_drops(
+                changes, current, args.baseline_webdriver, build / "bin/WebDriver", output / "body-drop-reruns"
+            )
+        changes, regressions = gate_regressions(baseline, current, args.console_error_increase, changes=changes)
         details["summary"] = current["summary"]
         report["site_changes"] = changes
         report["site_regressions"] = regressions
@@ -672,11 +780,15 @@ def main():
     comparison.add_argument("baseline", type=Path)
     comparison.add_argument("current", type=Path)
     comparison.add_argument("--json", action="store_true", help="Print the comparison as JSON")
+    comparison.add_argument("--webdriver", type=Path, help="Candidate WebDriver to rerun suspected body drops")
+    comparison.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired reruns")
+    comparison.add_argument("--rerun-output", type=Path, help="New directory for body-drop rerun artifacts")
     gate = commands.add_parser(
         "gate", help="Build and run the LibWeb, LibJS, and pinned site regression checks (Linux)"
     )
     gate.add_argument("--output", type=Path, required=True)
     gate.add_argument("--baseline", type=Path, default=HERE / "baseline.json")
+    gate.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired body-drop reruns")
     gate.add_argument("--cc", help="C compiler passed to Meta/ladybird.py")
     gate.add_argument("--cxx", help="C++ compiler passed to Meta/ladybird.py")
     gate.add_argument("--build-jobs", type=int)
@@ -692,9 +804,21 @@ def main():
         except (OSError, ValueError) as error:
             ci.error(str(error))
     if args.command == "compare":
+        rerun_options = (args.webdriver, args.baseline_webdriver, args.rerun_output)
+        if any(rerun_options) and not all(rerun_options):
+            comparison.error("--webdriver, --baseline-webdriver and --rerun-output must be supplied together")
         try:
-            changes = compare(json.loads(args.baseline.read_text()), json.loads(args.current.read_text()))
-        except (KeyError, OSError, ValueError) as error:
+            current = json.loads(args.current.read_text())
+            changes = compare(json.loads(args.baseline.read_text()), current)
+            if args.webdriver is not None:
+                confirm_body_drops(
+                    changes,
+                    current,
+                    resolve_webdriver(args.baseline_webdriver),
+                    resolve_webdriver(args.webdriver),
+                    args.rerun_output,
+                )
+        except (DriverError, KeyError, OSError, ValueError) as error:
             comparison.error(str(error))
         if args.json:
             print(json.dumps(changes, indent=2))
@@ -714,6 +838,8 @@ def main():
         if connect is None:
             gate.error("Install `websockets` as pinned in requirements.txt")
         try:
+            if args.baseline_webdriver is not None:
+                args.baseline_webdriver = resolve_webdriver(args.baseline_webdriver)
             baseline = json.loads(args.baseline.read_text())
             source, sites = targets(None)
             if (
@@ -734,8 +860,7 @@ def main():
     if args.jobs < 1 or not 0 < args.timeout < float("inf") or not 0 <= args.settle < float("inf"):
         run.error("Require positive --jobs and --timeout, and nonnegative --settle")
     for url in args.url or []:
-        parsed = urlsplit(url)
-        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username is not None:
+        if not is_http_url(url):
             run.error(f"Require an HTTP(S) URL without credentials: {url}")
     if args.url and len(set(args.url)) != len(args.url):
         run.error("Each --url must be unique")
