@@ -43,6 +43,11 @@ jobs:
               writeFileSync(linter, Buffer.from(script.content, "base64"));
               for (const { sha, commit: { message }, author } of commits) {
                 if (author?.id === 49699333) continue; // dependabot[bot]
+                const subject = message.split("\n", 1)[0];
+                if (/^(?:fixup|squash|amend)!(?: |$)/.test(subject)) {
+                  errors.push(`${sha}: Autosquash commit must be folded into its target commit`);
+                  continue;
+                }
                 writeFileSync(messageFile, message + "\n");
                 const result = spawnSync("bash", [linter, messageFile], { encoding: "utf-8" });
                 if (result.error) throw result.error;
