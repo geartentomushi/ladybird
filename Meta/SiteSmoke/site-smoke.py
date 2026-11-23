@@ -895,9 +895,8 @@ def main():
         try:
             current = json.loads(args.current.read_text())
             baseline = json.loads(args.baseline.read_text())
-            changes = compare(baseline, current)
+            changes = compare(baseline, current) + gate_evidence_findings(baseline, current, 5)
             if args.webdriver is not None:
-                changes.extend(gate_evidence_findings(baseline, current, 5))
                 confirm_findings(
                     changes,
                     current,

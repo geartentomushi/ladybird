@@ -278,6 +278,23 @@ class SiteSmokeTests(unittest.TestCase):
                         bool(status),
                     )
 
+    def test_raw_compare_reports_missing_render_evidence(self):
+        before = site("https://example.com/")
+        for metric in ("screenshot", "body_element_count"):
+            with self.subTest(metric=metric), tempfile.TemporaryDirectory() as temporary:
+                baseline, current = (Path(temporary) / name for name in ("old.json", "new.json"))
+                baseline.write_text(json.dumps(run(before)))
+                current.write_text(json.dumps(run(dict(before, **{metric: None}))))
+                with (
+                    patch.object(sys, "argv", ["site-smoke.py", "compare", str(baseline), str(current), "--json"]),
+                    contextlib.redirect_stdout(io.StringIO()) as output,
+                ):
+                    self.assertEqual(smoke.main(), 1)
+                self.assertEqual(
+                    [(row["metric"], row["direction"]) for row in json.loads(output.getvalue())],
+                    [(f"missing_{metric}", "regression")],
+                )
+
     def test_gate_blocks_partial_loads_new_crashes_and_large_console_increases(self):
         baseline = run(
             site("crashed", "load-error"),
