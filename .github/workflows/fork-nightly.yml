@@ -1,0 +1,274 @@
+name: Fork Nightly Compatibility
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fork-nightly-compatibility
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.repository == 'geartentomushi/ladybird' && github.ref == 'refs/heads/master'
+    runs-on: ubuntu-24.04
+    container: &ci_container
+      image: ghcr.io/ladybirdbrowser/ladybird-ci:2026.11.21
+      options: --ulimit core=1
+    outputs:
+      wpt-revision: ${{ steps.inputs.outputs.wpt-revision }}
+      has-sites: ${{ steps.inputs.outputs.has-sites }}
+    env:
+      CCACHE_MAXSIZE: 2G
+      CMAKE_BUILD_PARALLEL_LEVEL: '4'
+      VCPKG_MAX_CONCURRENCY: '4'
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Resolve test inputs
+        id: inputs
+        shell: bash
+        run: |
+          revision=$(git ls-remote --exit-code https://github.com/web-platform-tests/wpt.git HEAD)
+          echo "wpt-revision=${revision%%[[:space:]]*}" >> "$GITHUB_OUTPUT"
+          if [[ -f Meta/run-top-sites-smoke.sh ]]; then
+            echo "has-sites=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build
+        with:
+          os: Linux
+          arch: x86_64
+          toolchain: Clang
+          build_preset: Release
+
+      - name: Package runtime and test262 runner
+        shell: bash
+        run: |
+          install -m 755 Build/bin/test262-runner Install/bin/
+          test -x Install/bin/Ladybird
+          test -x Install/bin/WebDriver
+          tar -czf nightly-runtime.tar.gz Install
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: nightly-runtime
+          path: nightly-runtime.tar.gz
+          if-no-files-found: error
+          retention-days: 2
+          compression-level: 0
+
+  wpt:
+    needs: build
+    runs-on: ubuntu-24.04
+    container: *ci_container
+    timeout-minutes: 350
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16]
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: nightly-runtime
+
+      - name: Extract runtime and check out WPT
+        shell: bash
+        env:
+          WPT_REVISION: ${{ needs.build.outputs.wpt-revision }}
+        run: |
+          tar -xzf nightly-runtime.tar.gz
+          git init Tests/LibWeb/WPT/wpt
+          git -C Tests/LibWeb/WPT/wpt fetch --depth=1 https://github.com/web-platform-tests/wpt.git "$WPT_REVISION"
+          git -C Tests/LibWeb/WPT/wpt checkout --detach FETCH_HEAD
+
+      - name: Run WPT shard
+        shell: bash
+        env:
+          BUILD_LADYBIRD: 'false'
+          LADYBIRD_BINARY: ${{ github.workspace }}/Install/bin/Ladybird
+          WEBDRIVER_BINARY: ${{ github.workspace }}/Install/bin/WebDriver
+          WPT_PROCESSES: '4'
+        run: |
+          export PULSE_SERVER=unix:/tmp/pulse-native
+          pulseaudio --system -D --exit-idle-time=-1 \
+            --load="module-native-protocol-unix auth-anonymous=1 socket=/tmp/pulse-native" \
+            --load="module-null-sink sink_name=virtual_sink"
+          Meta/WPT.sh run --total-chunks ${{ strategy.job-total }} --this-chunk ${{ matrix.shard }} \
+            --chunk-type id_hash --no-fail-on-unexpected --log-wptreport "wpt-${{ matrix.shard }}.json"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: wpt-${{ matrix.shard }}
+          path: wpt-${{ matrix.shard }}.json
+          if-no-files-found: error
+          retention-days: 7
+
+  test262:
+    needs: build
+    runs-on: ubuntu-24.04
+    container: *ci_container
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: LadybirdBrowser/libjs-test262
+          path: libjs-test262
+          persist-credentials: false
+
+      - uses: actions/checkout@v7.0.1
+        with:
+          repository: tc39/test262
+          path: test262
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: nightly-runtime
+
+      - name: Run test262
+        shell: bash
+        run: |
+          tar -xzf nightly-runtime.tar.gz
+          export LD_LIBRARY_PATH="$PWD/Install/lib"
+          dependencies=$(ldd Install/bin/test262-runner)
+          printf '%s\n' "$dependencies"
+          [[ "$dependencies" != *'not found'* ]]
+          python3 -m venv "$RUNNER_TEMP/test262-venv"
+          python="$RUNNER_TEMP/test262-venv/bin/python"
+          "$python" -m pip install -r libjs-test262/requirements.txt
+          "$python" libjs-test262/main.py --libjs-test262-runner Install/bin/test262-runner \
+            --test262-root test262 --concurrency 4 --silent --summary --per-file test262.json
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: test262
+          path: test262.json
+          if-no-files-found: error
+          retention-days: 7
+
+  sites:
+    needs: build
+    if: needs.build.outputs.has-sites == 'true'
+    runs-on: ubuntu-24.04
+    container: *ci_container
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: nightly-runtime
+
+      - name: Run top-100 sites harness
+        shell: bash
+        run: |
+          tar -xzf nightly-runtime.tar.gz
+          python3 -m venv "$RUNNER_TEMP/sites-venv"
+          source "$RUNNER_TEMP/sites-venv/bin/activate"
+          python -m pip install -r Meta/SiteSmoke/requirements.txt
+          mkdir site-results
+          xvfb-run -a bash Meta/run-top-sites-smoke.sh \
+            --ladybird "$PWD/Install/bin/Ladybird" --output "$PWD/site-results/sites.json"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: sites
+          path: site-results/
+          if-no-files-found: error
+          retention-days: 7
+
+  summary:
+    if: ${{ !cancelled() && github.repository == 'geartentomushi/ladybird' && github.ref == 'refs/heads/master' }}
+    needs: [build, wpt, test262, sites]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Find last successful nightly with a retained baseline
+        id: baseline
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const repo = context.repo;
+            const { data: { workflow_runs } } = await github.rest.actions.listWorkflowRuns({
+              ...repo, workflow_id: "fork-nightly.yml", branch: "master", status: "success", per_page: 30,
+            });
+            for (const run of workflow_runs) {
+              if (run.run_number >= context.runNumber) continue;
+              const { data: { artifacts } } = await github.rest.actions.listWorkflowRunArtifacts({
+                ...repo, run_id: run.id, name: "nightly-summary",
+              });
+              if (artifacts.some(artifact => !artifact.expired)) {
+                core.setOutput("run-id", String(run.id));
+                break;
+              }
+            }
+
+      - name: Download previous baseline
+        if: steps.baseline.outputs.run-id != ''
+        uses: actions/download-artifact@v8
+        with:
+          name: nightly-summary
+          path: baseline
+          run-id: ${{ steps.baseline.outputs.run-id }}
+          github-token: ${{ github.token }}
+
+      - name: Download WPT reports
+        if: needs.wpt.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wpt-*
+          path: reports
+          merge-multiple: true
+
+      - name: Download test262 report
+        if: needs.test262.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: test262
+          path: reports
+
+      - name: Download sites report
+        if: needs.sites.result == 'success'
+        uses: actions/download-artifact@v8
+        with:
+          name: sites
+          path: reports/sites
+
+      - name: Compare nightly reports
+        env:
+          WPT_RESULT: ${{ needs.wpt.result }}
+          TEST262_RESULT: ${{ needs.test262.result }}
+          SITES_RESULT: ${{ needs.sites.result }}
+          BASELINE_RUN: ${{ steps.baseline.outputs.run-id }}
+        run: |
+          python3 Meta/test-nightly-regressions.py
+          python3 Meta/nightly_regressions.py --baseline baseline --reports reports --output summary \
+            --wpt "$WPT_RESULT" --test262 "$TEST262_RESULT" --sites "$SITES_RESULT" --baseline-run "$BASELINE_RUN"
+
+      - uses: actions/upload-artifact@v7
+        if: ${{ !cancelled() }}
+        with:
+          name: nightly-summary
+          path: summary/
+          if-no-files-found: error
+          retention-days: 30
