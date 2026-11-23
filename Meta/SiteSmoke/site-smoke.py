@@ -211,7 +211,11 @@ def browser_exited_abnormally(driver_pid, proc=Path("/proc")):
         fields = stat.split()
         if len(fields) >= 50 and fields[0] == "Z" and fields[1] == str(driver_pid):
             # Linux proc_pid_stat field 52 is the wait status; WebDriver uses SIGTERM for normal session cleanup.
-            if os.waitstatus_to_exitcode(int(fields[49])) not in (0, -signal.SIGTERM):
+            try:
+                returncode = os.waitstatus_to_exitcode(int(fields[49]))
+            except ValueError:
+                continue
+            if returncode not in (0, -signal.SIGTERM):
                 return True
     return False
 

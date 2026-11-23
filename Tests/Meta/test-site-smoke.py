@@ -388,9 +388,11 @@ except smoke["TerminationRequested"]:
                 ("Z", 1 << 8, True),
             ):
                 with self.subTest(state=state, status=status):
-                    fields = [state, "123"] + ["0"] * 47 + [str(status)]
+                    fields = [state, "123"] + ["0"] * 47 + [str(int(status))]
                     (child / "stat").write_text("456 (Hub) " + " ".join(fields))
                     self.assertEqual(smoke.browser_exited_abnormally(123, proc), crashed)
+            (child / "stat").write_text("456 (Hub) Z 123 " + "0 " * 47 + "invalid")
+            self.assertFalse(smoke.browser_exited_abnormally(123, proc))
 
     @unittest.skipIf(smoke.ConnectionClosedOK is None, "requires websockets")
     def test_session_close_during_settle_needs_crash_evidence(self):
