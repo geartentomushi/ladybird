@@ -125,9 +125,11 @@ class SiteSmokeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             old = Path(temporary) / "old.json"
             new = Path(temporary) / "new.json"
+            crashed = Path(temporary) / "crashed.json"
             old.write_text(json.dumps(run(site("example"))))
             new.write_text(json.dumps(run(site("example", "timeout"))))
-            for before, after, status in ((old, new, 1), (new, old, 0), (old, old, 0)):
+            crashed.write_text(json.dumps(run(site("example", "crash"))))
+            for before, after, status in ((old, new, 1), (new, old, 0), (old, old, 0), (new, crashed, 1)):
                 with patch.object(sys, "argv", ["site-smoke.py", "compare", str(before), str(after), "--json"]):
                     with contextlib.redirect_stdout(io.StringIO()) as output:
                         self.assertEqual(smoke.main(), status)
@@ -170,6 +172,15 @@ class SiteSmokeTests(unittest.TestCase):
                 ("noisy", "total_console_errors"),
             },
         )
+
+    def test_compare_and_gate_agree_on_new_crashes_after_failed_loads(self):
+        for status in ("timeout", "load-error", "harness-error"):
+            with self.subTest(status=status):
+                before = run(site("example", status))
+                after = run(site("example", "crash"))
+                changes, blocking = smoke.gate_regressions(before, after, 5)
+                self.assertEqual(changes[0]["direction"], "regression")
+                self.assertEqual(changes, blocking)
 
     def test_gate_writes_summary_and_returns_nonzero_after_suite_and_site_failures(self):
         settings = {"jobs": 4, "navigation_timeout_s": 25, "settle_s": 2}

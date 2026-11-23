@@ -331,7 +331,9 @@ def compare(baseline, current):
         old_status, status = before["status"], site["status"]
         if old_status != status:
             direction = "changed"
-            if "harness-error" not in (old_status, status):
+            if status == "crash":
+                direction = "regression"
+            elif "harness-error" not in (old_status, status):
                 if old_status == "success":
                     direction = "regression"
                 elif status == "success":
@@ -381,7 +383,6 @@ def gate_regressions(baseline, current, console_threshold):
         change
         for change in changes
         if (change["direction"] == "regression" and change["metric"] in ("status", "nonempty_body"))
-        or (change["metric"] == "status" and change.get("after") == "crash")
         or change["direction"] in ("added", "removed")
     ]
     old_sites = {row["url"]: row for row in baseline["sites"]}
