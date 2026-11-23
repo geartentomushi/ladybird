@@ -48,6 +48,7 @@ jobs:
           arch: x86_64
           toolchain: Clang
           build_preset: Release
+          strip_install: 'false'
 
       - name: Package runtime and test262 runner
         shell: bash
