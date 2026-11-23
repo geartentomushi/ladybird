@@ -266,8 +266,9 @@ def sample_render(bidi, context, row, image_path, errors):
     except errors as error:
         row["dom_error"] = str(error)
     screenshot = bidi.command("browsingContext.captureScreenshot", {"context": context})
+    data = base64.b64decode(screenshot["data"], validate=True)
     with open(image_path, "wb", opener=open_private_file) as image:
-        image.write(base64.b64decode(screenshot["data"], validate=True))
+        image.write(data)
     row["screenshot"] = image_path.name
 
 
@@ -490,6 +491,16 @@ def run_stage(command, **kwargs):
             raise
 
 
+def write_json_atomically(output, data):
+    fd, name = tempfile.mkstemp(dir=output.parent)
+    try:
+        with os.fdopen(fd, "w") as stream:
+            stream.write(json.dumps(data, indent=2) + "\n")
+        os.replace(name, output)
+    finally:
+        Path(name).unlink(missing_ok=True)
+
+
 def run_ci(ladybird, output):
     if not ladybird.is_absolute() or not output.is_absolute():
         raise ValueError("--ladybird and --output must be absolute paths")
@@ -501,7 +512,7 @@ def run_ci(ladybird, output):
     browser = driver.with_name("Ladybird")
     if not browser.is_file() or not ladybird.samefile(browser):
         raise ValueError(f"--ladybird must identify the adjacent browser WebDriver launches: {browser}")
-    if output.is_dir():
+    if not output.is_symlink() and output.is_dir():
         raise ValueError(f"--output must be a JSON file, not a directory: {output}")
     details = prepare_output(output.with_name(output.name + ".details"))
     status = run_stage(
@@ -528,7 +539,7 @@ def run_ci(ladybird, output):
         result = ci_results(rows)
     except (OSError, TypeError, KeyError, ValueError) as error:
         raise ValueError(f"Invalid or unavailable site results in {results_file}: {error}") from error
-    output.write_text(json.dumps(result, indent=2) + "\n")
+    write_json_atomically(output, result)
     print(f"CI results: {output}")
     return 0
 

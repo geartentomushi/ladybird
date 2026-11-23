@@ -314,6 +314,27 @@ class SiteSmokeTests(unittest.TestCase):
             self.assertEqual(results["https://nginx.com/"], "SKIP")
             self.assertTrue((directory / "ci.json.details" / "results.json").is_file())
 
+            unrelated = directory / "unrelated.json"
+            unrelated.write_text("untouched")
+            for target in (unrelated, directory):
+                with self.subTest(target=target):
+                    link = directory / ("link-to-" + target.name + ".json")
+                    link.symlink_to(target, target_is_directory=target.is_dir())
+                    self.assertEqual(smoke.run_ci(ladybird, link), 0)
+                    self.assertFalse(link.is_symlink())
+                    self.assertEqual(json.loads(link.read_text()), {"results": results})
+                    self.assertEqual(stat.S_IMODE(link.stat().st_mode), 0o600)
+                    self.assertEqual(unrelated.read_text(), "untouched")
+
+    def test_atomic_output_cleans_up_when_replace_fails(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            output = directory / "output"
+            output.mkdir()
+            with self.assertRaises(OSError):
+                smoke.write_json_atomically(output, {"results": {}})
+            self.assertEqual(list(directory.iterdir()), [output])
+
     def test_final_url_does_not_include_credentials_query_or_fragment(self):
         self.assertEqual(
             smoke.public_final_url("https://user:pass@host:8443/path?token=abc#state"), "https://host:8443/path"
