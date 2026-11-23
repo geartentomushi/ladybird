@@ -349,11 +349,13 @@ def gate_regressions(baseline, current, console_threshold):
     old_sites = {row["url"]: row for row in baseline["sites"]}
     for site in current["sites"]:
         before = old_sites.get(site["url"])
-        if before is None or before["status"] != "success" or site["status"] != "success":
+        if before is None:
             continue
         for metric in ("screenshot", "body_element_count"):
             if before[metric] is not None and site[metric] is None:
                 regressions.append({"url": site["url"], "metric": f"missing_{metric}", "direction": "regression"})
+        if before["status"] != "success" or site["status"] != "success":
+            continue
         if before["console_errors"] is not None and site["console_errors"] is not None:
             old_count = sum(before["console_errors"].values())
             count = sum(site["console_errors"].values())

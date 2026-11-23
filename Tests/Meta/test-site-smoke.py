@@ -195,6 +195,16 @@ class SiteSmokeTests(unittest.TestCase):
             self.assertIn("test-js", commands[0])
             self.assertEqual(commands[-2][0], "ctest")
 
+    def test_gate_counts_evidence_loss_on_unchanged_failed_loads(self):
+        before = site("lost", "load-error")
+        missing = dict(before, screenshot=None, body_element_count=None)
+        absent = dict(missing, url="absent")
+        _, blocking = smoke.gate_regressions(run(before, absent), run(missing, absent), 5)
+        self.assertEqual(
+            {(change["url"], change["metric"]) for change in blocking},
+            {("lost", "missing_screenshot"), ("lost", "missing_body_element_count")},
+        )
+
     def test_ci_status_mapping_and_infrastructure_failure(self):
         rows = [site(status, status) for status in smoke.STATUSES]
         self.assertEqual(
