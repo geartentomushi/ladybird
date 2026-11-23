@@ -476,7 +476,8 @@ def print_comparison(changes):
     print(
         "Changes:",
         ", ".join(
-            f"{key}={counts[key]}" for key in ("regression", "improvement", "changed", "added", "removed", "informational")
+            f"{key}={counts[key]}"
+            for key in ("regression", "improvement", "changed", "added", "removed", "informational")
         ),
     )
     for change in changes:
