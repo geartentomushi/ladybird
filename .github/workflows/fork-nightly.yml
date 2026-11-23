@@ -89,6 +89,8 @@ jobs:
           WPT_REVISION: ${{ needs.build.outputs.wpt-revision }}
         run: |
           tar -xzf nightly-runtime.tar.gz
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/Tests/LibWeb/WPT/wpt"
           git init Tests/LibWeb/WPT/wpt
           git -C Tests/LibWeb/WPT/wpt fetch --depth=1 https://github.com/web-platform-tests/wpt.git "$WPT_REVISION"
           git -C Tests/LibWeb/WPT/wpt checkout --detach FETCH_HEAD
@@ -139,6 +141,8 @@ jobs:
       - name: Run test262
         shell: bash
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/libjs-test262"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE/test262"
           tar -xzf nightly-runtime.tar.gz
           export LD_LIBRARY_PATH="$PWD/Install/lib"
           dependencies=$(ldd Install/bin/test262-runner)
