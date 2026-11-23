@@ -27,9 +27,15 @@ python3 Meta/SiteSmoke/filter-tranco.py /tmp/tranco-8PW6V.csv --output Meta/Site
 ```
 
 Live DNS, TLS, and HTTP responses can change; use the committed list for
-comparisons. For a smaller run, repeat `--url https://example.com/` with the URLs you want. `--jobs`,
-`--timeout`, and `--settle` control concurrency, the navigation deadline and the
-wait after navigation, respectively. Use the same settings for comparisons.
+comparisons. After regenerating the list, rerun the smoke test from the source
+build on the new list, replace `baseline.json` with that run's `results.json`,
+and commit the list and baseline together. The gate rejects a baseline whose
+targets do not match the pinned list.
+
+For a smaller run, repeat `--url https://example.com/` with the URLs you want.
+`--jobs`, `--timeout`, and `--settle` control concurrency, the navigation
+deadline and the wait after navigation, respectively. Use the same settings for
+comparisons.
 
 Each site gets a fresh temporary profile with CPU painting and a 1280×800
 viewport. `results.json` includes a summary and one row per target. Load time
