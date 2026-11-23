@@ -59,6 +59,10 @@ directory. Use `--baseline` to compare with a different complete Tranco baseline
 or `--cc`, `--cxx`, `--build-jobs`, and `--test-jobs` to control the build and
 test environment. It runs standalone, not as a CI workflow.
 
+On Linux, use a system FFmpeg with H.264/AAC support and a libavcodec major
+supported by Ladybird (currently 60–63). The bundled decoders alone do not
+satisfy the media expectations in the Text suite.
+
 The gate exits nonzero on build or test failure, missing results, or a site
 regression: a new crash, a previously successful load that no longer succeeds,
 lost screenshot or DOM evidence, a previously nonempty body becoming empty,

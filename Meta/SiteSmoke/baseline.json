@@ -1,0 +1,1582 @@
+{
+  "schema_version": 1,
+  "revision": "9b0603ab09b999895e0b9309391dfa7387e8d62d",
+  "started_at": "2026-11-23T19:40:48+00:00",
+  "site_list": "Tranco list 8PW6V (2026-11-22): https://tranco-list.eu/list/8PW6V",
+  "settings": {
+    "jobs": 4,
+    "navigation_timeout_s": 25,
+    "settle_s": 2,
+    "viewport": {
+      "width": 1280,
+      "height": 800
+    }
+  },
+  "sites": [
+    {
+      "rank": 1,
+      "url": "https://google.com/",
+      "status": "success",
+      "load_ms": 893,
+      "final_url": "https://www.google.com/",
+      "http_status": 200,
+      "body_element_count": 495,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "001.png"
+    },
+    {
+      "rank": 2,
+      "url": "https://cloudflare.com/",
+      "status": "success",
+      "load_ms": 1725,
+      "final_url": "https://www.cloudflare.com/",
+      "http_status": 200,
+      "body_element_count": 2925,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1076898 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 3,
+      "url": "https://amazonaws.com/",
+      "status": "success",
+      "load_ms": 1820,
+      "final_url": "https://aws.amazon.com/",
+      "http_status": 200,
+      "body_element_count": 2550,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 3
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1227254 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 4,
+      "url": "https://facebook.com/",
+      "status": "success",
+      "load_ms": 1035,
+      "final_url": "https://www.facebook.com/",
+      "http_status": 200,
+      "body_element_count": 328,
+      "console_errors": {
+        "not_implemented": 1,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "004.png"
+    },
+    {
+      "rank": 5,
+      "url": "https://fbcdn.net/",
+      "status": "success",
+      "load_ms": 862,
+      "final_url": "https://www.facebook.com/",
+      "http_status": 200,
+      "body_element_count": 328,
+      "console_errors": {
+        "not_implemented": 1,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "005.png"
+    },
+    {
+      "rank": 6,
+      "url": "https://ezviz7.com/",
+      "status": "load-error",
+      "load_ms": 84,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "006.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 7,
+      "url": "https://gstatic.com/",
+      "status": "load-error",
+      "load_ms": 224,
+      "final_url": "https://www.gstatic.com/",
+      "http_status": 404,
+      "body_element_count": 8,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "007.png",
+      "error": "HTTP 404"
+    },
+    {
+      "rank": 8,
+      "url": "https://microsoft.com/",
+      "status": "success",
+      "load_ms": 7240,
+      "final_url": "https://www.microsoft.com/en-us",
+      "http_status": 200,
+      "body_element_count": 1225,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 4,
+        "console_error": 1
+      },
+      "screenshot": "008.png"
+    },
+    {
+      "rank": 9,
+      "url": "https://googleapis.com/",
+      "status": "load-error",
+      "load_ms": 282,
+      "final_url": "https://googleapis.com/",
+      "http_status": 404,
+      "body_element_count": 8,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "009.png",
+      "error": "HTTP 404"
+    },
+    {
+      "rank": 10,
+      "url": "https://youtube.com/",
+      "status": "success",
+      "load_ms": 1666,
+      "final_url": "https://www.youtube.com/",
+      "http_status": 200,
+      "body_element_count": 1293,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "010.png"
+    },
+    {
+      "rank": 11,
+      "url": "https://apple.com/",
+      "status": "success",
+      "load_ms": 1121,
+      "final_url": "https://www.apple.com/",
+      "http_status": 200,
+      "body_element_count": 1800,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "011.png"
+    },
+    {
+      "rank": 12,
+      "url": "https://akamai.net/",
+      "status": "load-error",
+      "load_ms": 100,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "012.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 13,
+      "url": "https://instagram.com/",
+      "status": "success",
+      "load_ms": 1223,
+      "final_url": "https://www.instagram.com/",
+      "http_status": 200,
+      "body_element_count": 340,
+      "console_errors": {
+        "not_implemented": 1,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "013.png"
+    },
+    {
+      "rank": 14,
+      "url": "https://hicloudcam.com/",
+      "status": "load-error",
+      "load_ms": 309,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "014.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 15,
+      "url": "https://akamaiedge.net/",
+      "status": "load-error",
+      "load_ms": 86,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "015.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 16,
+      "url": "https://linkedin.com/",
+      "status": "success",
+      "load_ms": 979,
+      "final_url": "https://www.linkedin.com/",
+      "http_status": 200,
+      "body_element_count": 552,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "016.png"
+    },
+    {
+      "rank": 17,
+      "url": "https://twitter.com/",
+      "status": "success",
+      "load_ms": 630,
+      "final_url": "https://x.com/",
+      "http_status": 200,
+      "body_element_count": 217,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "017.png"
+    },
+    {
+      "rank": 18,
+      "url": "https://azure.com/",
+      "status": "success",
+      "load_ms": 9897,
+      "final_url": "https://azure.microsoft.com/en-us",
+      "http_status": 200,
+      "body_element_count": 3360,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 1
+      },
+      "screenshot": "018.png"
+    },
+    {
+      "rank": 19,
+      "url": "https://akadns.net/",
+      "status": "load-error",
+      "load_ms": 94,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "019.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 20,
+      "url": "https://domaincontrol.com/",
+      "status": "load-error",
+      "load_ms": 125,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "020.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 21,
+      "url": "https://appsflyersdk.com/",
+      "status": "load-error",
+      "load_ms": 129,
+      "final_url": "https://appsflyersdk.com/",
+      "http_status": 403,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "021.png",
+      "error": "HTTP 403"
+    },
+    {
+      "rank": 22,
+      "url": "https://googlevideo.com/",
+      "status": "load-error",
+      "load_ms": 129,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "022.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 23,
+      "url": "https://googletagmanager.com/",
+      "status": "load-error",
+      "load_ms": 175,
+      "final_url": "https://googletagmanager.com/",
+      "http_status": 404,
+      "body_element_count": 8,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "023.png",
+      "error": "HTTP 404"
+    },
+    {
+      "rank": 24,
+      "url": "https://mail.ru/",
+      "status": "success",
+      "load_ms": 2498,
+      "final_url": "https://account.mail.ru/login",
+      "http_status": 200,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "024.png"
+    },
+    {
+      "rank": 25,
+      "url": "https://office.com/",
+      "status": "success",
+      "load_ms": 1251,
+      "final_url": "https://m365.cloud.microsoft/",
+      "http_status": 200,
+      "body_element_count": 1020,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "025.png"
+    },
+    {
+      "rank": 26,
+      "url": "https://cloudfront.net/",
+      "status": "load-error",
+      "load_ms": 105,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "026.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 27,
+      "url": "https://amazon.com/",
+      "status": "success",
+      "load_ms": 435,
+      "final_url": "https://www.amazon.com/",
+      "http_status": 202,
+      "body_element_count": 2198,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 3
+      },
+      "screenshot": "027.png"
+    },
+    {
+      "rank": 28,
+      "url": "https://triplinkintl.com/",
+      "status": "success",
+      "load_ms": 8885,
+      "final_url": "https://www.triplinkintl.com/en/home/",
+      "http_status": 200,
+      "body_element_count": 2232,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1088078 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 29,
+      "url": "https://live.com/",
+      "status": "success",
+      "load_ms": 654,
+      "final_url": "https://outlook.live.com/mail/",
+      "http_status": 200,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "029.png"
+    },
+    {
+      "rank": 30,
+      "url": "https://sharepoint.com/",
+      "status": "success",
+      "load_ms": 7386,
+      "final_url": "https://www.microsoft.com/en-us/microsoft-365/sharepoint/collaboration",
+      "http_status": 200,
+      "body_element_count": 4167,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 13,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1111526 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 31,
+      "url": "https://gwfb.net/",
+      "status": "load-error",
+      "load_ms": 299,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "031.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 32,
+      "url": "https://aaplimg.com/",
+      "status": "load-error",
+      "load_ms": 93,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "032.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 33,
+      "url": "https://cloud.microsoft/",
+      "status": "success",
+      "load_ms": 1510,
+      "final_url": "https://m365.cloud.microsoft/",
+      "http_status": 200,
+      "body_element_count": 1020,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "033.png"
+    },
+    {
+      "rank": 34,
+      "url": "https://gtld-servers.net/",
+      "status": "load-error",
+      "load_ms": 119,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "034.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 35,
+      "url": "https://github.com/",
+      "status": "success",
+      "load_ms": 845,
+      "final_url": "https://github.com/",
+      "http_status": 200,
+      "body_element_count": 2162,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "035.png"
+    },
+    {
+      "rank": 36,
+      "url": "https://trafficmanager.net/",
+      "status": "load-error",
+      "load_ms": 106,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "036.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 37,
+      "url": "https://dzen.ru/",
+      "status": "success",
+      "load_ms": 1338,
+      "final_url": "https://sso.passport.yandex.ru/push",
+      "http_status": 200,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "037.png"
+    },
+    {
+      "rank": 38,
+      "url": "https://wikipedia.org/",
+      "status": "success",
+      "load_ms": 386,
+      "final_url": "https://www.wikipedia.org/",
+      "http_status": 200,
+      "body_element_count": 1178,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "038.png"
+    },
+    {
+      "rank": 39,
+      "url": "https://netflix.com/",
+      "status": "success",
+      "load_ms": 1958,
+      "final_url": "https://www.netflix.com/",
+      "http_status": 200,
+      "body_element_count": 1055,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1478350 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 40,
+      "url": "https://office.net/",
+      "status": "load-error",
+      "load_ms": 97,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "040.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 41,
+      "url": "https://apple-dns.net/",
+      "status": "load-error",
+      "load_ms": 97,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "041.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 42,
+      "url": "https://fastly.net/",
+      "status": "success",
+      "load_ms": 706,
+      "final_url": "https://www.fastly.com/",
+      "http_status": 200,
+      "body_element_count": 1687,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "042.png"
+    },
+    {
+      "rank": 43,
+      "url": "https://w2rt6byl5nf1opmc-a.com/",
+      "status": "load-error",
+      "load_ms": 140,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "043.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 44,
+      "url": "https://whatsapp.net/",
+      "status": "success",
+      "load_ms": 1161,
+      "final_url": "https://www.whatsapp.com/",
+      "http_status": 200,
+      "body_element_count": 1241,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1646958 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 45,
+      "url": "https://bing.com/",
+      "status": "success",
+      "load_ms": 483,
+      "final_url": "https://www.bing.com/",
+      "http_status": 200,
+      "body_element_count": 572,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 1
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1251058 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 46,
+      "url": "https://googleusercontent.com/",
+      "status": "load-error",
+      "load_ms": 309,
+      "final_url": "https://googleusercontent.com/",
+      "http_status": 404,
+      "body_element_count": 8,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "046.png",
+      "error": "HTTP 404"
+    },
+    {
+      "rank": 47,
+      "url": "https://x.com/",
+      "status": "success",
+      "load_ms": 588,
+      "final_url": "https://x.com/",
+      "http_status": 200,
+      "body_element_count": 217,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "047.png"
+    },
+    {
+      "rank": 48,
+      "url": "https://pv-cdn.net/",
+      "status": "load-error",
+      "load_ms": 117,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "048.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 49,
+      "url": "https://doubleclick.net/",
+      "status": "success",
+      "load_ms": 1429,
+      "final_url": "https://marketingplatform.google.com/about/enterprise/",
+      "http_status": 200,
+      "body_element_count": 791,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1431334 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 50,
+      "url": "https://lsrelayaccess.com/",
+      "status": "timeout",
+      "load_ms": 25000,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 0,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "050.png",
+      "error": "Navigation exceeded 25s"
+    },
+    {
+      "rank": 51,
+      "url": "https://googlesyndication.com/",
+      "status": "success",
+      "load_ms": 725,
+      "final_url": "https://www.google.com/",
+      "http_status": 200,
+      "body_element_count": 471,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "051.png"
+    },
+    {
+      "rank": 52,
+      "url": "https://youtu.be/",
+      "status": "success",
+      "load_ms": 1812,
+      "final_url": "https://www.youtube.com/",
+      "http_status": 200,
+      "body_element_count": 1293,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "052.png"
+    },
+    {
+      "rank": 53,
+      "url": "https://windows.net/",
+      "status": "load-error",
+      "load_ms": 344,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "053.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 54,
+      "url": "https://pinterest.com/",
+      "status": "success",
+      "load_ms": 2168,
+      "final_url": "https://www.pinterest.com/",
+      "http_status": 200,
+      "body_element_count": 768,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "054.png"
+    },
+    {
+      "rank": 55,
+      "url": "https://microsoftonline.com/",
+      "status": "load-error",
+      "load_ms": 101,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "055.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 56,
+      "url": "https://icloud.com/",
+      "status": "success",
+      "load_ms": 883,
+      "final_url": "https://www.icloud.com/",
+      "http_status": 200,
+      "body_element_count": 67,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "056.png"
+    },
+    {
+      "rank": 57,
+      "url": "https://cloudflare.net/",
+      "status": "success",
+      "load_ms": 1049,
+      "final_url": "https://cloudflare.net/home/default.aspx",
+      "http_status": 200,
+      "body_element_count": 734,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "057.png"
+    },
+    {
+      "rank": 58,
+      "url": "https://zoom.us/",
+      "status": "success",
+      "load_ms": 3895,
+      "final_url": "https://www.zoom.com/",
+      "http_status": 200,
+      "body_element_count": 1894,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "058.png"
+    },
+    {
+      "rank": 59,
+      "url": "https://adobe.com/",
+      "status": "success",
+      "load_ms": 828,
+      "final_url": "https://www.adobe.com/",
+      "http_status": 200,
+      "body_element_count": 2188,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "059.png"
+    },
+    {
+      "rank": 60,
+      "url": "https://goo.gl/",
+      "status": "load-error",
+      "load_ms": 171,
+      "final_url": "https://goo.gl/",
+      "http_status": 400,
+      "body_element_count": 8,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "060.png",
+      "error": "HTTP 400"
+    },
+    {
+      "rank": 61,
+      "url": "https://skype.com/",
+      "status": "success",
+      "load_ms": 1003,
+      "final_url": "https://teams.live.com/free",
+      "http_status": 200,
+      "body_element_count": 208,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "061.png"
+    },
+    {
+      "rank": 62,
+      "url": "https://tiktok.com/",
+      "status": "success",
+      "load_ms": 6508,
+      "final_url": "https://www.tiktok.com/",
+      "http_status": 200,
+      "body_element_count": 462,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 4
+      },
+      "screenshot": "062.png"
+    },
+    {
+      "rank": 63,
+      "url": "https://windowsupdate.com/",
+      "status": "load-error",
+      "load_ms": 103,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "063.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 64,
+      "url": "https://whatsapp.com/",
+      "status": "success",
+      "load_ms": 909,
+      "final_url": "https://www.whatsapp.com/",
+      "http_status": 200,
+      "body_element_count": 1241,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1646958 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 65,
+      "url": "https://wordpress.org/",
+      "status": "success",
+      "load_ms": 1547,
+      "final_url": "https://wordpress.org/",
+      "http_status": 200,
+      "body_element_count": 436,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "065.png"
+    },
+    {
+      "rank": 66,
+      "url": "https://gvt1.com/",
+      "status": "load-error",
+      "load_ms": 100,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "066.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 67,
+      "url": "https://digicert.com/",
+      "status": "success",
+      "load_ms": 1411,
+      "final_url": "https://www.digicert.com/",
+      "http_status": 200,
+      "body_element_count": 1313,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "067.png"
+    },
+    {
+      "rank": 68,
+      "url": "https://gandi.net/",
+      "status": "success",
+      "load_ms": 2366,
+      "final_url": "https://www.gandi.net/en-US",
+      "http_status": 200,
+      "body_element_count": 1562,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 1,
+        "console_error": 0
+      },
+      "screenshot": "068.png"
+    },
+    {
+      "rank": 69,
+      "url": "https://myfritz.net/",
+      "status": "success",
+      "load_ms": 3176,
+      "final_url": "https://www.myfritz.net/devices/",
+      "http_status": 200,
+      "body_element_count": 74,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "069.png"
+    },
+    {
+      "rank": 70,
+      "url": "https://googledomains.com/",
+      "status": "success",
+      "load_ms": 572,
+      "final_url": "https://domains.google/",
+      "http_status": 200,
+      "body_element_count": 42,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "070.png"
+    },
+    {
+      "rank": 71,
+      "url": "https://wa.me/",
+      "status": "success",
+      "load_ms": 637,
+      "final_url": "https://api.whatsapp.com/",
+      "http_status": 200,
+      "body_element_count": 791,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "071.png"
+    },
+    {
+      "rank": 72,
+      "url": "https://yahoo.com/",
+      "status": "timeout",
+      "load_ms": 25001,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 2152,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "072.png",
+      "error": "Navigation exceeded 25s"
+    },
+    {
+      "rank": 73,
+      "url": "https://edgekey.net/",
+      "status": "load-error",
+      "load_ms": 93,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "073.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 74,
+      "url": "https://tiktokcdn.com/",
+      "status": "load-error",
+      "load_ms": 93,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "074.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 75,
+      "url": "https://a2z.com/",
+      "status": "load-error",
+      "load_ms": 84,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "075.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 76,
+      "url": "https://spotify.com/",
+      "status": "success",
+      "load_ms": 1477,
+      "final_url": "https://open.spotify.com/",
+      "http_status": 200,
+      "body_element_count": 2344,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 2
+      },
+      "screenshot": "076.png"
+    },
+    {
+      "rank": 77,
+      "url": "https://epicgames.com/",
+      "status": "success",
+      "load_ms": 2601,
+      "final_url": "https://store.epicgames.com/",
+      "http_status": 200,
+      "body_element_count": 1224,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "077.png"
+    },
+    {
+      "rank": 78,
+      "url": "https://amazonvideo.com/",
+      "status": "success",
+      "load_ms": 2612,
+      "final_url": "https://www.primevideo.com/",
+      "http_status": 200,
+      "body_element_count": 2865,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1219454 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 79,
+      "url": "https://h264.io/",
+      "status": "load-error",
+      "load_ms": 87,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "079.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 80,
+      "url": "https://b-cdn.net/",
+      "status": "success",
+      "load_ms": 1699,
+      "final_url": "https://bunny.net/",
+      "http_status": 200,
+      "body_element_count": 2050,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 9,
+        "console_error": 0
+      },
+      "screenshot": "080.png"
+    },
+    {
+      "rank": 81,
+      "url": "https://opera.com/",
+      "status": "success",
+      "load_ms": 2294,
+      "final_url": "https://www.opera.com/",
+      "http_status": 200,
+      "body_element_count": 640,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "081.png"
+    },
+    {
+      "rank": 82,
+      "url": "https://roblox.com/",
+      "status": "success",
+      "load_ms": 3534,
+      "final_url": "https://www.roblox.com/",
+      "http_status": 200,
+      "body_element_count": 598,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": "082.png"
+    },
+    {
+      "rank": 83,
+      "url": "https://vimeo.com/",
+      "status": "success",
+      "load_ms": 2810,
+      "final_url": "https://vimeo.com/",
+      "http_status": 200,
+      "body_element_count": 3689,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "083.png"
+    },
+    {
+      "rank": 84,
+      "url": "https://ntp.org/",
+      "status": "success",
+      "load_ms": 1393,
+      "final_url": "https://www.ntp.org/",
+      "http_status": 200,
+      "body_element_count": 147,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "084.png"
+    },
+    {
+      "rank": 85,
+      "url": "https://3gppnetwork.org/",
+      "status": "load-error",
+      "load_ms": 99,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "085.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 86,
+      "url": "https://aws.dev/",
+      "status": "load-error",
+      "load_ms": 87,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "086.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 87,
+      "url": "https://tiktokv.com/",
+      "status": "load-error",
+      "load_ms": 308,
+      "final_url": "https://tiktokv.com/",
+      "http_status": 404,
+      "body_element_count": 4,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "087.png",
+      "error": "HTTP 404"
+    },
+    {
+      "rank": 88,
+      "url": "https://baidu.com/",
+      "status": "success",
+      "load_ms": 7158,
+      "final_url": "https://www.baidu.com/",
+      "http_status": 200,
+      "body_element_count": 423,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "088.png"
+    },
+    {
+      "rank": 89,
+      "url": "https://qq.com/",
+      "status": "success",
+      "load_ms": 8099,
+      "final_url": "https://www.qq.com/",
+      "http_status": 200,
+      "body_element_count": 2123,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "089.png"
+    },
+    {
+      "rank": 90,
+      "url": "https://blogspot.com/",
+      "status": "success",
+      "load_ms": 675,
+      "final_url": "https://www.blogger.com/about/",
+      "http_status": 200,
+      "body_element_count": 242,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "090.png"
+    },
+    {
+      "rank": 91,
+      "url": "https://workers.dev/",
+      "status": "success",
+      "load_ms": 1707,
+      "final_url": "https://www.cloudflare.com/products/workers/",
+      "http_status": 200,
+      "body_element_count": 2733,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "091.png"
+    },
+    {
+      "rank": 92,
+      "url": "https://intuit.com/",
+      "status": "success",
+      "load_ms": 3419,
+      "final_url": "https://www.intuit.com/",
+      "http_status": 200,
+      "body_element_count": 1283,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "092.png"
+    },
+    {
+      "rank": 93,
+      "url": "https://mozilla.org/",
+      "status": "success",
+      "load_ms": 798,
+      "final_url": "https://www.mozilla.org/en-US/",
+      "http_status": 200,
+      "body_element_count": 975,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "093.png"
+    },
+    {
+      "rank": 94,
+      "url": "https://nginx.org/",
+      "status": "success",
+      "load_ms": 768,
+      "final_url": "https://nginx.org/",
+      "http_status": 200,
+      "body_element_count": 163,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "094.png"
+    },
+    {
+      "rank": 95,
+      "url": "https://cdn77.org/",
+      "status": "load-error",
+      "load_ms": 109,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "095.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 96,
+      "url": "https://f5.com/",
+      "status": "success",
+      "load_ms": 14177,
+      "final_url": "https://www.f5.com/",
+      "http_status": 200,
+      "body_element_count": 1474,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 2,
+        "console_error": 0
+      },
+      "screenshot": "096.png"
+    },
+    {
+      "rank": 97,
+      "url": "https://cdninstagram.com/",
+      "status": "load-error",
+      "load_ms": 91,
+      "final_url": null,
+      "http_status": null,
+      "body_element_count": 10,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": "097.png",
+      "error": "browsingContext.navigate: unknown error: Navigation failed"
+    },
+    {
+      "rank": 98,
+      "url": "https://msn.com/",
+      "status": "success",
+      "load_ms": 845,
+      "final_url": "https://www.msn.com/",
+      "http_status": 200,
+      "body_element_count": 22,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 1
+      },
+      "screenshot": "098.png"
+    },
+    {
+      "rank": 99,
+      "url": "https://wordpress.com/",
+      "status": "success",
+      "load_ms": 1412,
+      "final_url": "https://wordpress.com/",
+      "http_status": 200,
+      "body_element_count": 2301,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 0,
+        "console_error": 0
+      },
+      "screenshot": null,
+      "capture_error": "sent 1009 (message too big) frame with 1456890 bytes exceeds limit of 1048576 bytes; no close frame received"
+    },
+    {
+      "rank": 100,
+      "url": "https://nginx.com/",
+      "status": "success",
+      "load_ms": 12580,
+      "final_url": "https://www.f5.com/products/nginx",
+      "http_status": 200,
+      "body_element_count": 1131,
+      "console_errors": {
+        "not_implemented": 0,
+        "javascript_exception": 2,
+        "console_error": 0
+      },
+      "screenshot": "100.png"
+    }
+  ],
+  "summary": {
+    "sites": 100,
+    "statuses": {
+      "success": 63,
+      "timeout": 2,
+      "crash": 0,
+      "load-error": 35,
+      "harness-error": 0
+    },
+    "screenshots": 89,
+    "nonempty_bodies": 95,
+    "console_errors": {
+      "not_implemented": 3,
+      "javascript_exception": 33,
+      "console_error": 24
+    }
+  }
+}
