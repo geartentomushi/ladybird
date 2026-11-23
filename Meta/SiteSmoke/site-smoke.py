@@ -391,6 +391,17 @@ def compare(baseline, current):
         old_count, count = before["body_element_count"], site["body_element_count"]
         if old_count is not None and count is not None:
             metrics["nonempty_body"] = (int(old_count > 0), int(count > 0), True)
+            drop = old_count - count
+            if count > 0 and drop >= 5 and drop * 10 >= old_count * 3:
+                changes.append(
+                    {
+                        "url": url,
+                        "metric": "body_element_count",
+                        "direction": "changed",
+                        "before": old_count,
+                        "after": count,
+                    }
+                )
         if before["console_errors"] is not None and site["console_errors"] is not None:
             for category in ERROR_CATEGORIES:
                 metrics[category] = (before["console_errors"][category], site["console_errors"][category], False)

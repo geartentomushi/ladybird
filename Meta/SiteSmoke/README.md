@@ -57,7 +57,9 @@ render content.
 The harness keeps output directories and files private to the owner (0700 and 0600).
 
 `compare` reports per-site load-status changes and, for successful loads,
-changes in console-error counts and whether the body is nonempty. It exits 1
+changes in console-error counts and whether the body is nonempty. If the body
+remains nonempty but loses at least five elements and at least 30% of its
+baseline count, the comparison and gate report the drop without blocking. It exits 1
 if any reported change is a regression. Use `--json` to get the same
 differences as JSON. Timings are saved but not graded because
 network latency and server behavior vary. Inspect screenshots and repeat a run

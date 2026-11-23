@@ -160,6 +160,32 @@ class SiteSmokeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "different.*settings"):
             smoke.compare(baseline, current)
 
+    def test_large_nonempty_body_count_drops_are_reported_but_do_not_block(self):
+        baseline = run(
+            site("large-drop", elements=22),
+            site("exact-percentage", elements=20),
+            site("exact-count", elements=10),
+            site("small-count-drop", elements=10),
+            site("small-percentage-drop", elements=20),
+        )
+        current = run(
+            site("large-drop", elements=15),
+            site("exact-percentage", elements=14),
+            site("exact-count", elements=5),
+            site("small-count-drop", elements=6),
+            site("small-percentage-drop", elements=15),
+        )
+        changes, blocking = smoke.gate_regressions(baseline, current, 5)
+        self.assertEqual(
+            [(row["url"], row["metric"], row["direction"], row["before"], row["after"]) for row in changes],
+            [
+                ("large-drop", "body_element_count", "changed", 22, 15),
+                ("exact-percentage", "body_element_count", "changed", 20, 14),
+                ("exact-count", "body_element_count", "changed", 10, 5),
+            ],
+        )
+        self.assertEqual(blocking, [])
+
     def test_compare_cli_exits_nonzero_only_when_changes_include_regressions(self):
         with tempfile.TemporaryDirectory() as temporary:
             old = Path(temporary) / "old.json"
