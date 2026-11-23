@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html class="reftest-wait">
+<link rel="match" href="../../expected/css/webkit-clip-path-and-font-feature-settings-aliases-ref.html">
+<style>
+    @font-face {
+        font-family: "Fira Code";
+        src: url("../../../Assets/FiraCode-Latin.woff2");
+    }
+    body { margin: 32px; }
+    .shape {
+        width: 180px;
+        height: 120px;
+        background: seagreen;
+        -webkit-clip-path: polygon(0 0, 50% 45%, 100% 0, 100% 100%, 0 100%);
+    }
+    .ligatures {
+        font: 32px "Fira Code";
+        -webkit-font-feature-settings: "calt" 0;
+    }
+</style>
+<p>Clipped shape</p>
+<div class="shape"></div>
+<p>Contextual ligatures disabled</p>
+<div class="ligatures">-&gt; --&gt; &lt;=&gt; ==&gt;</div>
+<script>
+    document.fonts.ready.then(() => document.documentElement.classList.remove("reftest-wait"));
+</script>
