@@ -285,9 +285,11 @@ def capture(executable, directory, site, timeout, settle, processes=None):
                 except errors + (ValueError,) as error:
                     row["capture_error"] = str(error)
                     session_closed |= isinstance(error, ConnectionClosedOK)
-                if crashed := crashed_process(process, profile, row) or ("Browser" if session_closed else None):
+                if crashed := crashed_process(process, profile, row):
                     row["status"] = "crash"
                     row["crashed_process"] = crashed
+                elif session_closed and row["status"] == "success":
+                    row["status"] = "load-error"
     except errors as error:
         row["error"] = str(error)
     return row

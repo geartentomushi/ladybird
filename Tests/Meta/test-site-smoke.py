@@ -307,7 +307,7 @@ class SiteSmokeTests(unittest.TestCase):
             self.assertEqual(smoke.crashed_process(driver, profile, {}), "WebContent")
 
     @unittest.skipIf(smoke.ConnectionClosedOK is None, "requires websockets")
-    def test_session_close_during_settle_is_a_crash(self):
+    def test_session_close_during_settle_needs_crash_evidence(self):
         from websockets.frames import Close
 
         close = Close(1000, "")
@@ -337,8 +337,17 @@ class SiteSmokeTests(unittest.TestCase):
                 },
             ):
                 row = smoke.capture(path / "WebDriver", path, (1, "https://example.com/"), 5, 2)
+                self.assertEqual(row["status"], "load-error")
+                self.assertNotIn("crashed_process", row)
+                self.assertEqual(smoke.ci_results([row]), {"results": {"https://example.com/": "FAIL"}})
+
+                reports = path / "data" / "CrashReports"
+                reports.mkdir(parents=True)
+                (reports / "2026-11-22T00-00-00Z-Browser-123456.txt").touch()
+                row = smoke.capture(path / "WebDriver", path, (1, "https://example.com/"), 5, 2)
         viewport = smoke.VIEWPORT
         self.assertGreater(connect.call_args.kwargs["max_size"], viewport["width"] * viewport["height"] * 4 * 4 / 3)
+        self.assertEqual(row["status"], "crash")
         self.assertEqual(row["crashed_process"], "Browser")
         self.assertEqual(smoke.ci_results([row]), {"results": {"https://example.com/": "FAIL"}})
 
