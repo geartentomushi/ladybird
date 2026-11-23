@@ -219,9 +219,9 @@ class SiteSmokeTests(unittest.TestCase):
         capture = Mock(side_effect=attempts)
         with (
             tempfile.TemporaryDirectory() as temporary,
-            patch.dict(smoke.confirm_body_drops.__globals__, {"capture": capture}),
+            patch.dict(smoke.confirm_findings.__globals__, {"capture": capture}),
         ):
-            smoke.confirm_body_drops(changes, current, baseline_driver, candidate_driver, Path(temporary) / "reruns")
+            smoke.confirm_findings(changes, current, baseline_driver, candidate_driver, Path(temporary) / "reruns")
         self.assertEqual(
             [
                 (row["url"], row["confirmation"], row["direction"])
@@ -278,6 +278,40 @@ class SiteSmokeTests(unittest.TestCase):
                         bool(status),
                     )
 
+    def test_raw_compare_reports_missing_render_evidence(self):
+        before = site("https://example.com/")
+        for metric in ("screenshot", "body_element_count"):
+            with self.subTest(metric=metric), tempfile.TemporaryDirectory() as temporary:
+                baseline, current = (Path(temporary) / name for name in ("old.json", "new.json"))
+                baseline.write_text(json.dumps(run(before)))
+                current.write_text(json.dumps(run(dict(before, **{metric: None}))))
+                with (
+                    patch.object(sys, "argv", ["site-smoke.py", "compare", str(baseline), str(current), "--json"]),
+                    contextlib.redirect_stdout(io.StringIO()) as output,
+                ):
+                    self.assertEqual(smoke.main(), 1)
+                self.assertEqual(
+                    [(row["metric"], row["direction"]) for row in json.loads(output.getvalue())],
+                    [(f"missing_{metric}", "regression")],
+                )
+
+    def test_candidate_harness_error_blocks_once_without_missing_evidence_findings(self):
+        url = "https://example.com/"
+        baseline = run(site(url))
+        current = run(dict(site(url, "harness-error", elements=None), screenshot=None))
+        expected = [{"url": url, "metric": "harness_error", "direction": "regression"}]
+        self.assertEqual(smoke.gate_regressions(baseline, current, 5), (expected, expected))
+        with tempfile.TemporaryDirectory() as temporary:
+            before, after = (Path(temporary) / name for name in ("old.json", "new.json"))
+            before.write_text(json.dumps(baseline))
+            after.write_text(json.dumps(current))
+            with (
+                patch.object(sys, "argv", ["site-smoke.py", "compare", str(before), str(after), "--json"]),
+                contextlib.redirect_stdout(io.StringIO()) as output,
+            ):
+                self.assertEqual(smoke.main(), 1)
+            self.assertEqual(json.loads(output.getvalue()), expected)
+
     def test_gate_blocks_partial_loads_new_crashes_and_large_console_increases(self):
         baseline = run(
             site("crashed", "load-error"),
@@ -312,6 +346,120 @@ class SiteSmokeTests(unittest.TestCase):
                 ("noisy", "total_console_errors"),
             },
         )
+
+    def test_paired_reruns_confirm_or_clear_existing_regressions(self):
+        scenarios = (
+            ("empty", {"elements": 0}, {}, {"elements": 0}, {"elements": 0}, "nonempty_body", True),
+            ("transient-empty", {"elements": 0}, {}, {"elements": 0}, {}, "nonempty_body", False),
+            ("baseline-empty", {"elements": 0}, {"elements": 0}, {"elements": 0}, {}, "nonempty_body", False),
+            (
+                "persistent-timeout",
+                {"status": "timeout"},
+                {},
+                {"status": "load-error"},
+                {"status": "timeout"},
+                "status",
+                True,
+            ),
+            (
+                "baseline-timeout",
+                {"status": "timeout"},
+                {"status": "load-error"},
+                {"status": "timeout"},
+                {},
+                "status",
+                False,
+            ),
+            ("transient-load-error", {"status": "load-error"}, {}, {"status": "load-error"}, {}, "status", False),
+            (
+                "persistent-console",
+                {"console_error": 5},
+                {},
+                {"console_error": 5},
+                {"console_error": 5},
+                "total_console_errors",
+                True,
+            ),
+            (
+                "below-console-threshold",
+                {"console_error": 5},
+                {},
+                {"console_error": 4},
+                {},
+                "total_console_errors",
+                False,
+            ),
+            (
+                "baseline-console",
+                {"console_error": 5},
+                {"console_error": 5},
+                {"console_error": 5},
+                {},
+                "total_console_errors",
+                False,
+            ),
+            (
+                "persistent-evidence-loss",
+                {"elements": None},
+                {},
+                {"elements": None},
+                {"elements": None},
+                "missing_body_element_count",
+                True,
+            ),
+            (
+                "transient-evidence-loss",
+                {"elements": None},
+                {},
+                {"elements": None},
+                {},
+                "missing_body_element_count",
+                False,
+            ),
+        )
+        for name, initial, fresh_baseline, first, second, metric, confirmed in scenarios:
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as temporary:
+                url = f"https://{name}.example/"
+                baseline = run(site(url))
+                current = run(dict(site(url, **initial), rank=1))
+                settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
+                baseline["settings"].update(settings)
+                current["settings"].update(settings)
+                changes, _ = smoke.gate_regressions(baseline, current, 5)
+                capture = Mock(side_effect=[site(url, **values) for values in (fresh_baseline, first, {}, second)])
+                drivers = (Path("baseline"), Path("candidate"))
+                with patch.dict(smoke.confirm_findings.__globals__, {"capture": capture}):
+                    smoke.confirm_findings(changes, current, *drivers, Path(temporary) / "reruns")
+                _, blocking = smoke.gate_regressions(baseline, current, 5, changes=changes)
+                change = next(row for row in changes if row["metric"] == metric)
+                self.assertEqual(change["confirmation"], "confirmed" if confirmed else "cleared-on-rerun")
+                self.assertEqual(change["direction"], "regression" if confirmed else "informational")
+                self.assertEqual(blocking, [change] if confirmed else [])
+                actual_drivers = [call.args[0] for call in capture.call_args_list]
+                self.assertEqual(actual_drivers, list(drivers) * (len(actual_drivers) // 2))
+                self.assertIn(len(actual_drivers), (2, 4))
+                if name == "persistent-console":
+                    self.assertEqual(len(actual_drivers), 4)
+                if name == "baseline-empty":
+                    self.assertEqual(change["clear_reason"], "baseline-also-regressed")
+
+    def test_paired_reruns_do_not_clear_an_observed_crash(self):
+        url = "https://example.com/"
+        settings = {"navigation_timeout_s": 25, "settle_s": 2, "viewport": smoke.VIEWPORT}
+        for initial, candidate in (("crash", "success"), ("timeout", "crash")):
+            with self.subTest(initial=initial), tempfile.TemporaryDirectory() as temporary:
+                baseline = run(site(url))
+                current = run(dict(site(url, initial, elements=None), rank=1))
+                baseline["settings"].update(settings)
+                current["settings"].update(settings)
+                changes, _ = smoke.gate_regressions(baseline, current, 5)
+                capture = Mock(side_effect=[site(url), site(url, candidate), site(url), site(url)])
+                with patch.dict(smoke.confirm_findings.__globals__, {"capture": capture}):
+                    smoke.confirm_findings(
+                        changes, current, Path("baseline"), Path("candidate"), Path(temporary) / "reruns"
+                    )
+                _, blocking = smoke.gate_regressions(baseline, current, 5, changes=changes)
+                self.assertEqual([(row["metric"], row["after"]) for row in blocking], [("status", "crash")])
 
     def test_compare_and_gate_agree_on_new_crashes_after_failed_loads(self):
         for status in ("timeout", "load-error", "harness-error"):

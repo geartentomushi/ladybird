@@ -374,6 +374,9 @@ def compare(baseline, current):
     for site in current["sites"]:
         url = site["url"]
         before = old_sites.pop(url, None)
+        if site["status"] == "harness-error":
+            changes.append({"url": url, "metric": "harness_error", "direction": "regression"})
+            continue
         if before is None:
             changes.append({"url": url, "metric": "coverage", "direction": "added"})
             continue
@@ -423,29 +426,40 @@ def is_http_url(url):
     return parsed.scheme in ("http", "https") and parsed.hostname and parsed.username is None
 
 
-def confirm_body_drops(changes, current, baseline_executable, executable, directory):
-    pending = [change for change in changes if change.get("confirmation") == "pending"]
+def confirm_findings(changes, current, baseline_executable, executable, directory, console_threshold=5):
+    pending = {}
+    for change in changes:
+        metric = change["metric"]
+        rerunnable = metric in (
+            *ERROR_CATEGORIES,
+            "nonempty_body",
+            "total_console_errors",
+            "missing_screenshot",
+            "missing_body_element_count",
+        ) or (metric == "status" and change["after"] != "crash")
+        if change.get("confirmation") == "pending" or (rerunnable and change["direction"] == "regression"):
+            change["confirmation"] = "pending"
+            pending.setdefault(change["url"], []).append(change)
     if not pending:
         return
     settings = current["settings"]
     timeout, settle = settings["navigation_timeout_s"], settings["settle_s"]
     if settings["viewport"] != VIEWPORT or not 0 < timeout < float("inf") or not 0 <= settle < float("inf"):
-        raise ValueError("Invalid body-drop rerun capture settings")
+        raise ValueError("Invalid rerun capture settings")
     ranks = {row["url"]: row["rank"] for row in current["sites"]}
-    for change in pending:
-        url = change["url"]
+    for url in pending:
         if not is_http_url(url) or not isinstance(ranks[url], int) or ranks[url] < 1:
-            raise ValueError("Invalid site in body-drop rerun")
+            raise ValueError("Invalid site in rerun")
 
     directory = prepare_output(directory)
     processes = DriverProcesses()
+    crashed = {change["url"] for change in changes if change["metric"] == "status" and change["after"] == "crash"}
     try:
         for attempt in range(1, 3):
             attempt_directory = prepare_output(directory / f"attempt-{attempt}")
             baseline_directory = prepare_output(attempt_directory / "baseline")
             candidate_directory = prepare_output(attempt_directory / "candidate")
-            for change in pending:
-                url = change["url"]
+            for url, findings in pending.items():
                 site = (ranks[url], url)
                 pair = {}
                 for label, driver, path in (
@@ -453,31 +467,52 @@ def confirm_body_drops(changes, current, baseline_executable, executable, direct
                     ("candidate", executable, candidate_directory),
                 ):
                     row = capture(driver, path, site, timeout, settle, processes)
-                    pair[label] = {"status": row["status"], "body_element_count": row["body_element_count"]}
-                change.setdefault("reruns", []).append(pair)
-                baseline_count, count = body_count(pair["baseline"]), body_count(pair["candidate"])
-                if baseline_count is not None and is_large_body_drop(change["before"], baseline_count):
-                    change["confirmation"] = "cleared-on-rerun"
-                    change["clear_reason"] = "baseline-also-dropped"
-                elif count is not None and (
-                    not is_large_body_drop(change["before"], count)
-                    or (baseline_count is not None and not is_large_body_drop(baseline_count, count))
+                    pair[label] = {
+                        key: row[key] for key in ("status", "body_element_count", "console_errors", "screenshot")
+                    }
+                if (
+                    pair["candidate"]["status"] == "crash"
+                    and pair["baseline"]["status"] != "crash"
+                    and url not in crashed
                 ):
-                    change["confirmation"] = "cleared-on-rerun"
-            pending = [change for change in pending if change["confirmation"] == "pending"]
+                    changes.append(
+                        {
+                            "url": url,
+                            "metric": "status",
+                            "direction": "regression",
+                            "before": pair["baseline"]["status"],
+                            "after": "crash",
+                            "reruns": [pair],
+                        }
+                    )
+                    crashed.add(url)
+                for change in findings:
+                    change.setdefault("reruns", []).append(pair)
+                    compare_rerun(change, pair, console_threshold)
+            pending = {
+                url: remaining
+                for url, findings in pending.items()
+                if (remaining := [change for change in findings if change["confirmation"] == "pending"])
+            }
             if not pending:
                 break
     except KeyboardInterrupt:
         processes.cancel()
         raise
-    for change in pending:
-        if all(body_count(row) is not None for pair in change["reruns"] for row in pair.values()):
+    for url, findings in pending.items():
+        for change in findings:
+            metric = change["metric"]
+            if any(rerun_value(metric, row) is None for pair in change["reruns"] for row in pair.values()):
+                change["confirmation"] = "inconclusive"
+                continue
             change["confirmation"] = "confirmed"
+            if metric != "body_element_count":
+                continue
             change["direction"] = "changed"
             if all(body_count(pair["candidate"]) == 0 for pair in change["reruns"]):
                 changes.append(
                     {
-                        "url": change["url"],
+                        "url": url,
                         "metric": "nonempty_body",
                         "direction": "regression",
                         "before": 1,
@@ -485,8 +520,47 @@ def confirm_body_drops(changes, current, baseline_executable, executable, direct
                         "confirmation": "confirmed",
                     }
                 )
-        else:
-            change["confirmation"] = "inconclusive"
+
+
+def compare_rerun(change, pair, console_threshold):
+    metric = change["metric"]
+    before = 1 if metric == "status" or metric.startswith("missing_") else change["before"]
+    baseline = rerun_value(metric, pair["baseline"])
+    candidate = rerun_value(metric, pair["candidate"])
+
+    def worse(old, new):
+        if metric == "body_element_count":
+            return is_large_body_drop(old, new)
+        if metric in ("status", "nonempty_body") or metric.startswith("missing_"):
+            return new < old
+        return new - old >= (console_threshold if metric == "total_console_errors" else 1)
+
+    if baseline is not None and worse(before, baseline):
+        change["clear_reason"] = (
+            "baseline-also-dropped" if metric == "body_element_count" else "baseline-also-regressed"
+        )
+    elif candidate is None or (worse(before, candidate) and (baseline is None or worse(baseline, candidate))):
+        return
+    change["confirmation"] = "cleared-on-rerun"
+    change["direction"] = "informational"
+
+
+def rerun_value(metric, row):
+    if row["status"] == "harness-error":
+        return None
+    if metric == "status":
+        return int(row["status"] == "success")
+    if metric.startswith("missing_"):
+        return int(row[metric.removeprefix("missing_")] is not None)
+    if metric == "body_element_count":
+        return body_count(row)
+    if metric == "nonempty_body":
+        count = body_count(row)
+        return int(count > 0) if count is not None else None
+    errors = row["console_errors"]
+    if row["status"] != "success" or errors is None:
+        return None
+    return sum(errors.values()) if metric == "total_console_errors" else errors[metric]
 
 
 def body_count(row):
@@ -525,28 +599,44 @@ def print_comparison(changes):
 
 def gate_regressions(baseline, current, console_threshold, *, changes=None):
     if changes is None:
-        changes = compare(baseline, current)
+        changes = compare(baseline, current) + gate_evidence_findings(baseline, current, console_threshold)
     regressions = [
         change
         for change in changes
-        if (change["direction"] == "regression" and change["metric"] in ("status", "nonempty_body"))
+        if (
+            change["direction"] == "regression"
+            and change["metric"]
+            in (
+                "status",
+                "harness_error",
+                "nonempty_body",
+                "missing_screenshot",
+                "missing_body_element_count",
+                "total_console_errors",
+            )
+        )
         or change["direction"] in ("added", "removed")
     ]
+    return changes, regressions
+
+
+def gate_evidence_findings(baseline, current, console_threshold):
+    findings = []
     old_sites = {row["url"]: row for row in baseline["sites"]}
     for site in current["sites"]:
         before = old_sites.get(site["url"])
-        if before is None:
+        if before is None or site["status"] == "harness-error":
             continue
         for metric in ("screenshot", "body_element_count"):
             if before[metric] is not None and site[metric] is None:
-                regressions.append({"url": site["url"], "metric": f"missing_{metric}", "direction": "regression"})
+                findings.append({"url": site["url"], "metric": f"missing_{metric}", "direction": "regression"})
         if before["status"] != "success" or site["status"] != "success":
             continue
         if before["console_errors"] is not None and site["console_errors"] is not None:
             old_count = sum(before["console_errors"].values())
             count = sum(site["console_errors"].values())
             if count - old_count >= console_threshold:
-                regressions.append(
+                findings.append(
                     {
                         "url": site["url"],
                         "metric": "total_console_errors",
@@ -555,7 +645,7 @@ def gate_regressions(baseline, current, console_threshold, *, changes=None):
                         "after": count,
                     }
                 )
-    return changes, regressions
+    return findings
 
 
 def prepare_output(path):
@@ -741,10 +831,15 @@ def run_gate(args, output, baseline):
     )
     try:
         current = json.loads((sites_dir / "results.json").read_text())
-        changes = compare(baseline, current)
+        changes = compare(baseline, current) + gate_evidence_findings(baseline, current, args.console_error_increase)
         if args.baseline_webdriver is not None:
-            confirm_body_drops(
-                changes, current, args.baseline_webdriver, build / "bin/WebDriver", output / "body-drop-reruns"
+            confirm_findings(
+                changes,
+                current,
+                args.baseline_webdriver,
+                build / "bin/WebDriver",
+                output / "site-reruns",
+                args.console_error_increase,
             )
         changes, regressions = gate_regressions(baseline, current, args.console_error_increase, changes=changes)
         details["summary"] = current["summary"]
@@ -780,15 +875,15 @@ def main():
     comparison.add_argument("baseline", type=Path)
     comparison.add_argument("current", type=Path)
     comparison.add_argument("--json", action="store_true", help="Print the comparison as JSON")
-    comparison.add_argument("--webdriver", type=Path, help="Candidate WebDriver to rerun suspected body drops")
+    comparison.add_argument("--webdriver", type=Path, help="Candidate WebDriver for paired reruns")
     comparison.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired reruns")
-    comparison.add_argument("--rerun-output", type=Path, help="New directory for body-drop rerun artifacts")
+    comparison.add_argument("--rerun-output", type=Path, help="New directory for paired rerun artifacts")
     gate = commands.add_parser(
         "gate", help="Build and run the LibWeb, LibJS, and pinned site regression checks (Linux)"
     )
     gate.add_argument("--output", type=Path, required=True)
     gate.add_argument("--baseline", type=Path, default=HERE / "baseline.json")
-    gate.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired body-drop reruns")
+    gate.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired reruns")
     gate.add_argument("--cc", help="C compiler passed to Meta/ladybird.py")
     gate.add_argument("--cxx", help="C++ compiler passed to Meta/ladybird.py")
     gate.add_argument("--build-jobs", type=int)
@@ -809,9 +904,10 @@ def main():
             comparison.error("--webdriver, --baseline-webdriver and --rerun-output must be supplied together")
         try:
             current = json.loads(args.current.read_text())
-            changes = compare(json.loads(args.baseline.read_text()), current)
+            baseline = json.loads(args.baseline.read_text())
+            changes = compare(baseline, current) + gate_evidence_findings(baseline, current, 5)
             if args.webdriver is not None:
-                confirm_body_drops(
+                confirm_findings(
                     changes,
                     current,
                     resolve_webdriver(args.baseline_webdriver),
