@@ -39,6 +39,7 @@ errors. Native engine diagnostics are not console events; inspect the numbered
 driver logs for those. A successful load or nonempty body does not prove the
 site is usable: a consent prompt, verification challenge or error page can also
 render content.
+The harness keeps output directories and files private to the owner (0700 and 0600).
 
 `compare` reports per-site load-status changes and, for successful loads,
 changes in console-error counts and whether the body is nonempty. It exits 1

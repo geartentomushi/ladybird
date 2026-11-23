@@ -10,6 +10,7 @@ import os
 import runpy
 import select
 import signal
+import stat
 import subprocess
 import sys
 import tempfile
@@ -261,6 +262,32 @@ class SiteSmokeTests(unittest.TestCase):
             ladybird.touch(mode=0o755)
             with self.assertRaisesRegex(ValueError, "WebDriver next to Ladybird"):
                 smoke.run_ci(ladybird, directory / "results.json")
+
+    @unittest.skipUnless(os.name == "posix" and smoke.connect is not None, "requires POSIX and websockets")
+    def test_run_keeps_output_and_driver_logs_private_under_a_permissive_umask(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary) / "results"
+            output.mkdir()
+            output.chmod(0o755)
+            command = [
+                sys.executable,
+                smoke.__file__,
+                "run",
+                "--webdriver",
+                sys.executable,
+                "--revision",
+                "fixture",
+                "--output",
+                str(output),
+                "--url",
+                "https://example.com/",
+            ]
+            result = subprocess.run(command, capture_output=True, text=True, timeout=10, umask=0)
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertEqual(stat.S_IMODE(output.stat().st_mode), 0o700)
+            for name in ("001.log", "results.json"):
+                with self.subTest(name=name):
+                    self.assertEqual(stat.S_IMODE((output / name).stat().st_mode), 0o600)
 
     def test_ci_preserves_details_and_accepts_partial_harness_errors(self):
         def fake_run(command, **_):

@@ -139,11 +139,15 @@ class DriverProcesses:
             self.active.discard(pid)
 
 
+def open_private_file(path, flags):
+    return os.open(path, flags | os.O_EXCL, 0o600)
+
+
 @contextlib.contextmanager
 def launch_driver(executable, directory, log_path, processes):
     with tempfile.TemporaryDirectory(prefix="profile-", dir=directory) as temporary:
         profile = Path(temporary) / "profile"
-        with log_path.open("wb") as log:
+        with open(log_path, "wb", opener=open_private_file) as log:
             process = processes.start(
                 [executable, "--headless", "--force-cpu-painting", "--port", "0", "--profile-path", profile],
                 log,
@@ -262,7 +266,8 @@ def sample_render(bidi, context, row, image_path, errors):
     except errors as error:
         row["dom_error"] = str(error)
     screenshot = bidi.command("browsingContext.captureScreenshot", {"context": context})
-    image_path.write_bytes(base64.b64decode(screenshot["data"], validate=True))
+    with open(image_path, "wb", opener=open_private_file) as image:
+        image.write(base64.b64decode(screenshot["data"], validate=True))
     row["screenshot"] = image_path.name
 
 
@@ -450,10 +455,13 @@ def gate_regressions(baseline, current, console_threshold):
 
 
 def prepare_output(path):
+    if path.is_symlink():
+        raise ValueError(f"Output directory must not be a symbolic link: {path}")
     path = path.resolve()
-    path.mkdir(parents=True, exist_ok=True)
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
     if any(path.iterdir()):
         raise ValueError(f"Output directory is not empty: {path}")
+    path.chmod(0o700)
     return path
 
 
@@ -534,7 +542,7 @@ def run_gate(args, output, baseline):
 
     def stage(name, command):
         log = output / f"{name}.log"
-        with log.open("w") as stream:
+        with open(log, "w", opener=open_private_file) as stream:
             try:
                 status = run_stage(command, cwd=ROOT, env=environment, stdout=stream, stderr=subprocess.STDOUT)
             except OSError as error:
@@ -548,7 +556,8 @@ def run_gate(args, output, baseline):
         report["passed"] = not report.get("site_regressions") and all(
             details["exit_status"] == 0 and "error" not in details for details in report["stages"].values()
         )
-        (output / "gate-summary.json").write_text(json.dumps(report, indent=2) + "\n")
+        with open(output / "gate-summary.json", "w", opener=open_private_file) as stream:
+            stream.write(json.dumps(report, indent=2) + "\n")
         print(f"Gate {'passed' if report['passed'] else 'failed'}: {output / 'gate-summary.json'}")
         return int(not report["passed"])
 
@@ -756,7 +765,8 @@ def main():
             raise
     result["summary"] = summarize(result["sites"])
     results_file = output / "results.json"
-    results_file.write_text(json.dumps(result, indent=2) + "\n")
+    with open(results_file, "w", opener=open_private_file) as stream:
+        stream.write(json.dumps(result, indent=2) + "\n")
     print(json.dumps(result["summary"], indent=2))
     print(f"Results: {results_file}")
     return int(result["summary"]["statuses"]["harness-error"] > 0)
