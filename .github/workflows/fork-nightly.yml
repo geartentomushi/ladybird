@@ -121,6 +121,8 @@ jobs:
     needs: build
     runs-on: ubuntu-24.04
     container: *ci_container
+    outputs:
+      revision: ${{ steps.test-suite.outputs.commit }}
     steps:
       - uses: actions/checkout@v7.0.1
         with:
@@ -129,6 +131,7 @@ jobs:
           persist-credentials: false
 
       - uses: actions/checkout@v7.0.1
+        id: test-suite
         with:
           repository: tc39/test262
           path: test262
@@ -264,10 +267,14 @@ jobs:
           TEST262_RESULT: ${{ needs.test262.result }}
           SITES_RESULT: ${{ needs.sites.result }}
           BASELINE_RUN: ${{ steps.baseline.outputs.run-id }}
+          BROWSER_REVISION: ${{ github.sha }}
+          WPT_REVISION: ${{ needs.build.outputs.wpt-revision }}
+          TEST262_REVISION: ${{ needs.test262.outputs.revision }}
         run: |
           python3 Meta/test-nightly-regressions.py
           python3 Meta/nightly_regressions.py --baseline baseline --reports reports --output summary \
-            --wpt "$WPT_RESULT" --test262 "$TEST262_RESULT" --sites "$SITES_RESULT" --baseline-run "$BASELINE_RUN"
+            --wpt "$WPT_RESULT" --test262 "$TEST262_RESULT" --sites "$SITES_RESULT" --baseline-run "$BASELINE_RUN" \
+            --browser-revision "$BROWSER_REVISION" --wpt-revision "$WPT_REVISION" --test262-revision "$TEST262_REVISION"
 
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}

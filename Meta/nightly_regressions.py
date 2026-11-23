@@ -55,11 +55,20 @@ def regressions(suite: str, previous: dict[str, str], current: dict[str, str]) -
 
 
 def summarize(
-    baseline: Path, reports: Path, output: Path, run_id: str, results: dict[str, str]
+    baseline: Path, reports: Path, output: Path, run_id: str, results: dict[str, str], revisions: dict[str, str]
 ) -> tuple[str, int, int, int]:
     output.mkdir(parents=True, exist_ok=True)
     previous_label = f"nightly run {run_id}" if run_id else "none (first retained run)"
     lines = ["# Nightly compatibility", "", f"Comparison baseline: {previous_label}", ""]
+    baseline_report = baseline / "regressions.json"
+    previous_revisions = (
+        json.loads(baseline_report.read_text(encoding="utf-8")).get("revisions", {})
+        if baseline_report.is_file()
+        else {}
+    )
+    for name, revision in revisions.items():
+        lines.append(f"- {name} revision: <code>{html.escape(revision or 'unavailable')}</code>")
+    lines.append("")
     suites = {}
     hard_count = soft_count = errors = 0
     for suite, result in results.items():
@@ -103,6 +112,11 @@ def summarize(
         else:
             hard_count += len(new)
         label = "site regressions (advisory)" if soft else "new regressions"
+        previous_revision = previous_revisions.get(suite)
+        current_revision = revisions.get(suite)
+        if new and previous_revision and current_revision and previous_revision != current_revision:
+            detail["suite_revision_change"] = {"before": previous_revision, "after": current_revision}
+            label += f" — test suite changed (rev {html.escape(previous_revision)}→{html.escape(current_revision)})"
         lines.extend([f"{len(current):,} results; **{len(new):,} {label}**.", ""])
         for entry in new[:25]:
             lines.append(
@@ -116,7 +130,17 @@ def summarize(
     summary = "\n".join(lines)
     (output / "nightly-summary.md").write_text(summary, encoding="utf-8")
     (output / "regressions.json").write_text(
-        json.dumps({"baseline_run": run_id or None, "suites": suites}, indent=2) + "\n", encoding="utf-8"
+        json.dumps(
+            {
+                "baseline_run": run_id or None,
+                "revisions": revisions,
+                "baseline_revisions": previous_revisions,
+                "suites": suites,
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
     )
     return summary, hard_count, soft_count, errors
 
@@ -129,6 +153,8 @@ def main() -> int:
     parser.add_argument("--baseline-run", default="")
     for suite in PASS_STATUSES:
         parser.add_argument(f"--{suite}", required=True)
+    for name in ("browser", "wpt", "test262"):
+        parser.add_argument(f"--{name}-revision", required=True)
     args = parser.parse_args()
 
     summary, hard, soft, errors = summarize(
@@ -137,6 +163,7 @@ def main() -> int:
         args.output,
         args.baseline_run,
         {suite: getattr(args, suite) for suite in PASS_STATUSES},
+        {name: getattr(args, f"{name}_revision") for name in ("browser", "wpt", "test262")},
     )
     if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary_path, "a", encoding="utf-8") as stream:
