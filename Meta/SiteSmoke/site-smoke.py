@@ -401,7 +401,7 @@ def compare(baseline, current):
                     {
                         "url": url,
                         "metric": "body_element_count",
-                        "direction": "changed",
+                        "direction": "informational",
                         "before": old_count,
                         "after": count,
                         "confirmation": "pending",
@@ -456,11 +456,11 @@ def confirm_body_drops(changes, current, executable, directory):
         processes.cancel()
         raise
     for change in pending:
-        change["confirmation"] = (
-            "confirmed"
-            if all(row["status"] == "success" and row["body_element_count"] is not None for row in change["reruns"])
-            else "inconclusive"
-        )
+        if all(row["status"] == "success" and row["body_element_count"] is not None for row in change["reruns"]):
+            change["confirmation"] = "confirmed"
+            change["direction"] = "changed"
+        else:
+            change["confirmation"] = "inconclusive"
 
 
 def targets(urls):
@@ -475,12 +475,14 @@ def print_comparison(changes):
     counts = Counter(change["direction"] for change in changes)
     print(
         "Changes:",
-        ", ".join(f"{key}={counts[key]}" for key in ("regression", "improvement", "changed", "added", "removed")),
+        ", ".join(
+            f"{key}={counts[key]}" for key in ("regression", "improvement", "changed", "added", "removed", "informational")
+        ),
     )
     for change in changes:
         delta = f": {change['before']} → {change['after']}" if "before" in change else ""
         confirmation = f" ({change['confirmation']})" if "confirmation" in change else ""
-        print(f"{change['direction']:11} {change['url']} {change['metric']}{delta}{confirmation}")
+        print(f"{change['direction']:13} {change['url']} {change['metric']}{delta}{confirmation}")
 
 
 def gate_regressions(baseline, current, console_threshold):

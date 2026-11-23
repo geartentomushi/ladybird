@@ -179,9 +179,9 @@ class SiteSmokeTests(unittest.TestCase):
         self.assertEqual(
             [(row["url"], row["metric"], row["direction"], row["before"], row["after"]) for row in changes],
             [
-                ("large-drop", "body_element_count", "changed", 22, 15),
-                ("exact-percentage", "body_element_count", "changed", 20, 14),
-                ("exact-count", "body_element_count", "changed", 10, 5),
+                ("large-drop", "body_element_count", "informational", 22, 15),
+                ("exact-percentage", "body_element_count", "informational", 20, 14),
+                ("exact-count", "body_element_count", "informational", 10, 5),
             ],
         )
         self.assertTrue(all(row["confirmation"] == "pending" for row in changes))
@@ -212,8 +212,12 @@ class SiteSmokeTests(unittest.TestCase):
         ):
             smoke.confirm_body_drops(changes, current, Path("WebDriver"), Path(temporary) / "reruns")
         self.assertEqual(
-            [(row["url"], row["confirmation"]) for row in changes],
-            list(zip(urls, ("confirmed", "cleared-on-rerun", "inconclusive"))),
+            [(row["url"], row["confirmation"], row["direction"]) for row in changes],
+            [
+                (urls[0], "confirmed", "changed"),
+                (urls[1], "cleared-on-rerun", "informational"),
+                (urls[2], "inconclusive", "informational"),
+            ],
         )
         self.assertEqual(
             [call.args[2] for call in capture.call_args_list],
