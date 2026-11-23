@@ -66,6 +66,18 @@ class SiteSmokeTests(unittest.TestCase):
             ):
                 self.assertEqual(tranco.probe(("2", "example.com")), expected)
 
+    def test_tranco_filter_bounds_the_entire_probe_and_skips_a_timeout(self):
+        def fake_curl(command, *, timeout, **_kwargs):
+            self.assertEqual(timeout, 40)
+            if command[-1] == "https://slow.example/":
+                raise subprocess.TimeoutExpired(command, timeout)
+            return SimpleNamespace(returncode=0, stdout="200\ttext/html")
+
+        with patch.object(tranco.subprocess, "run", side_effect=fake_curl) as curl:
+            rows = [("1", "slow.example"), ("2", "browsable.example")]
+            self.assertEqual(tranco.select_domains(iter(rows), count=1), rows[1:])
+        self.assertEqual(curl.call_count, 2)
+
     def test_tranco_filter_preserves_original_rank_numbers(self):
         rows = [("1", "unreachable.example"), ("2", "first.example"), ("4", "second.example"), ("8", "later.example")]
         with patch.dict(tranco.select_domains.__globals__, {"probe": lambda row: row != rows[0]}):

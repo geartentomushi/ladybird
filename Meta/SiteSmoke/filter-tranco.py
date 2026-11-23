@@ -14,39 +14,44 @@ from pathlib import Path
 
 SNAPSHOT = "# Tranco list 8PW6V (2026-11-22): https://tranco-list.eu/list/8PW6V"
 JOBS = 16
+PROBE_TIMEOUT_SECONDS = 40
 
 
 def probe(rank_and_domain):
     _, domain = rank_and_domain
-    result = subprocess.run(
-        [
-            "curl",
-            "--disable",
-            "--silent",
-            "--location",
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=http,https",
-            "--max-redirs",
-            "10",
-            "--connect-timeout",
-            "5",
-            "--max-time",
-            "12",
-            "--retry",
-            "2",
-            "--retry-all-errors",
-            "--output",
-            "/dev/null",
-            "--write-out",
-            "%{http_code}\t%{content_type}",
-            f"https://{domain}/",
-        ],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            [
+                "curl",
+                "--disable",
+                "--silent",
+                "--location",
+                "--proto",
+                "=https",
+                "--proto-redir",
+                "=http,https",
+                "--max-redirs",
+                "10",
+                "--connect-timeout",
+                "5",
+                "--max-time",
+                "12",
+                "--retry",
+                "2",
+                "--retry-all-errors",
+                "--output",
+                "/dev/null",
+                "--write-out",
+                "%{http_code}\t%{content_type}",
+                f"https://{domain}/",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=PROBE_TIMEOUT_SECONDS,
+        )
+    except subprocess.TimeoutExpired:
+        return False
     status, _, content_type = result.stdout.partition("\t")
     return (
         result.returncode == 0 and status.startswith("2") and content_type.split(";")[0].strip().lower() == "text/html"
