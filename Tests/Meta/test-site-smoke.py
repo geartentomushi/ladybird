@@ -6,8 +6,11 @@
 import contextlib
 import io
 import json
+import os
 import runpy
+import select
 import signal
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -318,6 +321,42 @@ class SiteSmokeTests(unittest.TestCase):
                         smoke.run_stage(["stage"])
                     kill.assert_called_once_with(123, signum)
                     self.assertEqual(stage.wait.call_count, 2)
+
+    @unittest.skipUnless(os.name == "posix", "requires POSIX process groups")
+    def test_sigterm_cleans_up_a_detached_stage(self):
+        launcher = """
+import runpy
+import signal
+import sys
+
+smoke = runpy.run_path(sys.argv[1])
+signal.signal(signal.SIGTERM, smoke["request_termination"])
+try:
+    smoke["run_stage"]([sys.executable, "-c", sys.argv[2]])
+except smoke["TerminationRequested"]:
+    raise SystemExit(128 + signal.SIGTERM) from None
+"""
+        child = "import os, signal; print(os.getpid(), flush=True); signal.pause()"
+        command = [sys.executable, "-c", launcher, str(Path(smoke.__file__)), child]
+        with subprocess.Popen(command, stdout=subprocess.PIPE, start_new_session=True, text=True) as wrapper:
+            assert wrapper.stdout is not None
+            child_pid = None
+            try:
+                ready, _, _ = select.select([wrapper.stdout], [], [], 10)
+                self.assertTrue(ready, "the detached stage did not report its PID")
+                child_pid = int(wrapper.stdout.readline())
+                self.assertEqual(os.getpgid(child_pid), child_pid)
+                self.assertNotEqual(child_pid, wrapper.pid)
+                os.killpg(wrapper.pid, signal.SIGTERM)
+                self.assertEqual(wrapper.wait(timeout=10), 128 + signal.SIGTERM)
+                with self.assertRaises(ProcessLookupError):
+                    os.killpg(child_pid, 0)
+            finally:
+                if child_pid is not None:
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(child_pid, signal.SIGKILL)
+                if wrapper.poll() is None:
+                    wrapper.kill()
 
     def test_recovers_crash_evidence_from_profile_and_protocol(self):
         with tempfile.TemporaryDirectory() as temporary:
