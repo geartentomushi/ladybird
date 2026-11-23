@@ -10,6 +10,7 @@ jobs:
     name: Fork commit messages
     if: github.repository == 'geartentomushi/ladybird' && github.event_name == 'pull_request'
     permissions:
+      contents: read
       pull-requests: read
     uses: ./.github/workflows/lint-commits.yml
 
