@@ -196,7 +196,27 @@ def public_final_url(url):
     return parts._replace(netloc=parts.netloc.rsplit("@", 1)[-1], query="", fragment="").geturl()
 
 
-def crashed_process(process, profile, row):
+def browser_exited_abnormally(driver_pid, proc=Path("/proc")):
+    try:
+        children = (proc / str(driver_pid) / "task" / str(driver_pid) / "children").read_text().split()
+    except OSError:
+        return False
+    for pid in children:
+        try:
+            name, _, stat = (proc / pid / "stat").read_text().rpartition(") ")
+        except OSError:
+            continue
+        if name.partition(" (")[2] not in ("Ladybird", "Hub"):
+            continue
+        fields = stat.split()
+        if len(fields) >= 50 and fields[0] == "Z" and fields[1] == str(driver_pid):
+            # Linux proc_pid_stat field 52 is the wait status; WebDriver uses SIGTERM for normal session cleanup.
+            if os.waitstatus_to_exitcode(int(fields[49])) not in (0, -signal.SIGTERM):
+                return True
+    return False
+
+
+def crash_evidence(process, profile, row):
     for executable in ("WebContent", "Browser", "Hub"):
         if any((profile / "data" / "CrashReports").glob(f"*-{executable}-*.txt")):
             return executable
@@ -209,6 +229,20 @@ def crashed_process(process, profile, row):
         if "Browser connection lost" in message:
             return "Browser"
     return None
+
+
+def crashed_process(process, profile, row, *, session_closed=False):
+    deadline = time.monotonic() + 0.25
+    while True:
+        if crashed := crash_evidence(process, profile, row):
+            return crashed
+        if not session_closed:
+            return None
+        if browser_exited_abnormally(process.pid):
+            return "Browser"
+        if time.monotonic() >= deadline:
+            return None
+        time.sleep(0.05)
 
 
 def sample_render(bidi, context, row, image_path, errors):
@@ -293,7 +327,7 @@ def capture(executable, directory, site, timeout, settle, processes=None):
                 except errors + (ValueError,) as error:
                     row["capture_error"] = str(error)
                     session_closed |= isinstance(error, ConnectionClosedOK)
-                if crashed := crashed_process(process, profile, row):
+                if crashed := crashed_process(process, profile, row, session_closed=session_closed):
                     row["status"] = "crash"
                     row["crashed_process"] = crashed
                 elif session_closed and row["status"] == "success":

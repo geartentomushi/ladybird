@@ -333,6 +333,26 @@ class SiteSmokeTests(unittest.TestCase):
             (directory / "2026-11-22T00-00-00Z-WebContent-123456.txt").touch()
             self.assertEqual(smoke.crashed_process(driver, profile, {}), "WebContent")
 
+    def test_browser_wait_status_distinguishes_a_crash_from_driver_cleanup(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            proc = Path(temporary)
+            driver = proc / "123" / "task" / "123"
+            driver.mkdir(parents=True)
+            (driver / "children").write_text("456")
+            child = proc / "456"
+            child.mkdir()
+            for state, status, crashed in (
+                ("R", 0, False),
+                ("Z", 0, False),
+                ("Z", signal.SIGTERM, False),
+                ("Z", signal.SIGKILL, True),
+                ("Z", 1 << 8, True),
+            ):
+                with self.subTest(state=state, status=status):
+                    fields = [state, "123"] + ["0"] * 47 + [str(status)]
+                    (child / "stat").write_text("456 (Hub) " + " ".join(fields))
+                    self.assertEqual(smoke.browser_exited_abnormally(123, proc), crashed)
+
     @unittest.skipIf(smoke.ConnectionClosedOK is None, "requires websockets")
     def test_session_close_during_settle_needs_crash_evidence(self):
         from websockets.frames import Close
@@ -351,8 +371,9 @@ class SiteSmokeTests(unittest.TestCase):
         bidi.observe = observe
         with tempfile.TemporaryDirectory() as temporary:
             path = Path(temporary)
-            driver = SimpleNamespace(poll=lambda: None)
+            driver = SimpleNamespace(pid=123, poll=lambda: None)
             connect = Mock(return_value=contextlib.nullcontext(None))
+            browser_exited = Mock(return_value=False)
             with patch.dict(
                 smoke.capture.__globals__,
                 {
@@ -361,6 +382,7 @@ class SiteSmokeTests(unittest.TestCase):
                     "open_session": lambda *_: "ws://localhost:1234",
                     "connect": connect,
                     "BiDi": lambda _: bidi,
+                    "browser_exited_abnormally": browser_exited,
                 },
             ):
                 row = smoke.capture(path / "WebDriver", path, (1, "https://example.com/"), 5, 2)
@@ -368,6 +390,12 @@ class SiteSmokeTests(unittest.TestCase):
                 self.assertNotIn("crashed_process", row)
                 self.assertEqual(smoke.ci_results([row]), {"results": {"https://example.com/": "FAIL"}})
 
+                browser_exited.return_value = True
+                row = smoke.capture(path / "WebDriver", path, (1, "https://example.com/"), 5, 2)
+                self.assertEqual(row["status"], "crash")
+                self.assertEqual(row["crashed_process"], "Browser")
+
+                browser_exited.return_value = False
                 reports = path / "data" / "CrashReports"
                 reports.mkdir(parents=True)
                 (reports / "2026-11-22T00-00-00Z-Browser-123456.txt").touch()
