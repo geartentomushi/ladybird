@@ -23,6 +23,7 @@
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/EventNames.h>
 #include <LibWeb/HTML/MessagePort.h>
+#include <LibWeb/HTML/Navigator.h>
 #include <LibWeb/HTML/Scripting/ClassicScript.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/Scripting/Fetching.h>
@@ -30,6 +31,7 @@
 #include <LibWeb/HTML/Scripting/ModuleScript.h>
 #include <LibWeb/HTML/Scripting/Script.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
+#include <LibWeb/HTML/Window.h>
 #include <LibWeb/HTML/WorkerAgentParent.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/ServiceWorker/EventNames.h>
@@ -271,14 +273,8 @@ private:
 
 GC_DEFINE_ALLOCATOR(ScriptFetchConsumeBody);
 
-enum class RegistrationWorkerSlot : u8 {
-    Installing,
-    Waiting,
-    Active,
-};
-
 // https://w3c.github.io/ServiceWorker/#update-registration-state-algorithm
-static void update_registration_state(HTML::EventLoop& event_loop, Registration& registration, RegistrationWorkerSlot target, RefPtr<ServiceWorkerRecord> source)
+void update_registration_state(HTML::EventLoop& event_loop, Registration& registration, RegistrationWorkerSlot target, RefPtr<ServiceWorkerRecord> source)
 {
     // 1. Let registrationObjects be an array containing all the ServiceWorkerRegistration objects associated with registration.
     // 2. If target is "installing", then: set registration's installing worker to source.
@@ -323,7 +319,7 @@ static void update_registration_state(HTML::EventLoop& event_loop, Registration&
 }
 
 // https://w3c.github.io/ServiceWorker/#update-state-algorithm
-static void update_worker_state(HTML::EventLoop& event_loop, ServiceWorkerRecord& worker, ServiceWorkerState state)
+void update_worker_state(HTML::EventLoop& event_loop, ServiceWorkerRecord& worker, ServiceWorkerState state)
 {
     // 1. Assert: state is not "parsed".
     VERIFY(state != ServiceWorkerState::Parsed);
@@ -353,7 +349,7 @@ static void update_worker_state(HTML::EventLoop& event_loop, ServiceWorkerRecord
 }
 
 // https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 8 and 9)
-static void fire_update_found(HTML::EventLoop& event_loop, Registration& registration)
+void fire_update_found(HTML::EventLoop& event_loop, Registration& registration)
 {
     // 8. Let settingsObjects be all environment settings objects whose origin is registration's scope url's origin.
     // 9. For each settingsObject of settingsObjects, queue a task on settingsObject's responsible event loop in the DOM
@@ -381,7 +377,7 @@ static void terminate_service_worker(ServiceWorkerRecord& worker)
 }
 
 // https://w3c.github.io/ServiceWorker/#run-service-worker-algorithm
-static void run_service_worker(HTML::EnvironmentSettingsObject& client, ServiceWorkerRecord& worker)
+static void run_service_worker(HTML::EnvironmentSettingsObject& client, Registration const& registration, ServiceWorkerRecord& worker)
 {
     // NB: The worker's agent creates its ServiceWorkerGlobalScope, and fetches and evaluates its script, on its own
     //     thread. A RunScript step waits for the evaluation to complete.
@@ -391,7 +387,16 @@ static void run_service_worker(HTML::EnvironmentSettingsObject& client, ServiceW
     options.type = worker.worker_type;
     auto worker_object = client.get_service_worker_object(&worker);
     auto outside_port = HTML::MessagePort::create(client.realm());
-    worker.agent = HTML::WorkerAgentParent::create(worker.script_url, options, false, outside_port, client, worker_object, HTML::AgentType::ServiceWorker);
+    // NB: The service worker replies to the messages it receives through its port, so those replies arrive as message
+    //     events at the ServiceWorkerContainer of the client that runs it.
+    // FIXME: Implement the client message queue, and deliver messages to every client through its own Client object.
+    if (auto* window = HTML::window_from_global_object(client.global_object()))
+        outside_port->set_message_event_target(window->navigator()->service_worker());
+    HTML::ServiceWorkerRegistrationSnapshot registration_snapshot {
+        .scope_url = registration.scope_url(),
+        .update_via_cache = registration.update_via_cache(),
+    };
+    worker.agent = HTML::WorkerAgentParent::create(worker.script_url, options, false, outside_port, client, worker_object, HTML::AgentType::ServiceWorker, move(registration_snapshot));
 }
 
 static void try_activate(GC::Ref<UpdateAlgorithmState>);
@@ -875,7 +880,7 @@ static void update(JS::VM& vm, GC::Ref<Job> job)
         state->set_new_worker(worker, job->client->responsible_event_loop());
 
         // 15. Let runResult be the result of running the Run Service Worker algorithm with worker and forceBypassCache.
-        run_service_worker(*job->client, worker);
+        run_service_worker(*job->client, registration, worker);
         worker->agent->run_service_worker_lifecycle_step(HTML::ServiceWorkerLifecycleStep::RunScript, GC::create_function(GC::Heap::the(), GC::captures(job, state), [](auto& job, auto& state, bool run_succeeded) {
             auto& vm = JS::VM::the();
             auto& registration = state->registration();

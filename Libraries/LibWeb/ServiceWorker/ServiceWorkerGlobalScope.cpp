@@ -5,14 +5,25 @@
  */
 
 #include <LibGC/Heap.h>
+#include <LibJS/Runtime/NativeFunction.h>
 #include <LibWeb/CookieStore/CookieStore.h>
+#include <LibWeb/DOM/EventTarget.h>
+#include <LibWeb/DOM/IDLEventListener.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
+#include <LibWeb/HTML/EventNames.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/Page/Page.h>
+#include <LibWeb/ServiceWorker/Clients.h>
 #include <LibWeb/ServiceWorker/EventNames.h>
 #include <LibWeb/ServiceWorker/ExtendableEvent.h>
+#include <LibWeb/ServiceWorker/ExtendableMessageEvent.h>
+#include <LibWeb/ServiceWorker/Job.h>
+#include <LibWeb/ServiceWorker/ServiceWorker.h>
 #include <LibWeb/ServiceWorker/ServiceWorkerGlobalScope.h>
+#include <LibWeb/ServiceWorker/ServiceWorkerRegistration.h>
+#include <LibWeb/StorageAPI/StorageKey.h>
+#include <LibWeb/WebIDL/CallbackType.h>
 
 namespace Web::ServiceWorker {
 
@@ -30,6 +41,8 @@ void ServiceWorkerGlobalScope::visit_edges(Cell::Visitor& visitor)
     Base::visit_edges(visitor);
 
     visitor.visit(m_cookie_store);
+    visitor.visit(m_message_event_relay);
+    visitor.visit(m_clients);
 }
 
 // https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-oninstall
@@ -115,6 +128,76 @@ GC::Ref<WebIDL::Promise> ServiceWorkerGlobalScope::skip_waiting()
     return WebIDL::create_resolved_promise(realm(), JS::js_undefined());
 }
 
+// https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-clients
+GC::Ref<Clients> ServiceWorkerGlobalScope::clients()
+{
+    // The clients getter steps are to return the Clients object that is associated with this.
+    if (!m_clients)
+        m_clients = Clients::create(*this);
+    return *m_clients;
+}
+
+bool ServiceWorkerGlobalScope::is_active_worker() const
+{
+    return m_registration && m_service_worker && m_registration->active_worker() == m_service_worker.ptr();
+}
+
+// https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-registration
+GC::Ref<ServiceWorkerRegistration> ServiceWorkerGlobalScope::registration()
+{
+    // The registration getter steps are to return the result of getting the service worker registration object
+    // representing this's service worker's containing service worker registration in this's relevant settings object.
+    VERIFY(m_registration);
+    return HTML::relevant_settings_object(*this).get_service_worker_registration_object(*m_registration);
+}
+
+// https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-serviceworker
+GC::Ref<ServiceWorker> ServiceWorkerGlobalScope::service_worker()
+{
+    // The serviceWorker getter steps are to return the result of getting the service worker object that represents
+    // this's service worker in this's relevant settings object.
+    VERIFY(m_service_worker);
+    return HTML::relevant_settings_object(*this).get_service_worker_object(m_service_worker.ptr());
+}
+
+void ServiceWorkerGlobalScope::set_up_service_worker(HTML::ServiceWorkerRegistrationSnapshot const& registration)
+{
+    auto storage_key = StorageAPI::obtain_a_storage_key(HTML::relevant_settings_object(*this));
+    VERIFY(storage_key.has_value());
+    m_registration = Registration::set(storage_key.release_value(), registration.scope_url, registration.update_via_cache);
+
+    m_service_worker = adopt_ref(*new ServiceWorkerRecord);
+    m_service_worker->script_url = url();
+    m_service_worker->worker_type = type();
+}
+
+// https://w3c.github.io/ServiceWorker/#installation-algorithm
+void ServiceWorkerGlobalScope::did_finish_install(bool succeeded)
+{
+    if (!m_registration)
+        return;
+    auto& event_loop = HTML::relevant_settings_object(*this).responsible_event_loop();
+
+    // 14. If installFailed is true, then:
+    if (!succeeded) {
+        // 1. Run the Update Worker State algorithm passing registration's installing worker and "redundant".
+        update_worker_state(event_loop, *m_service_worker, ServiceWorkerState::Redundant);
+
+        // 2. Run the Update Registration State algorithm passing registration, "installing" and null.
+        update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Installing, nullptr);
+        return;
+    }
+
+    // 17. Run the Update Registration State algorithm passing registration, "waiting" and registration's installing worker.
+    update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Waiting, m_service_worker);
+
+    // 18. Run the Update Registration State algorithm passing registration, "installing" and null.
+    update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Installing, nullptr);
+
+    // 19. Run the Update Worker State algorithm passing registration's waiting worker and "installed".
+    update_worker_state(event_loop, *m_service_worker, ServiceWorkerState::Installed);
+}
+
 void ServiceWorkerGlobalScope::run_lifecycle_step(HTML::ServiceWorkerLifecycleStep step, GC::Ref<GC::Function<void(bool succeeded)>> on_complete)
 {
     // NB: Steps only run once the worker's script has been evaluated, which is all RunScript waits for.
@@ -124,6 +207,30 @@ void ServiceWorkerGlobalScope::run_lifecycle_step(HTML::ServiceWorkerLifecycleSt
     }
 
     auto const& event_name = step == HTML::ServiceWorkerLifecycleStep::Install ? EventNames::install : EventNames::activate;
+
+    // NB: Mirror the state changes that the registration makes before it dispatches the event, and after it.
+    if (m_registration) {
+        auto& event_loop = HTML::relevant_settings_object(*this).responsible_event_loop();
+        if (step == HTML::ServiceWorkerLifecycleStep::Install) {
+            // https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 1-3 and 8-9)
+            update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Installing, m_service_worker);
+            update_worker_state(event_loop, *m_service_worker, ServiceWorkerState::Installing);
+            fire_update_found(event_loop, *m_registration);
+            on_complete = GC::create_function(GC::Heap::the(), GC::captures(*this, on_complete), [](ServiceWorkerGlobalScope& self, GC::Ref<GC::Function<void(bool)>>& on_complete, bool succeeded) {
+                self.did_finish_install(succeeded);
+                on_complete->function()(succeeded);
+            });
+        } else {
+            // https://w3c.github.io/ServiceWorker/#activation-algorithm (steps 3-5 and 12)
+            update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Active, m_service_worker);
+            update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Waiting, nullptr);
+            update_worker_state(event_loop, *m_service_worker, ServiceWorkerState::Activating);
+            on_complete = GC::create_function(GC::Heap::the(), GC::captures(*this, on_complete), [](ServiceWorkerGlobalScope& self, GC::Ref<GC::Function<void(bool)>>& on_complete, bool succeeded) {
+                update_worker_state(HTML::relevant_settings_object(self).responsible_event_loop(), *self.m_service_worker, ServiceWorkerState::Activated);
+                on_complete->function()(succeeded);
+            });
+        }
+    }
 
     // https://w3c.github.io/ServiceWorker/#installation-algorithm (step 11.3)
     // https://w3c.github.io/ServiceWorker/#activation-algorithm (step 10.2)
@@ -149,6 +256,47 @@ void ServiceWorkerGlobalScope::run_lifecycle_step(HTML::ServiceWorkerLifecycleSt
         // FIXME: Time out events that are extended for too long.
         event->wait_for_extend_lifetime_promises(realm, on_complete);
     }));
+}
+
+// https://w3c.github.io/ServiceWorker/#dom-serviceworker-postmessage-message-options (step 6)
+GC::Ref<DOM::EventTarget> ServiceWorkerGlobalScope::message_event_relay()
+{
+    if (m_message_event_relay)
+        return *m_message_event_relay;
+
+    // NB: The inside port fires MessageEvents. The service worker fires functional events named message and
+    //     messageerror using ExtendableMessageEvent instead, so the relay fires one for each MessageEvent it receives.
+    auto& realm = this->realm();
+    m_message_event_relay = DOM::EventTarget::create();
+    for (auto const& event_name : { HTML::EventNames::message, HTML::EventNames::messageerror }) {
+        auto listener_function = JS::NativeFunction::create(
+            realm, GC::create_function(GC::Heap::the(), GC::captures(*this, event_name), [](ServiceWorkerGlobalScope& self, Utf16FlyString& event_name, JS::VM& vm) -> JS::ThrowCompletionOr<JS::Value> {
+                auto& message_event = vm.argument(0).as_object();
+
+                // 1. Let e be the result of creating an event named message, using ExtendableMessageEvent.
+                // 2. Initialize e's data, origin, source and ports from the message.
+                // FIXME: Make the source a Client, and the origin the origin of the client that posted the message.
+                ExtendableMessageEvent::Init init;
+                init.data = TRY(message_event.get(JS::PropertyKey { "data"_utf16_fly_string }));
+                init.origin = HTML::relevant_settings_object(self).origin().serialize();
+                init.source = TRY(message_event.get(JS::PropertyKey { "source"_utf16_fly_string }));
+                init.ports = TRY(message_event.get(JS::PropertyKey { "ports"_utf16_fly_string }));
+                auto event = ExtendableMessageEvent::create(self.realm(), event_name, init);
+                event->set_is_trusted(true);
+
+                // 3. Dispatch e at the service worker's global object.
+                // NB: This runs inside a listener of the relay. Dispatch in a task of its own, so that microtasks run
+                //     after each listener of e while e is still being dispatched.
+                HTML::queue_global_task(HTML::Task::Source::PostedMessage, self.realm().global_object(), GC::create_function(GC::Heap::the(), GC::captures(self, event), [](ServiceWorkerGlobalScope& self, GC::Ref<ExtendableMessageEvent>& event) {
+                    self.dispatch_event(event);
+                }));
+                return JS::js_undefined();
+            }),
+            0, Utf16FlyString {}, &realm);
+        auto callback = GC::Heap::the().allocate<WebIDL::CallbackType>(*listener_function, realm);
+        m_message_event_relay->add_event_listener_without_options(event_name, *DOM::IDLEventListener::create(*callback));
+    }
+    return *m_message_event_relay;
 }
 
 }

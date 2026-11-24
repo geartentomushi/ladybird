@@ -28,6 +28,7 @@ void* web_rust_message_port_create(JSVM*, void* realm);
 void web_rust_message_port_entangle(JSVM*, void* port, void* remote_port);
 void* web_rust_message_port_entangled_port(void* port);
 void web_rust_message_port_set_message_event_target(void* port, DOM::EventTarget*);
+void web_rust_message_port_set_message_event_source(void* port, void* source);
 JSCompletion web_rust_message_port_post_message(JSVM*, void* realm, void* port, JSValue message, JSObject* const* transfer, size_t count);
 void web_rust_message_port_enable(JSVM*, void* port);
 void web_rust_message_port_close(void* port);
@@ -92,6 +93,11 @@ GC::Ptr<MessagePort> MessagePort::entangled_port()
 void MessagePort::set_message_event_target(DOM::EventTarget& target)
 {
     web_rust_message_port_set_message_event_target(this, &target);
+}
+
+void MessagePort::set_message_event_source(GC::Ptr<MessagePort> source)
+{
+    web_rust_message_port_set_message_event_source(this, source.ptr());
 }
 
 WebIDL::ExceptionOr<void> MessagePort::post_message(JS::Realm& realm, JS::Value message, GC::RootVector<GC::Ref<JS::Object>> const& transfer)

@@ -1049,7 +1049,9 @@ namespace Web::ServiceWorker {
 
 class Cache;
 class CacheStorage;
+class Clients;
 class ExtendableEvent;
+class ExtendableMessageEvent;
 class ServiceWorker;
 class ServiceWorkerContainer;
 class ServiceWorkerGlobalScope;

@@ -6,8 +6,8 @@
 
 #include <AK/RefPtr.h>
 #include <LibGC/Heap.h>
-#include <LibIPC/File.h>
 #include <LibHTTP/Header.h>
+#include <LibIPC/File.h>
 #include <LibJS/Runtime/ConsoleObject.h>
 #include <LibJS/Runtime/Promise.h>
 #include <LibWeb/Bindings/DedicatedWorkerGlobalScope.h>
@@ -115,7 +115,7 @@ static Web::HTML::WorkerGlobalScope::Owner relevant_owner_to_add(Web::HTML::Seri
 }
 
 // https://html.spec.whatwg.org/multipage/workers.html#run-a-worker
-void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject const& outside_settings_snapshot, Web::HTML::RequestCredentials credentials, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself)
+void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject const& outside_settings_snapshot, Web::HTML::RequestCredentials credentials, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself, Optional<Web::HTML::ServiceWorkerRegistrationSnapshot> service_worker_registration)
 {
     bool const is_shared = agent_type == Web::HTML::AgentType::SharedWorker;
     bool const is_service_worker = agent_type == Web::HTML::AgentType::ServiceWorker;
@@ -212,6 +212,11 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
     else {
         worker_global_scope->set_type(m_type);
     }
+
+    // https://w3c.github.io/ServiceWorker/#run-service-worker-algorithm
+    // Set workerGlobalScope's service worker to serviceWorker.
+    if (is_service_worker && service_worker_registration.has_value())
+        static_cast<Web::ServiceWorker::ServiceWorkerGlobalScope&>(*worker_global_scope).set_up_service_worker(*service_worker_registration);
 
     // 11. Let destination be "sharedworker" if is shared is true, and "worker" otherwise.
     auto destination = is_shared ? Web::Fetch::Infrastructure::Request::Destination::SharedWorker
@@ -338,7 +343,17 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
             inside_port = Web::HTML::MessagePort::create_from_transfer(realm, move(message_port_data));
 
             // 1. Set inside port's message event target to worker global scope.
-            inside_port->set_message_event_target(*worker_global_scope);
+            if (is_service_worker) {
+                inside_port->set_message_event_target(static_cast<Web::ServiceWorker::ServiceWorkerGlobalScope&>(*worker_global_scope).message_event_relay());
+
+                // NB: A service worker replies to a message through its source. Until that source is a Client, it is
+                //     the inside port, which delivers the reply at the ServiceWorkerContainer of the client that runs
+                //     the service worker.
+                // FIXME: Make the source the Client or ServiceWorker that posted the message.
+                inside_port->set_message_event_source(inside_port);
+            } else {
+                inside_port->set_message_event_target(*worker_global_scope);
+            }
 
             // 2. Set worker global scope's inside port to inside port.
             worker_global_scope->set_internal_port(*inside_port);

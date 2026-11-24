@@ -26,7 +26,8 @@ class WorkerAgentParent : public JS::Cell {
 public:
     static GC::Ref<WorkerAgentParent> create(URL::URL, WorkerOptions const&, bool extended_lifetime,
         GC::Ptr<MessagePort> outside_port, GC::Ref<EnvironmentSettingsObject> outside_settings,
-        GC::Ref<DOM::EventTarget> worker_event_target, AgentType);
+        GC::Ref<DOM::EventTarget> worker_event_target, AgentType,
+        Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration = {});
 
     static WEB_API void did_fail_loading_worker_script(WorkerAgentOwnerToken);
     static WEB_API void did_report_worker_exception(WorkerAgentOwnerToken, Utf16String message, Utf16String filename, u32 lineno, u32 colno);
@@ -46,6 +47,8 @@ protected:
     virtual void finalize() override;
 
 public:
+    GC::Ptr<MessagePort> outside_port() const { return m_outside_port; }
+
     void rtc_transform_init(u64 transform_id, SerializedTransferRecord options_record);
     void rtc_transform_teardown(u64 transform_id);
     void rtc_transform_encoded_audio_frame(u64 transform_id, ByteBuffer payload, u32 ssrc, u8 payload_type, u32 rtp_timestamp, u16 sequence_number);
@@ -56,7 +59,7 @@ public:
 private:
     WorkerAgentParent(URL::URL, WorkerOptions const&, bool extended_lifetime, GC::Ptr<MessagePort> outside_port,
         GC::Ref<EnvironmentSettingsObject> outside_settings, GC::Ref<DOM::EventTarget> worker_event_target,
-        AgentType);
+        AgentType, Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration);
 
     void start();
     void forget_agent();
@@ -72,6 +75,7 @@ private:
     bool m_extended_lifetime { false };
     AgentType m_agent_type { AgentType::DedicatedWorker };
     URL::URL m_url;
+    Optional<ServiceWorkerRegistrationSnapshot> m_service_worker_registration;
     WorkerAgentId m_agent_id { 0 };
     RefPtr<DedicatedWorkerThreadLink> m_dedicated_worker_thread_link;
     WorkerAgentOwnerToken m_owner_token { 0 };

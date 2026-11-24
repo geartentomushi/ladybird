@@ -35,11 +35,12 @@ public:
     // Calls on_complete once every extend lifetime promise, including ones added while waiting, has settled.
     void wait_for_extend_lifetime_promises(JS::Realm&, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
 
-private:
+protected:
     ExtendableEvent(Utf16FlyString const& event_name, ExtendableEventInit const&, HighResolutionTime::DOMHighResTimeStamp);
 
     virtual void visit_edges(Cell::Visitor&) override;
 
+private:
     bool is_active() const;
 
     // https://w3c.github.io/ServiceWorker/#extendableevent-extend-lifetime-promises

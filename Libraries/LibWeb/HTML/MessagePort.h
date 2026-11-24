@@ -39,6 +39,9 @@ public:
     // https://html.spec.whatwg.org/multipage/web-messaging.html#message-event-target
     void set_message_event_target(DOM::EventTarget&);
 
+    // The source of the message events fired at the message event target, which is null unless set.
+    void set_message_event_source(GC::Ptr<MessagePort>);
+
     // https://html.spec.whatwg.org/multipage/web-messaging.html#dom-messageport-postmessage
     WebIDL::ExceptionOr<void> post_message(JS::Realm&, JS::Value message, GC::RootVector<GC::Ref<JS::Object>> const& transfer);
 

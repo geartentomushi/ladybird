@@ -1,0 +1,83 @@
+<!doctype html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const server = httpTestServer();
+        const runId = uniqueID();
+        const channelName = `service-worker-post-message-${runId}`;
+        const workerScript = `
+            const channel = new BroadcastChannel("${channelName}");
+            try {
+                self.serviceWorker.postMessage(() => {});
+            } catch (error) {
+                channel.postMessage(\`self.serviceWorker.postMessage() with a function throws \${error.name}\`);
+            }
+            self.addEventListener("message", event => {
+                if (event.ports.length > 0) {
+                    event.ports[0].postMessage(\`port received: \${event.data}\`);
+                    return;
+                }
+                if (event.data === "reply") {
+                    Promise.resolve().then(() => {
+                        let result = "succeeds";
+                        try {
+                            event.waitUntil(Promise.resolve());
+                        } catch (error) {
+                            result = \`throws \${error.name}\`;
+                        }
+                        event.source.postMessage(\`worker replied from an \${event.constructor.name}, waitUntil() in a microtask \${result}\`);
+                    });
+                    return;
+                }
+                channel.postMessage(\`worker received: \${JSON.stringify(event.data)}\`);
+            });
+        `;
+        const javascript = { "Content-Type": "text/javascript", "Cache-Control": "no-store", "Service-Worker-Allowed": "/" };
+        const scriptURL = await server.createEcho("GET", `/service-worker-post-message-${runId}.js`, { status: 200, headers: javascript, body: workerScript });
+
+        const channel = new BroadcastChannel(channelName);
+        const selfPosted = new Promise(resolve => {
+            channel.onmessage = event => resolve(event.data);
+        });
+        const registration = await navigator.serviceWorker.register(scriptURL, { scope: "/" });
+        println(await selfPosted);
+        const worker = registration.installing || registration.waiting || registration.active;
+        const received = new Promise(resolve => {
+            channel.onmessage = event => resolve(event.data);
+        });
+
+        try {
+            worker.postMessage(() => {});
+        } catch (error) {
+            println(`postMessage() with a function throws ${error.name}`);
+        }
+
+        worker.postMessage({ hello: "world" });
+        println(await received);
+
+        const { port1, port2 } = new MessageChannel();
+        const replied = new Promise(resolve => {
+            port1.onmessage = event => resolve(event.data);
+        });
+        worker.postMessage("ping", [port2]);
+        println(await replied);
+
+        const optionsChannel = new MessageChannel();
+        const optionsReplied = new Promise(resolve => {
+            optionsChannel.port1.onmessage = event => resolve(event.data);
+        });
+        worker.postMessage("pong", { transfer: [optionsChannel.port2] });
+        println(await optionsReplied);
+
+        const workerReplied = new Promise(resolve => {
+            navigator.serviceWorker.onmessage = event => resolve(event.data);
+        });
+        worker.postMessage("reply");
+        println(`navigator.serviceWorker received: ${await workerReplied}`);
+
+        port1.close();
+        optionsChannel.port1.close();
+        channel.close();
+        println(`unregister() resolves with: ${await registration.unregister()}`);
+    });
+</script>

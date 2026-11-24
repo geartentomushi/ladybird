@@ -8,6 +8,8 @@
 
 #include <LibWeb/HTML/DedicatedWorkerThreadLink.h>
 #include <LibWeb/HTML/WorkerGlobalScope.h>
+#include <LibWeb/ServiceWorker/Registration.h>
+#include <LibWebCommon/HTML/WorkerAgentTypes.h>
 
 namespace Web::ServiceWorker {
 
@@ -38,6 +40,19 @@ public:
 
     GC::Ref<WebIDL::Promise> skip_waiting();
 
+    GC::Ref<Clients> clients();
+    GC::Ref<ServiceWorkerRegistration> registration();
+    GC::Ref<ServiceWorker> service_worker();
+
+    void set_up_service_worker(HTML::ServiceWorkerRegistrationSnapshot const&);
+
+    // The message event target of the service worker's inside port. It fires the messages that arrive there at this
+    // global as ExtendableMessageEvents.
+    GC::Ref<DOM::EventTarget> message_event_relay();
+
+    // https://w3c.github.io/ServiceWorker/#dfn-active-worker
+    bool is_active_worker() const;
+
     // Runs a step of the service worker's lifecycle that its registration asked for from another agent.
     void run_lifecycle_step(HTML::ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
 
@@ -48,7 +63,17 @@ private:
     virtual void initialize_web_interfaces_impl() override;
     virtual void visit_edges(Cell::Visitor&) override;
 
+    void did_finish_install(bool succeeded);
+
     GC::Ptr<CookieStore::CookieStore> m_cookie_store;
+    GC::Ptr<DOM::EventTarget> m_message_event_relay;
+    GC::Ptr<Clients> m_clients;
+
+    // NB: The service worker registration and the service worker live in the agent of the client that registered the
+    //     service worker. This agent keeps its own copy of both, which follows the lifecycle steps run on it.
+    // FIXME: Share them with the client's agent, once service workers are managed by the user agent.
+    RefPtr<Registration> m_registration;
+    RefPtr<ServiceWorkerRecord> m_service_worker;
 };
 
 }
