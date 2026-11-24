@@ -1227,10 +1227,17 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
                     // NB: On a line whose dominant baseline is the central one, an atomic inline aligns its central
                     //     baseline with its parent's, which lies above the alphabetic baseline the line records.
                     let svg_reset = style.svg_reset();
-                    if svg_reset.has_alignment_baseline && svg_reset.alignment_baseline == baseline_metric::MIDDLE {
+                    if svg_reset.has_alignment_baseline
+                        && matches!(
+                            svg_reset.alignment_baseline,
+                            baseline_metric::ALPHABETIC | baseline_metric::MIDDLE
+                        )
+                    {
+                        // https://drafts.csswg.org/css-inline-3/#valdef-alignment-baseline-alphabetic
+                        // alphabetic: Uses the alphabetic baselines.
                         // https://drafts.csswg.org/css-inline-3/#valdef-alignment-baseline-middle
                         // middle: Uses the x-middle baselines.
-                        // FIXME: Align by the x-middle baseline, which lines don't record yet, rather than as before.
+                        // FIXME: Align by the x-middle baseline, which lines do not record yet, rather than as before.
                         formatting_context::inline_box_baseline(
                             &self.context().pass,
                             node,
