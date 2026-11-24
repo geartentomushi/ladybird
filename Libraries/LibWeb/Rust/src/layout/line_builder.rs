@@ -66,8 +66,8 @@ struct LineTextFacts {
     kept_fragments: std::ops::Range<usize>,
     /// The inline boxes that hold text the line keeps directly, found only in quirks mode.
     boxes_holding_text: std::collections::HashSet<Node>,
-    /// Whether the line holds a block ellipsis and no other content.
-    holds_only_block_ellipsis: bool,
+    /// Whether the line holds a block ellipsis, which is text in the block container.
+    holds_block_ellipsis: bool,
 }
 
 #[derive(Clone)]
@@ -1303,16 +1303,13 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
                 }
             }
         }
-        let holds_only_block_ellipsis = fragments.iter().any(|fragment| fragment.is_block_ellipsis)
-            && fragments
-                .iter()
-                .all(|fragment| fragment.is_block_ellipsis || !is_content(fragment));
+        let holds_block_ellipsis = fragments.iter().any(|fragment| fragment.is_block_ellipsis);
         LineTextFacts {
             in_line_height_quirks_mode,
             strut_fragment_start,
             kept_fragments,
             boxes_holding_text,
-            holds_only_block_ellipsis,
+            holds_block_ellipsis,
         }
     }
 
@@ -1330,11 +1327,11 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         // NB: The zero-width inline box that starts each line is the block container's own, so it matches them on a
         //     line with no text directly in the block container. Only a forced break directly in the block container
         //     that's alone on its line gives it its strut back, and a list item keeps its strut on every line.
-        // NB: So does a line that holds a block ellipsis and no other content.
+        // NB: So does a line that holds a block ellipsis, which is text directly in the block container.
         let containing_block = self.context().containing_block;
         if self.containing_style().display().is_list_item()
             || text.boxes_holding_text.contains(&containing_block)
-            || text.holds_only_block_ellipsis
+            || text.holds_block_ellipsis
         {
             return true;
         }
