@@ -10,6 +10,7 @@
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/Page/Page.h>
+#include <LibWeb/ServiceWorker/Clients.h>
 #include <LibWeb/ServiceWorker/EventNames.h>
 #include <LibWeb/ServiceWorker/ExtendableEvent.h>
 #include <LibWeb/ServiceWorker/Job.h>
@@ -34,6 +35,7 @@ void ServiceWorkerGlobalScope::visit_edges(Cell::Visitor& visitor)
     Base::visit_edges(visitor);
 
     visitor.visit(m_cookie_store);
+    visitor.visit(m_clients);
 }
 
 // https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-oninstall
@@ -117,6 +119,20 @@ GC::Ref<WebIDL::Promise> ServiceWorkerGlobalScope::skip_waiting()
     // NB: The registration activates a worker as soon as it is installed, since no client is ever controlled by its
     //     active worker yet. So there's never a waiting worker for the skip waiting flag to promote.
     return WebIDL::create_resolved_promise(realm(), JS::js_undefined());
+}
+
+// https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-clients
+GC::Ref<Clients> ServiceWorkerGlobalScope::clients()
+{
+    // The clients getter steps are to return the Clients object that is associated with this.
+    if (!m_clients)
+        m_clients = Clients::create(*this);
+    return *m_clients;
+}
+
+bool ServiceWorkerGlobalScope::is_active_worker() const
+{
+    return m_registration && m_service_worker && m_registration->active_worker() == m_service_worker.ptr();
 }
 
 // https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-registration
