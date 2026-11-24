@@ -87,11 +87,14 @@ private:
     struct PendingFlush {
         u64 flush_id { 0 };
         GC::Ref<WebIDL::Promise> promise;
+        bool awaiting_codec { true };
     };
     Vector<PendingFlush> m_pending_flush_promises;
     u64 m_next_flush_id { 1 };
 
-    // NB: The promises returned by flush() must settle even when the page keeps nothing else that refers to us.
+    // NB: The promises returned by flush() must settle even when the page keeps nothing else that refers to us. Once
+    //     the codec has flushed, the queued task keeps us alive instead, so that a destroyed document's discarded
+    //     tasks do not leak us.
     GC::Root<VideoDecoder> m_pending_flush_keep_alive;
 
     // https://w3c.github.io/webcodecs/#dom-videodecoder-codec-implementation-slot

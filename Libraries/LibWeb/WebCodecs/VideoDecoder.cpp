@@ -448,7 +448,7 @@ void VideoDecoder::schedule_dequeue_event()
 
 void VideoDecoder::update_pending_flush_keep_alive()
 {
-    if (m_pending_flush_promises.is_empty())
+    if (!m_pending_flush_promises.contains([](auto const& pending_flush) { return pending_flush.awaiting_codec; }))
         m_pending_flush_keep_alive = nullptr;
     else if (!m_pending_flush_keep_alive)
         m_pending_flush_keep_alive = *this;
@@ -549,6 +549,14 @@ void VideoDecoder::output_frame(u64 codec_generation, i64 timestamp, Optional<u6
 
 void VideoDecoder::codec_flushed(u64 codec_generation, u64 flush_id)
 {
+    if (codec_generation == m_codec_generation) {
+        for (auto& pending_flush : m_pending_flush_promises) {
+            if (pending_flush.flush_id == flush_id)
+                pending_flush.awaiting_codec = false;
+        }
+        update_pending_flush_keep_alive();
+    }
+
     // https://w3c.github.io/webcodecs/#flush-videodecoder
     queue_a_codec_task(GC::captures(*this, codec_generation, flush_id), [](VideoDecoder& self, u64& codec_generation, u64& flush_id) {
         if (codec_generation != self.m_codec_generation)
