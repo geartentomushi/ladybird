@@ -50,8 +50,11 @@ DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> FFmpegVideoDecoder::try_create
     TRY(set_codec_initialization_data(functions, *codec_context, codec_id, codec_initialization_data));
     VERIFY(functions.av_opt_set_int(codec_context, "threads", min(Core::System::hardware_concurrency(), 4u), 0) == 0);
     // Frame threading holds back one frame per extra thread, so only split each frame across threads when latency matters.
-    if (options.optimize_for_latency)
+    // Decoders that thread internally, such as libdav1d, ignore the thread type and hold frames back unless low delay is set.
+    if (options.optimize_for_latency) {
         codec_context->thread_type = FF_THREAD_SLICE;
+        codec_context->flags |= AV_CODEC_FLAG_LOW_DELAY;
+    }
     codec_context->max_pixels = MAX_VIDEO_FRAME_AREA;
 
     if (functions.avcodec_open2(codec_context, codec, nullptr) < 0)

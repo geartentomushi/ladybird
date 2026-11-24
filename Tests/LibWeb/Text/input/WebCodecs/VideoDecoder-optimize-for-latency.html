@@ -1,23 +1,35 @@
 <!DOCTYPE html>
 <script src="../include.js"></script>
 <script>
-    // A single 16x16 solid red H.264 key frame, in Annex B format.
-    const keyFrame = Uint8Array.from(atob("AAAAAWdCwB7ZHsBEAAADAAQAAAMACDxYuSAAAAABaMuDyyAAAAEGBf//bNxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjMgcjMwNjAgNWRiNmFhNiAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjEgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxMTEgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAFliIQFfEYoAAuMxwABOhjgADYNgA=="), c => c.charCodeAt(0));
+    // Single 16x16 solid red key frames.
+    const keyFrames = [
+        { codec: "vp09.00.10.08", data: "gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA" },
+        { codec: "av01.0.04M.08", data: "EgAKCgAAAAGf+bXyAIAyFBAAwAAAAoAAAACpjmy2qrHGtoVA" },
+    ];
+
+    function decodeOneFrame({ codec, data }) {
+        return new Promise(resolve => {
+            const decoder = new VideoDecoder({
+                output: frame => {
+                    println(`${codec}: output without flushing: ${frame.codedWidth}x${frame.codedHeight} at ${frame.timestamp}`);
+                    frame.close();
+                    decoder.close();
+                    resolve();
+                },
+                error: e => {
+                    println(`${codec}: decoder error: ${e.name}`);
+                    resolve();
+                },
+            });
+            decoder.configure({ codec, optimizeForLatency: true });
+            const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+            decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 1234, data: bytes }));
+        });
+    }
 
     asyncTest(async done => {
-        const decoder = new VideoDecoder({
-            output: frame => {
-                println(`Output without flushing: ${frame.codedWidth}x${frame.codedHeight} at ${frame.timestamp}`);
-                frame.close();
-                decoder.close();
-                done();
-            },
-            error: e => {
-                println(`Decoder error: ${e.name}`);
-                done();
-            },
-        });
-        decoder.configure({ codec: "avc1.42c01e", optimizeForLatency: true });
-        decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 1234, data: keyFrame }));
+        for (const keyFrame of keyFrames)
+            await decodeOneFrame(keyFrame);
+        done();
     });
 </script>
