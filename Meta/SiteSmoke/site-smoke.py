@@ -975,14 +975,14 @@ def run_gate(args, output, baseline):
         report["stages"][name] = {"exit_status": status, "log": log.name}
         return report["stages"][name]
 
-    def finish():
+    def finish(failure_status=1):
         report["passed"] = not report.get("site_regressions") and all(
             details["exit_status"] == 0 and "error" not in details for details in report["stages"].values()
         )
         with open(output / "gate-summary.json", "w", opener=open_private_file) as stream:
             stream.write(json.dumps(report, indent=2) + "\n")
         print(f"Gate {'passed' if report['passed'] else 'failed'}: {output / 'gate-summary.json'}")
-        return int(not report["passed"])
+        return 0 if report["passed"] else failure_status
 
     command = [sys.executable, ROOT / "Meta/ladybird.py", "build", "--preset", "Release"]
     for option in ("cc", "cxx", "build_jobs"):
@@ -998,8 +998,8 @@ def run_gate(args, output, baseline):
             validate_build_pair(args.baseline_webdriver, build / "bin/WebDriver")
         except ValueError as error:
             print(error, file=sys.stderr)
-            report["stages"]["build-pair"] = {"exit_status": 1, "error": str(error)}
-            return finish()
+            report["stages"]["build-pair"] = {"exit_status": 2, "error": str(error)}
+            return finish(2)
 
     read_test_results = runpy.run_path(str(ROOT / "Meta/test-results.py"))["read_results"]
     for mode in ("Text", "Layout", "Ref"):

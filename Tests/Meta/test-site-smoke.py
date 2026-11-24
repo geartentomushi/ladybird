@@ -725,13 +725,13 @@ class SiteSmokeTests(unittest.TestCase):
                 contextlib.redirect_stdout(io.StringIO()),
                 contextlib.redirect_stderr(io.StringIO()) as errors,
             ):
-                self.assertEqual(smoke.run_gate(args, output, {"revision": "baseline"}), 1)
+                self.assertEqual(smoke.run_gate(args, output, {"revision": "baseline"}), 2)
             build.assert_called_once()
             validate.assert_called_once_with(args.baseline_webdriver, smoke.ROOT / "Build/release/bin/WebDriver")
             self.assertIn("Contaminated SiteSmoke baseline", errors.getvalue())
             report = json.loads((output / "gate-summary.json").read_text())
             self.assertFalse(report["passed"])
-            self.assertEqual(report["stages"]["build-pair"]["exit_status"], 1)
+            self.assertEqual(report["stages"]["build-pair"]["exit_status"], 2)
 
     def test_gate_counts_evidence_loss_on_unchanged_failed_loads(self):
         before = site("lost", "load-error")
