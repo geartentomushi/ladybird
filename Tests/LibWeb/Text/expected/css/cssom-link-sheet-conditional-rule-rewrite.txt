@@ -6,6 +6,7 @@ inserted @container rule applies in the container: 7px
 inserted @container rule does not apply outside it: 1px
 inserted @supports rule applies: 11px
 inserted @media rule nested in an @container rule applies: 17px
+unmatched @media rule nested in an @container rule does not apply: true
 inserted @media rule applies: 13px
 deleted @media rule stops applying: true
 deleted original @media rule stops applying: true

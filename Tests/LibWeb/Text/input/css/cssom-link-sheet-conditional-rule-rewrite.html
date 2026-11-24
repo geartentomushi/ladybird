@@ -42,6 +42,8 @@ asyncTest(async done => {
 
     sheet.insertRule("@container q (min-width: 1px) { @media (min-width: 1px) { .nested-inside { width: 17px; } } }", sheet.cssRules.length);
     println(`inserted @media rule nested in an @container rule applies: ${width(".nested-inside")}`);
+    sheet.insertRule("@container q (min-width: 1px) { @media (max-width: 1px) { .nested-inside { height: 19px; } } }", sheet.cssRules.length);
+    println(`unmatched @media rule nested in an @container rule does not apply: ${getComputedStyle(document.querySelector(".nested-inside")).height !== "19px"}`);
     sheet.insertRule("@media (min-width: 1px) { .nested { width: 13px; } }", sheet.cssRules.length);
     println(`inserted @media rule applies: ${width(".nested")}`);
 
