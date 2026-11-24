@@ -3008,7 +3008,7 @@ impl<'pass> FlexFormattingContext<'pass> {
             let half_line = self.flex_lines[line_index].cross_size / 2;
             for item_position in 0..self.flex_lines[line_index].items.len() {
                 let index = self.flex_lines[line_index].items.at(item_position);
-                // NB: An item that can't participate in last-baseline alignment uses its fallback alignment.
+                // NB: An item that cannot participate in last-baseline alignment uses its fallback alignment.
                 let alignment = if self.item_aligns_by_last_baseline(index)
                     && !self.item_participates_in_baseline_alignment(index)
                 {
