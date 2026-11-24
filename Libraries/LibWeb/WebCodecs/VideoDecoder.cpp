@@ -250,7 +250,7 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     m_media_client = media_client.release_value();
 
     // NB: A decoder the page dropped without closing keeps its codec until it is collected, so collect those before
-    //     MediaServer would turn this one away for having too many open.
+    //     MediaServer would reject this one for having too many open.
     if (m_media_client->webcodecs_video_decoder_count() >= MediaClient::max_webcodecs_video_decoders_per_client)
         heap().collect_garbage();
 
