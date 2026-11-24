@@ -50,6 +50,9 @@ private:
 
     // https://w3c.github.io/ServiceWorker/#extendableevent-timed-out-flag
     bool m_timed_out { false };
+
+    GC::Ptr<JS::Realm> m_on_no_pending_promises_realm;
+    GC::Ptr<GC::Function<void(bool succeeded)>> m_on_no_pending_promises;
 };
 
 }

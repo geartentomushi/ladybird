@@ -30,6 +30,8 @@ void ExtendableEvent::visit_edges(Cell::Visitor& visitor)
 {
     Base::visit_edges(visitor);
     visitor.visit(m_extend_lifetime_promises);
+    visitor.visit(m_on_no_pending_promises_realm);
+    visitor.visit(m_on_no_pending_promises);
 }
 
 // https://w3c.github.io/ServiceWorker/#extendableevent-active
@@ -66,6 +68,12 @@ WebIDL::ExceptionOr<void> ExtendableEvent::wait_until(GC::Ref<WebIDL::Promise> p
         // 1. Decrement event’s pending promises count by one.
         --self.m_pending_promises_count;
 
+        if (self.m_pending_promises_count == 0 && self.m_on_no_pending_promises) {
+            auto realm = exchange(self.m_on_no_pending_promises_realm, nullptr);
+            auto on_complete = exchange(self.m_on_no_pending_promises, nullptr);
+            self.wait_for_extend_lifetime_promises(*realm, *on_complete);
+        }
+
         // FIXME: 2. If event’s pending promises count is 0, then: let registration be the current global object's
         //           associated service worker's containing service worker registration, and if registration is
         //           unregistered, invoke Try Clear Registration with registration.
@@ -78,6 +86,14 @@ WebIDL::ExceptionOr<void> ExtendableEvent::wait_until(GC::Ref<WebIDL::Promise> p
 
 void ExtendableEvent::wait_for_extend_lifetime_promises(JS::Realm& realm, GC::Ref<GC::Function<void(bool succeeded)>> on_complete)
 {
+    // https://w3c.github.io/ServiceWorker/#installation-algorithm (step 11.3.3)
+    // WaitForAsynchronousExtensions: Wait, in parallel, until event is not active.
+    if (m_pending_promises_count > 0) {
+        m_on_no_pending_promises_realm = realm;
+        m_on_no_pending_promises = on_complete;
+        return;
+    }
+
     auto promise_count = m_extend_lifetime_promises.size();
     if (promise_count == 0) {
         on_complete->function()(true);
