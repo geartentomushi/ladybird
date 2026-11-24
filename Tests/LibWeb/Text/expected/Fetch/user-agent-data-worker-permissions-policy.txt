@@ -1,0 +1,2 @@
+Denied: brands, mobile, platform
+Allowed: architecture, bitness, brands, mobile, platform

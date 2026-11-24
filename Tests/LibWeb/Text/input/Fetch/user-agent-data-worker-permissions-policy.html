@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const workerScript = URL.createObjectURL(new Blob([`
+            navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(result => postMessage(result));
+        `], { type: "text/javascript" }));
+        try {
+            for (const allow of [false, true]) {
+                const frame = document.createElement("iframe");
+                frame.allow = `ch-ua-high-entropy-values ${allow ? "*" : "'none'"}`;
+                frame.srcdoc = "<!DOCTYPE html>";
+                const loaded = new Promise(resolve => frame.onload = resolve);
+                document.body.append(frame);
+                await loaded;
+                const worker = new frame.contentWindow.Worker(workerScript);
+                try {
+                    const hints = await new Promise((resolve, reject) => {
+                        worker.onmessage = event => resolve(event.data);
+                        worker.onerror = reject;
+                    });
+                    println(`${allow ? "Allowed" : "Denied"}: ${Object.keys(hints).sort().join(", ")}`);
+                } finally {
+                    worker.terminate();
+                    frame.remove();
+                }
+            }
+        } finally {
+            URL.revokeObjectURL(workerScript);
+        }
+    });
+</script>

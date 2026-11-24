@@ -38,6 +38,7 @@ public:
 
     // https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#concept-AnimationFrameProvider-supported
     bool is_supported() const;
+    bool allows_high_entropy_user_agent_values() const;
 
     // Requests a near-term "update the rendering of that dedicated worker" pass:
     // run pending animation frame callbacks and commit OffscreenCanvas frames.

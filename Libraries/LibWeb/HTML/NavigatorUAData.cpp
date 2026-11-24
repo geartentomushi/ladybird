@@ -8,6 +8,7 @@
 #include <LibGC/Heap.h>
 #include <LibJS/Runtime/Realm.h>
 #include <LibWeb/DOM/Document.h>
+#include <LibWeb/HTML/DedicatedWorkerGlobalScope.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/NavigatorUAData.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
@@ -77,7 +78,15 @@ void NavigatorUAData::get_high_entropy_values(JS::Realm& realm, Vector<Utf16Stri
     values.mobile = mobile();
     values.platform = platform();
 
-    if (auto const* window = window_from_global_object(m_realm->global_object()); window && !window->associated_document().is_allowed_to_use_feature(DOM::PolicyControlledFeature::ClientHintsUAHighEntropyValues)) {
+    auto const& global = m_realm->global_object();
+    auto allows_high_entropy_user_agent_values = [&] {
+        if (auto const* window = window_from_global_object(global))
+            return window->associated_document().is_allowed_to_use_feature(DOM::PolicyControlledFeature::ClientHintsUAHighEntropyValues);
+        if (auto const* worker = as_if<DedicatedWorkerGlobalScope>(Bindings::worker_global_scope_from_global_object(global)))
+            return worker->allows_high_entropy_user_agent_values();
+        return false;
+    };
+    if (!allows_high_entropy_user_agent_values()) {
         WebIDL::resolve_promise(promise, Bindings::ua_data_values_to_value(realm, values));
         return;
     }
