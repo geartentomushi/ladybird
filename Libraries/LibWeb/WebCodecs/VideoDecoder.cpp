@@ -7,6 +7,7 @@
 #include <AK/AnyOf.h>
 #include <AK/Array.h>
 #include <AK/CharacterTypes.h>
+#include <LibCore/EventLoop.h>
 #include <LibGC/Heap.h>
 #include <LibGC/RootVector.h>
 #include <LibJS/Runtime/ArrayBuffer.h>
@@ -250,9 +251,14 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     m_media_client = media_client.release_value();
 
     // NB: A decoder the page dropped without closing keeps its codec until it is collected, so collect those before
-    //     MediaServer would reject this one for having too many open.
-    if (m_media_client->webcodecs_video_decoder_count() >= MediaClient::max_webcodecs_video_decoders_per_client)
+    //     MediaServer would reject this one for having too many open. This happens at most once per event loop
+    //     iteration, as a page that keeps its decoders would otherwise make each configure() scan the whole heap.
+    static bool collected_for_this_iteration = false;
+    if (!collected_for_this_iteration && m_media_client->webcodecs_video_decoder_count() >= MediaClient::max_webcodecs_video_decoders_per_client) {
+        collected_for_this_iteration = true;
+        Core::deferred_invoke([] { collected_for_this_iteration = false; });
         heap().collect_garbage();
+    }
 
     auto codec_generation = ++m_codec_generation;
     auto weak_this = GC::Weak { *this };
