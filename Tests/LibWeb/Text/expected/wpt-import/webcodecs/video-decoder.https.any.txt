@@ -1,0 +1,38 @@
+Harness status: OK
+
+Found 33 tests
+
+33 Pass
+Pass	Test that VideoDecoder.isConfigSupported() rejects invalid config:Missing codec
+Pass	Test that VideoDecoder.isConfigSupported() rejects invalid config:Empty codec
+Pass	Test that VideoDecoder.isConfigSupported() rejects invalid config:Valid codec, detached description
+Pass	Test that VideoDecoder.configure() rejects invalid config:Missing codec
+Pass	Test that VideoDecoder.configure() rejects invalid config:Empty codec
+Pass	Test that VideoDecoder.configure() rejects invalid config:Valid codec, detached description
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Unrecognized codec
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Unrecognized codec with dataview description
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Audio codec
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Ambiguous codec
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Codec with bad casing
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Codec with MIME type
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Possible future H264 codec string
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Possible future H264 codec string (level 2.9)
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Possible future HEVC codec string
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Possible future VP9 codec string
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: Possible future AV1 codec string
+Pass	Test that VideoDecoder.isConfigSupported() doesn't support config: codec with spaces
+Pass	Test that VideoDecoder.configure() doesn't support config: Unrecognized codec
+Pass	Test that VideoDecoder.configure() doesn't support config: Unrecognized codec with dataview description
+Pass	Test that VideoDecoder.configure() doesn't support config: Audio codec
+Pass	Test that VideoDecoder.configure() doesn't support config: Ambiguous codec
+Pass	Test that VideoDecoder.configure() doesn't support config: Codec with bad casing
+Pass	Test that VideoDecoder.configure() doesn't support config: Codec with MIME type
+Pass	Test that VideoDecoder.configure() doesn't support config: Possible future H264 codec string
+Pass	Test that VideoDecoder.configure() doesn't support config: Possible future H264 codec string (level 2.9)
+Pass	Test that VideoDecoder.configure() doesn't support config: Possible future HEVC codec string
+Pass	Test that VideoDecoder.configure() doesn't support config: Possible future VP9 codec string
+Pass	Test that VideoDecoder.configure() doesn't support config: Possible future AV1 codec string
+Pass	Test that VideoDecoder.configure() doesn't support config: codec with spaces
+Pass	Test VideoDecoder construction
+Pass	Test that VideoDecoder.isConfigSupported() accepts config:variant 1 of h264 codec string
+Pass	Test that VideoDecoder.isConfigSupported() accepts config:variant 2 of h264 codec string

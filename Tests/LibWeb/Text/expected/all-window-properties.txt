@@ -620,6 +620,8 @@ UserActivation
 VTTCue
 VTTRegion
 ValidityState
+VideoDecoder
+VideoFrame
 VideoPlaybackQuality
 VideoTrack
 VideoTrackList
