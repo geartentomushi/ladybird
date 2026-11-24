@@ -1,0 +1,12 @@
+active before unregister: true
+unregister() resolves with: true
+worker state: redundant
+active after unregister: null
+getRegistration() after unregister: undefined
+second unregister() resolves with: false
+register() again gives a new registration: true
+new registration unregister() resolves with: true
+unregister() during activation resolves with: true
+worker state when unregister() resolves: activating
+worker unregistered during activation: installing -> installed -> activating -> activated -> redundant
+unregister() on a non-registration throws TypeError

@@ -43,6 +43,10 @@ struct ServiceWorkerRecord : public RefCounted<ServiceWorkerRecord> {
     // FIXME: This should be owned by the user agent, not by the client that registered the service worker.
     GC::Root<HTML::WorkerAgentParent> agent;
 
+    // https://w3c.github.io/ServiceWorker/#service-worker-has-no-pending-events
+    // NB: Set while the activate event's extend lifetime promises are pending.
+    bool has_pending_events { false };
+
     // FIXME: A lot more fields after this...
 };
 
