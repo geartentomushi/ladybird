@@ -115,7 +115,7 @@ void NavigatorUAData::get_high_entropy_values(JS::Realm& realm, Vector<Utf16Stri
         values.wow64 = false;
 
     auto result = Bindings::ua_data_values_to_value(realm, values);
-    queue_global_task(Task::Source::Permissions, m_realm->global_object(),
+    queue_a_task(Task::Source::Permissions, nullptr, nullptr,
         GC::create_function(realm.heap(), GC::captures(realm, promise, result), [](auto& realm, auto& promise, auto& result) {
             TemporaryExecutionContext execution_context { realm, TemporaryExecutionContext::CallbacksEnabled::Yes };
             WebIDL::resolve_promise(realm, promise, result);
