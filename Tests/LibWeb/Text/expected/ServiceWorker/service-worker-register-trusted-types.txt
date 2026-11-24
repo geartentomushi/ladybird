@@ -1,1 +1,1 @@
-register() with a string rejects with TypeError
+register() with a string rejects with TypeError: Sink ServiceWorkerContainer register of type 'script' requires a TrustedType to be used
