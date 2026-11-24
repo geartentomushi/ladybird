@@ -1,2 +1,4 @@
 Denied: brands, mobile, platform
+Nested worker, Denied: brands, mobile, platform
 Allowed: architecture, bitness, brands, mobile, platform
+Nested worker, Allowed: architecture, bitness, brands, mobile, platform
