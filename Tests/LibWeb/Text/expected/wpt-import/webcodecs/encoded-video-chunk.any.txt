@@ -1,0 +1,8 @@
+Harness status: OK
+
+Found 3 tests
+
+3 Pass
+Pass	Test we can construct an EncodedVideoChunk.
+Pass	Test copyTo() exception if destiation invalid
+Pass	Test we can construct an zero-sized EncodedVideoChunk.

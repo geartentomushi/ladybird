@@ -1212,6 +1212,12 @@ class PeriodicWave;
 
 }
 
+namespace Web::WebCodecs {
+
+class EncodedVideoChunk;
+
+}
+
 namespace Web::WebGL {
 
 class WebGL2RenderingContext;

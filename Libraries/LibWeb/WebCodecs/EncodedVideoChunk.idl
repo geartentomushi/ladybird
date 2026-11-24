@@ -1,0 +1,29 @@
+// https://w3c.github.io/webcodecs/#encodedvideochunk-interface
+// FIXME: The spec marks this interface Serializable.
+[Exposed=(Window,DedicatedWorker)]
+interface EncodedVideoChunk {
+    constructor(EncodedVideoChunkInit init);
+    readonly attribute EncodedVideoChunkType type;
+    readonly attribute long long timestamp;             // microseconds
+    readonly attribute unsigned long long? duration;    // microseconds
+    readonly attribute unsigned long byteLength;
+
+    // FIXME: The destination should be an AllowSharedBufferSource.
+    undefined copyTo(BufferSource destination);
+};
+
+// https://w3c.github.io/webcodecs/#dictdef-encodedvideochunkinit
+dictionary EncodedVideoChunkInit {
+    required EncodedVideoChunkType type;
+    required [EnforceRange] long long timestamp;        // microseconds
+    [EnforceRange] unsigned long long duration;         // microseconds
+    // FIXME: This should be an AllowSharedBufferSource.
+    required BufferSource data;
+    sequence<ArrayBuffer> transfer = [];
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-encodedvideochunktype
+enum EncodedVideoChunkType {
+    "key",
+    "delta",
+};
