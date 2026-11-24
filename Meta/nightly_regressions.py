@@ -87,8 +87,11 @@ def summarize(
         if baseline_report.is_file()
         else {}
     )
+    previous_revisions.setdefault("wpt", "")
     for name, revision in revisions.items():
         lines.append(f"- {name} revision: <code>{html.escape(revision or 'unavailable')}</code>")
+    baseline_wpt_revision = previous_revisions["wpt"] or "unavailable"
+    lines.append(f"- Baseline WPT revision: <code>{html.escape(baseline_wpt_revision)}</code>")
     lines.append("")
     suites = {}
     hard_count = soft_count = errors = 0

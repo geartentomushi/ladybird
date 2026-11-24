@@ -45,11 +45,17 @@ class NightlyRegressionsTest(unittest.TestCase):
 
     def test_first_night_records_baseline_even_with_known_failures(self):
         self.write_reports(wpt="FAIL", test262="FAILED")
+        output = self.root / "baseline"
         summary, hard, soft, errors = summarize(
-            self.root / "none", self.reports, self.root / "baseline", "", self.results, self.revisions
+            self.root / "none", self.reports, output, "", self.results, self.revisions
         )
         self.assertEqual((hard, soft, errors), (0, 0, 0))
         self.assertIn("Recorded first baseline", summary)
+        self.assertIn("- wpt revision: <code>wpt-a</code>", summary)
+        self.assertIn("- Baseline WPT revision: <code>unavailable</code>", summary)
+        data = json.loads((output / "regressions.json").read_text(encoding="utf-8"))
+        self.assertEqual(data["revisions"]["wpt"], "wpt-a")
+        self.assertEqual(data["baseline_revisions"]["wpt"], "")
 
     def test_wpt_subtests_and_test262_regressions_are_hard_but_sites_are_soft(self):
         self.write_reports()
@@ -111,6 +117,8 @@ class NightlyRegressionsTest(unittest.TestCase):
         self.assertEqual((hard, soft, errors), (2, 0, 0))
         self.assertIn("test suite changed (rev wpt-a→wpt-b)", summary)
         self.assertIn("browser revision: <code>browser-b</code>", summary)
+        self.assertIn("- wpt revision: <code>wpt-b</code>", summary)
+        self.assertIn("- Baseline WPT revision: <code>wpt-a</code>", summary)
         data = json.loads((output / "regressions.json").read_text(encoding="utf-8"))
         self.assertEqual(data["revisions"], revisions)
         self.assertEqual(data["baseline_revisions"], self.revisions)
