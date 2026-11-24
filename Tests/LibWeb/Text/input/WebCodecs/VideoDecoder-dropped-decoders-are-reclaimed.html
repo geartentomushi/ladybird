@@ -4,19 +4,19 @@
     // A single 16x16 solid red VP9 key frame.
     const keyFrame = Uint8Array.from(atob("gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA"), c => c.charCodeAt(0));
 
-    function decodeWithDroppedDecoder() {
-        return new Promise(resolve => {
-            const decoder = new VideoDecoder({
-                output: frame => {
-                    frame.close();
-                    resolve("decoded");
-                },
-                error: e => resolve(e.name),
-            });
-            decoder.configure({ codec: "vp09.00.10.08" });
-            decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 0, data: keyFrame }));
-            decoder.flush().catch(() => {});
+    async function decodeWithDroppedDecoder() {
+        let outcome = "no output";
+        const decoder = new VideoDecoder({
+            output: frame => {
+                frame.close();
+                outcome = "decoded";
+            },
+            error: e => (outcome = e.name),
         });
+        decoder.configure({ codec: "vp09.00.10.08" });
+        decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 0, data: keyFrame }));
+        await decoder.flush().catch(() => {});
+        return outcome;
     }
 
     asyncTest(async done => {
