@@ -696,14 +696,20 @@ def linked_ladybird_libraries(executable, environment):
     if result.returncode and result.stderr.strip() == "not a dynamic executable":
         with executable.open("rb") as file:
             if file.read(4) == b"\x7fELF":
-                return {}
+                return []
     if result.returncode or "=> not found" in result.stdout:
         raise ValueError(f"Cannot resolve libraries for {executable}: {(result.stderr or result.stdout).strip()}")
-    libraries = {}
+    libraries = []
     for line in result.stdout.splitlines():
-        match = re.fullmatch(r"\s*(liblagom-\S+\.so(?:\.\S+)?)\s+=>\s+(.+?)\s+\(0x[0-9a-fA-F]+\)", line)
-        if match:
-            libraries[match[1]] = Path(match[2]).resolve(strict=True)
+        match = re.fullmatch(r"\s*(?:(\S+)\s+=>\s+)?(.+?)\s+\(0x[0-9a-fA-F]+\)", line)
+        if not match:
+            continue
+        path = Path(match[2])
+        if match[1] is None and not path.is_absolute():
+            continue
+        name = match[1] or path.name
+        if re.fullmatch(r"liblagom-\S+\.so(?:\.\S+)?", name):
+            libraries.append((name, path.resolve(strict=True)))
     return libraries
 
 
@@ -725,8 +731,8 @@ def build_library_paths(driver):
         libraries = linked_ladybird_libraries(
             executable.resolve(), helper_environment if name in ("WebContent", "ImageDecoder") else environment
         )
-        yield from libraries.items()
-    yield from linked_ladybird_libraries(driver, environment).items()
+        yield from libraries
+    yield from linked_ladybird_libraries(driver, environment)
 
 
 def validate_baseline_build(baseline, candidate_build):

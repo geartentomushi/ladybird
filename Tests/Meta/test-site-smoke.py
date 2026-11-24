@@ -666,6 +666,21 @@ class SiteSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "both WebDriver paths identify the same executable"):
                 smoke.validate_build_pair(before, after)
 
+    def test_linked_libraries_include_absolute_preloads_without_an_arrow(self):
+        with tempfile.TemporaryDirectory(prefix="preloaded libs ") as temporary:
+            root = Path(temporary)
+            name = "liblagom-web.so.0"
+            preload, linked = root / "preload" / name, root / "linked" / name
+            for library in (preload, linked):
+                library.parent.mkdir()
+                library.touch()
+            lines = f"\t{preload} (0x1234)\n\t{name} => {linked} (0x2345)\n\t/lib/libc.so.6 (0x3456)\n"
+            result = subprocess.CompletedProcess([], 0, stdout=lines, stderr="")
+            with patch.object(smoke.subprocess, "run", return_value=result):
+                self.assertEqual(
+                    smoke.linked_ladybird_libraries(root / "WebDriver", {}), [(name, preload), (name, linked)]
+                )
+
     @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
     def test_gate_preflight_inspects_only_the_baseline_and_refuses_candidate_libraries(self):
         with tempfile.TemporaryDirectory() as temporary:
