@@ -1,0 +1,3 @@
+Sec-CH-UA follows the default browser identity: true
+Sec-CH-UA-Mobile follows the default browser identity: true
+Sec-CH-UA-Platform follows the default browser identity: true

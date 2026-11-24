@@ -88,6 +88,7 @@
 #include <LibWebCommon/Fetch/Infrastructure/DataURL.h>
 #include <LibWebCommon/Fetch/Infrastructure/HTTP/Statuses.h>
 #include <LibWebCommon/Fetch/Infrastructure/URL.h>
+#include <LibWebCommon/Loader/UserAgent.h>
 #include <LibWebCommon/SecureContexts/AbstractOperations.h>
 
 namespace Web::Fetch::Fetching {
@@ -3520,6 +3521,9 @@ void set_sec_fetch_user_header(Infrastructure::Request& request)
 void append_user_agent_client_hints_for_request(Infrastructure::Request& request, LoaderConfig const& loader_config)
 {
     if (SecureContexts::is_url_potentially_trustworthy(request.current_url()) != SecureContexts::Trustworthiness::PotentiallyTrustworthy)
+        return;
+
+    if (loader_config.user_agent != Web::default_user_agent)
         return;
 
     auto user_agent = Infrastructure::default_user_agent_value(loader_config, request);

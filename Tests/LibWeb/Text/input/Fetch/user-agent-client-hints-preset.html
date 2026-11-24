@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const url = await httpTestServer().createEcho("GET", "/ua-client-hints-preset", {
+            status: 200,
+            headers: {
+                "Access-Control-Allow-Origin": "*",
+                "Content-Type": "application/json",
+            },
+            reflect_headers_in_body: true,
+        });
+        const headers = await (await fetch(url)).json();
+        const hasLadybirdIdentity = navigator.userAgent.includes("Ladybird/");
+        for (const hint of ["Sec-CH-UA", "Sec-CH-UA-Mobile", "Sec-CH-UA-Platform"])
+            println(`${hint} follows the default browser identity: ${(hint in headers) === hasLadybirdIdentity}`);
+    });
+</script>
