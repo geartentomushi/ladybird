@@ -13,6 +13,7 @@ import os
 import re
 import runpy
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -42,6 +43,9 @@ VIEWPORT = {"width": 1280, "height": 800}
 BIDI_MAX_MESSAGE_SIZE = 8 * 1024 * 1024
 STATUSES = ("success", "timeout", "crash", "load-error", "harness-error")
 ERROR_CATEGORIES = ("not_implemented", "javascript_exception", "console_error")
+SITE_LISTS = {path.stem.removeprefix("tranco-"): path for path in sorted(HERE.glob("tranco-top-*.csv"))}
+DEFAULT_SITE_LIST = "top-100"
+BASELINE_GUIDANCE = "See Meta/SiteSmoke/README.md#prepare-a-standalone-linux-baseline."
 
 
 class DriverError(RuntimeError):
@@ -143,15 +147,61 @@ def open_private_file(path, flags):
     return os.open(path, flags | os.O_EXCL, 0o600)
 
 
+class ChromeReference:
+    """Launches headless Chrome through ChromeDriver as a reference browser for comparisons."""
+
+    def __init__(self, chromedriver, chrome):
+        self.chromedriver = chromedriver
+        self.chrome = chrome
+        version = subprocess.run([chrome, "--version"], capture_output=True, text=True, check=True).stdout
+        match = re.search(r"\b(\d+)\.\d+\.\d+\.\d+\b", version)
+        if not match:
+            raise DriverError(f"Cannot read the Chrome version from: {version.strip()}")
+        self.user_agent = (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            f"Chrome/{match[1]}.0.0.0 Safari/537.36"
+        )
+
+    def command(self, port, profile):
+        return [self.chromedriver, f"--port={port}", "--allowed-ips=127.0.0.1"]
+
+    def capabilities(self, profile):
+        return {
+            "browserName": "chrome",
+            "goog:chromeOptions": {
+                "binary": str(self.chrome),
+                "args": [
+                    "--headless=new",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-gpu",
+                    "--hide-scrollbars",
+                    f"--user-data-dir={profile}",
+                    f"--user-agent={self.user_agent}",
+                ],
+            },
+        }
+
+
+def unused_port():
+    with contextlib.closing(socket.socket()) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return listener.getsockname()[1]
+
+
 @contextlib.contextmanager
 def launch_driver(executable, directory, log_path, processes):
     with tempfile.TemporaryDirectory(prefix="profile-", dir=directory) as temporary:
         profile = Path(temporary) / "profile"
         with open(log_path, "wb", opener=open_private_file) as log:
-            process = processes.start(
-                [executable, "--headless", "--force-cpu-painting", "--port", "0", "--profile-path", profile],
-                log,
-            )
+            if isinstance(executable, ChromeReference):
+                port = unused_port()
+                command = executable.command(port, profile)
+            else:
+                port = None
+                command = [executable, "--headless", "--force-cpu-painting", "--port", "0", "--profile-path", profile]
+            process = processes.start(command, log)
+            process.fixed_port = port
             try:
                 yield process, profile
             finally:
@@ -168,6 +218,12 @@ def launch_driver(executable, directory, log_path, processes):
 
 def webdriver_port(process, log_path):
     deadline = time.monotonic() + COMMAND_TIMEOUT
+    if process.fixed_port is not None:
+        while time.monotonic() < deadline and process.poll() is None:
+            with contextlib.suppress(OSError), socket.create_connection(("127.0.0.1", process.fixed_port), 0.2):
+                return process.fixed_port
+            time.sleep(0.05)
+        raise DriverError(f"WebDriver did not start (exit status: {process.poll()}); see {log_path}")
     with log_path.open("rb") as startup_log:
         while time.monotonic() < deadline and process.poll() is None:
             position = startup_log.tell()
@@ -182,9 +238,10 @@ def webdriver_port(process, log_path):
     raise DriverError(f"WebDriver did not start (exit status: {process.poll()}); see {log_path}")
 
 
-def open_session(port):
+def open_session(port, extra_capabilities=None):
     with contextlib.closing(http.client.HTTPConnection("127.0.0.1", port, timeout=COMMAND_TIMEOUT)) as client:
-        payload = json.dumps({"capabilities": {"alwaysMatch": {"webSocketUrl": True}}})
+        capabilities = {"webSocketUrl": True, **(extra_capabilities or {})}
+        payload = json.dumps({"capabilities": {"alwaysMatch": capabilities}})
         client.request("POST", "/session", payload, {"Content-Type": "application/json"})
         response = client.getresponse()
         value = json.load(response)["value"]
@@ -265,6 +322,15 @@ def sample_render(bidi, context, row, image_path, errors):
             row["body_element_count"] = result["result"]["value"]
     except errors as error:
         row["dom_error"] = str(error)
+    params["expression"] = (
+        "document.documentElement ? "
+        "document.documentElement.scrollWidth + 'x' + document.documentElement.scrollHeight : ''"
+    )
+    with contextlib.suppress(*errors, ValueError):
+        result = bidi.command("script.evaluate", params)
+        if result["type"] == "success" and result["result"]["type"] == "string" and result["result"]["value"]:
+            width, height = map(int, result["result"]["value"].split("x"))
+            row["document_size"] = {"width": width, "height": height}
     screenshot = bidi.command("browsingContext.captureScreenshot", {"context": context})
     data = base64.b64decode(screenshot["data"], validate=True)
     with open(image_path, "wb", opener=open_private_file) as image:
@@ -292,7 +358,10 @@ def capture(executable, directory, site, timeout, settle, processes=None):
     errors = (DriverError, OSError, WebSocketException, http.client.HTTPException)
     try:
         with launch_driver(executable, directory, log_path, processes or DriverProcesses()) as (process, profile):
-            endpoint = open_session(webdriver_port(process, log_path))
+            endpoint = open_session(
+                webdriver_port(process, log_path),
+                executable.capabilities(profile) if isinstance(executable, ChromeReference) else None,
+            )
             with connect(
                 endpoint,
                 proxy=None,
@@ -369,6 +438,8 @@ def is_large_body_drop(before, after):
 def compare(baseline, current):
     if any(baseline[field] != current[field] for field in ("schema_version", "settings")):
         raise ValueError("Baseline and current run use different schema versions or capture settings")
+    if "chrome" in (baseline.get("browser"), current.get("browser")):
+        raise ValueError("Compare Chrome reference runs with `reference`, not as a baseline or candidate")
     old_sites = {row["url"]: row for row in baseline["sites"]}
     changes = []
     for site in current["sites"]:
@@ -419,6 +490,50 @@ def compare(baseline, current):
                 changes.append({"url": url, "metric": metric, "direction": direction, "before": old, "after": new})
     changes.extend({"url": url, "metric": "coverage", "direction": "removed"} for url in old_sites)
     return changes
+
+
+def is_size_outlier(reference, value, factor=2):
+    return reference > 0 and (value * factor < reference or value > reference * factor)
+
+
+def reference_differences(reference, current):
+    """List sites where Ladybird's result differs from a reference browser that loaded the site successfully."""
+    if reference["settings"]["viewport"] != current["settings"]["viewport"]:
+        raise ValueError("The reference and Ladybird runs use different viewports")
+    reference_sites = {row["url"]: row for row in reference["sites"]}
+    if set(reference_sites) != {row["url"] for row in current["sites"]}:
+        raise ValueError("The reference and Ladybird runs use different targets")
+    differences = []
+    for site in current["sites"]:
+        expected = reference_sites.get(site["url"])
+        if expected is None or expected["status"] != "success" or site["status"] == "harness-error":
+            continue
+
+        def add(metric, before, after, site=site):
+            differences.append(
+                {"rank": site["rank"], "url": site["url"], "metric": metric, "reference": before, "ladybird": after}
+            )
+
+        if site["status"] != "success":
+            add("status", "success", site["status"])
+            continue
+        expected_count, count = expected["body_element_count"], site["body_element_count"]
+        if expected_count and count is not None and (count == 0 or is_large_body_drop(expected_count, count)):
+            add("body_element_count", expected_count, count)
+        expected_size, size = expected.get("document_size"), site.get("document_size")
+        if expected_size and size:
+            for dimension in ("width", "height"):
+                if is_size_outlier(expected_size[dimension], size[dimension]):
+                    add(f"document_{dimension}", expected_size[dimension], size[dimension])
+        if expected["console_errors"] is not None and site["console_errors"] is not None:
+            extra = sum(site["console_errors"].values()) - sum(expected["console_errors"].values())
+            if extra >= 5:
+                add(
+                    "total_console_errors",
+                    sum(expected["console_errors"].values()),
+                    sum(site["console_errors"].values()),
+                )
+    return differences
 
 
 def is_http_url(url):
@@ -574,10 +689,133 @@ def resolve_webdriver(path):
     return path
 
 
-def targets(urls):
+def linked_ladybird_libraries(executable, environment):
+    result = subprocess.run(
+        ["ldd", executable], check=False, env=environment, capture_output=True, text=True, timeout=30
+    )
+    if result.returncode and result.stderr.strip() == "not a dynamic executable":
+        with executable.open("rb") as file:
+            if file.read(4) == b"\x7fELF":
+                return []
+    if result.returncode or "=> not found" in result.stdout:
+        raise ValueError(f"Cannot resolve libraries for {executable}: {(result.stderr or result.stdout).strip()}")
+    libraries = []
+    for line in result.stdout.splitlines():
+        match = re.fullmatch(r"\s*(?:(\S+)\s+=>\s+)?(.+?)\s+\(0x[0-9a-fA-F]+\)", line)
+        if not match:
+            continue
+        path = Path(match[2])
+        if match[1] is None and not path.is_absolute():
+            continue
+        name = match[1] or path.name
+        if re.fullmatch(r"liblagom-\S+\.so(?:\.\S+)?", name):
+            libraries.append((name, path.resolve(strict=True)))
+    return libraries
+
+
+def build_executables(driver):
+    yield "WebDriver", driver
+    libexec = driver.parent.parent / "libexec"
+    for name in ("Ladybird", "WebContent", "Hub", "ImageDecoder"):
+        for directory in (libexec, driver.parent):
+            executable = directory / name
+            if executable.is_file() and os.access(executable, os.X_OK):
+                break
+        else:
+            if name in ("Hub", "ImageDecoder"):
+                continue
+            raise ValueError(f"Cannot find {name} alongside {driver} or in {libexec}")
+        yield name, executable
+
+
+def build_library_paths(executables):
+    environment = os.environ | {"LC_ALL": "C"}
+    # LibWebView's helper-process environment does not forward dynamic-loader overrides.
+    helper_environment = {name: value for name, value in environment.items() if not name.startswith("LD_")}
+    for name, executable in executables:
+        yield from linked_ladybird_libraries(
+            executable.resolve(), helper_environment if name in ("WebContent", "ImageDecoder") else environment
+        )
+
+
+def same_build_file(baseline, candidate):
+    try:
+        return baseline.samefile(candidate)
+    except FileNotFoundError:
+        return baseline.resolve() == candidate.resolve()
+
+
+def validate_baseline_build(baseline, candidate_build):
+    try:
+        baseline = resolve_webdriver(baseline)
+        executables = []
+        for name, path in build_executables(baseline):
+            for directory in ("bin", "libexec"):
+                candidate = candidate_build / directory / name
+                if same_build_file(path, candidate):
+                    raise ValueError(
+                        contaminated_baseline(
+                            f"the baseline's {name} is the same file as candidate output: {candidate}"
+                        )
+                    )
+            executables.append((name, path))
+        for name, path in build_library_paths(executables):
+            for filename in (name, path.name):
+                candidate = candidate_build / "lib" / filename
+                if same_build_file(path, candidate):
+                    raise ValueError(
+                        contaminated_baseline(f"the baseline resolves {name} to candidate output: {candidate}")
+                    )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"Cannot verify baseline libraries: {error}. {BASELINE_GUIDANCE}") from error
+    return baseline
+
+
+def contaminated_baseline(reason):
+    return (
+        f"Contaminated SiteSmoke baseline: {reason}. "
+        f"A copied build can retain an absolute RUNPATH; WebContent does not inherit LD_LIBRARY_PATH. {BASELINE_GUIDANCE}"
+    )
+
+
+def validate_build_pair(baseline, candidate):
+    if sys.platform != "linux":
+        raise ValueError("Shared-library checks for paired builds currently support Linux only")
+
+    def libraries_by_identity(driver):
+        libraries = {}
+        for name, path in build_library_paths(build_executables(driver)):
+            info = path.stat()
+            libraries[(info.st_dev, info.st_ino)] = (name, path)
+        return libraries
+
+    try:
+        baseline, candidate = resolve_webdriver(baseline), resolve_webdriver(candidate)
+        same_driver = baseline.samefile(candidate)
+        before, after = ({}, {}) if same_driver else (libraries_by_identity(baseline), libraries_by_identity(candidate))
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        raise ValueError(
+            f"Cannot verify separate Ladybird builds: {error}. Use built WebDriver binaries, not wrappers. {BASELINE_GUIDANCE}"
+        ) from error
+    if same_driver:
+        raise ValueError(
+            f"Contaminated SiteSmoke baseline: both WebDriver paths identify the same executable "
+            f"(baseline: {baseline}; candidate: {candidate}). {BASELINE_GUIDANCE}"
+        )
+    for identity, (name, path) in before.items():
+        if identity in after:
+            candidate_path = after[identity][1]
+            raise ValueError(
+                contaminated_baseline(
+                    f"both builds resolve {name} to the same file (baseline: {path}; candidate: {candidate_path})"
+                )
+            )
+
+
+def targets(urls, site_list=DEFAULT_SITE_LIST):
     if urls:
         return "custom", list(enumerate(urls, start=1))
-    with (HERE / "tranco-top-100.csv").open(newline="") as snapshot:
+    with SITE_LISTS[site_list].open(newline="") as snapshot:
         source = snapshot.readline().removeprefix("# ").strip()
         return source, [(int(row["rank"]), f"https://{row['domain']}/") for row in csv.DictReader(snapshot)]
 
@@ -694,7 +932,7 @@ def write_json_atomically(output, data):
         Path(name).unlink(missing_ok=True)
 
 
-def run_ci(ladybird, output):
+def run_ci(ladybird, output, site_list=DEFAULT_SITE_LIST, baseline_webdriver=None):
     if not ladybird.is_absolute() or not output.is_absolute():
         raise ValueError("--ladybird and --output must be absolute paths")
     if not ladybird.is_file() or not os.access(ladybird, os.X_OK):
@@ -705,6 +943,8 @@ def run_ci(ladybird, output):
     browser = driver.with_name("Ladybird")
     if not browser.is_file() or not ladybird.samefile(browser):
         raise ValueError(f"--ladybird must identify the adjacent browser WebDriver launches: {browser}")
+    if baseline_webdriver is not None:
+        validate_build_pair(baseline_webdriver, driver)
     if not output.is_symlink() and output.is_dir():
         raise ValueError(f"--output must be a JSON file, not a directory: {output}")
     details = prepare_output(output.with_name(output.name + ".details"))
@@ -719,11 +959,13 @@ def run_ci(ladybird, output):
             "unreported",
             "--output",
             str(details),
+            "--list",
+            site_list,
         ],
     )
     if status not in (0, 1):
         raise ValueError(f"Site smoke harness exited {status}; see {details}")
-    _, sites = targets(None)
+    _, sites = targets(None, site_list)
     results_file = details / "results.json"
     try:
         rows = json.loads(results_file.read_text())["sites"]
@@ -756,14 +998,14 @@ def run_gate(args, output, baseline):
         report["stages"][name] = {"exit_status": status, "log": log.name}
         return report["stages"][name]
 
-    def finish():
+    def finish(failure_status=1):
         report["passed"] = not report.get("site_regressions") and all(
             details["exit_status"] == 0 and "error" not in details for details in report["stages"].values()
         )
         with open(output / "gate-summary.json", "w", opener=open_private_file) as stream:
             stream.write(json.dumps(report, indent=2) + "\n")
         print(f"Gate {'passed' if report['passed'] else 'failed'}: {output / 'gate-summary.json'}")
-        return int(not report["passed"])
+        return 0 if report["passed"] else failure_status
 
     command = [sys.executable, ROOT / "Meta/ladybird.py", "build", "--preset", "Release"]
     for option in ("cc", "cxx", "build_jobs"):
@@ -774,6 +1016,13 @@ def run_gate(args, output, baseline):
     )
     if stage("build", command)["exit_status"]:
         return finish()
+    if args.baseline_webdriver is not None:
+        try:
+            validate_build_pair(args.baseline_webdriver, build / "bin/WebDriver")
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            report["stages"]["build-pair"] = {"exit_status": 2, "error": str(error)}
+            return finish(2)
 
     read_test_results = runpy.run_path(str(ROOT / "Meta/test-results.py"))["read_results"]
     for mode in ("Text", "Layout", "Ref"):
@@ -827,6 +1076,8 @@ def run_gate(args, output, baseline):
             str(settings["navigation_timeout_s"]),
             "--settle",
             str(settings["settle_s"]),
+            "--list",
+            args.list,
         ],
     )
     try:
@@ -862,12 +1113,16 @@ def main():
     )
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Capture a smoke run")
-    run.add_argument("--webdriver", type=Path, required=True, help="Built Ladybird WebDriver executable")
+    driver = run.add_mutually_exclusive_group(required=True)
+    driver.add_argument("--webdriver", type=Path, help="Built Ladybird WebDriver executable")
+    driver.add_argument("--chromedriver", type=Path, help="ChromeDriver for a headless Chrome reference run")
+    run.add_argument("--chrome", type=Path, help="Chrome executable matching --chromedriver")
     run.add_argument("--revision", required=True, help="Revision or build label for the supplied executable")
     run.add_argument(
         "--output", type=Path, required=True, help="New directory for results, screenshots and driver logs"
     )
     run.add_argument("--url", action="append", help="Use these URLs instead of the pinned list (repeatable)")
+    run.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
     run.add_argument("--jobs", type=int, default=4)
     run.add_argument("--timeout", type=float, default=25, help="Per-site navigation deadline in seconds")
     run.add_argument("--settle", type=float, default=2, help="Seconds to observe before taking each screenshot")
@@ -882,7 +1137,8 @@ def main():
         "gate", help="Build and run the LibWeb, LibJS, and pinned site regression checks (Linux)"
     )
     gate.add_argument("--output", type=Path, required=True)
-    gate.add_argument("--baseline", type=Path, default=HERE / "baseline.json")
+    gate.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
+    gate.add_argument("--baseline", type=Path, help="Baseline results (default: the pinned list's baseline)")
     gate.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired reruns")
     gate.add_argument("--cc", help="C compiler passed to Meta/ladybird.py")
     gate.add_argument("--cxx", help="C++ compiler passed to Meta/ladybird.py")
@@ -891,11 +1147,36 @@ def main():
     gate.add_argument("--console-error-increase", type=int, default=5, help="Per-site increase that fails the gate")
     ci = commands.add_parser("ci", help="Run without building and emit the compact CI results")
     ci.add_argument("--ladybird", type=Path, required=True, help="Absolute path to Ladybird, next to WebDriver")
+    ci.add_argument(
+        "--baseline-webdriver", type=Path, help="Verify independent libraries from this baseline build (Linux)"
+    )
     ci.add_argument("--output", type=Path, required=True, help="Absolute path to the compact results JSON")
+    ci.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
+    reference = commands.add_parser("reference", help="List differences from a reference browser run")
+    reference.add_argument("reference", type=Path, help="Results from a --chromedriver run")
+    reference.add_argument("current", type=Path, help="Ladybird results for the same sites")
+    reference.add_argument("--json", action="store_true", help="Print the differences as JSON")
     args = parser.parse_args()
+    if args.command == "reference":
+        try:
+            differences = reference_differences(
+                json.loads(args.reference.read_text()), json.loads(args.current.read_text())
+            )
+        except (KeyError, OSError, ValueError) as error:
+            reference.error(str(error))
+        if args.json:
+            print(json.dumps(differences, indent=2))
+        else:
+            print(f"Differences: {len(differences)}")
+            for difference in differences:
+                print(
+                    f"{difference['rank']:3d} {difference['url']} {difference['metric']}: "
+                    f"{difference['reference']} → {difference['ladybird']}"
+                )
+        return 0
     if args.command == "ci":
         try:
-            return run_ci(args.ladybird, args.output)
+            return run_ci(args.ladybird, args.output, args.list, args.baseline_webdriver)
         except (OSError, ValueError) as error:
             ci.error(str(error))
     if args.command == "compare":
@@ -907,6 +1188,8 @@ def main():
             baseline = json.loads(args.baseline.read_text())
             changes = compare(baseline, current) + gate_evidence_findings(baseline, current, 5)
             if args.webdriver is not None:
+                if sys.platform == "linux":
+                    validate_build_pair(args.baseline_webdriver, args.webdriver)
                 confirm_findings(
                     changes,
                     current,
@@ -935,9 +1218,12 @@ def main():
             gate.error("Install `websockets` as pinned in requirements.txt")
         try:
             if args.baseline_webdriver is not None:
-                args.baseline_webdriver = resolve_webdriver(args.baseline_webdriver)
+                args.baseline_webdriver = validate_baseline_build(args.baseline_webdriver, ROOT / "Build/release")
+            if args.baseline is None:
+                name = "baseline.json" if args.list == DEFAULT_SITE_LIST else f"baseline-{args.list}.json"
+                args.baseline = HERE / name
             baseline = json.loads(args.baseline.read_text())
-            source, sites = targets(None)
+            source, sites = targets(None, args.list)
             if (
                 baseline["schema_version"] != 1
                 or baseline["site_list"] != source
@@ -946,7 +1232,7 @@ def main():
                 or baseline["settings"]["viewport"] != VIEWPORT
             ):
                 raise ValueError(
-                    "The gate needs a complete baseline for the pinned top-100 list without harness errors"
+                    f"The gate needs a complete baseline for the pinned {args.list} list without harness errors"
                 )
             output = prepare_output(args.output)
         except (KeyError, OSError, ValueError) as error:
@@ -960,19 +1246,26 @@ def main():
             run.error(f"Require an HTTP(S) URL without credentials: {url}")
     if args.url and len(set(args.url)) != len(args.url):
         run.error("Each --url must be unique")
-    executable = args.webdriver.resolve()
-    if not executable.is_file() or not os.access(executable, os.X_OK):
-        run.error(f"Not an executable: {executable}")
+    if (args.chrome is None) != (args.chromedriver is None):
+        run.error("--chrome and --chromedriver must be supplied together")
+    try:
+        if args.chromedriver is not None:
+            executable = ChromeReference(resolve_webdriver(args.chromedriver), resolve_webdriver(args.chrome))
+        else:
+            executable = resolve_webdriver(args.webdriver)
+    except (DriverError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        run.error(str(error))
     if connect is None:
         run.error("Install `websockets` as pinned in requirements.txt")
     try:
         output = prepare_output(args.output)
     except (OSError, ValueError) as error:
         run.error(str(error))
-    source, sites = targets(args.url)
+    source, sites = targets(args.url, args.list)
     result = {
         "schema_version": 1,
         "revision": args.revision,
+        "browser": "chrome" if isinstance(executable, ChromeReference) else "ladybird",
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "site_list": source,
         "settings": {

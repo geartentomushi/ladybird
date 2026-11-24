@@ -29,7 +29,8 @@ endpoint WebWorkerServer {
                  Web::HTML::AgentType agent_type,
                  URL::Origin origin,
                  Web::HTML::EnvironmentId environment_id,
-                 bool has_process_to_itself) =|
+                 bool has_process_to_itself,
+                 Optional<Web::HTML::ServiceWorkerRegistrationSnapshot> service_worker_registration) =|
 
     connect_shared_worker(Web::HTML::TransferDataEncoder message_port,
                           Web::HTML::SerializedEnvironmentSettingsObject outside_settings) =|

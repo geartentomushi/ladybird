@@ -268,10 +268,10 @@ impl LineBoxFragmentData {
         (inline_size, glyphs)
     }
 
-    /// Whether the fragment counts toward the height and baseline of its line: Content that a block overflow ellipsis
-    /// displaced doesn't, but content that a text-overflow ellipsis hides does.
+    /// Whether the fragment counts toward the height and baseline of its line: Text that a block overflow ellipsis
+    /// displaced doesn't, but an atomic inline it displaced and content that a text-overflow ellipsis hides do.
     pub(crate) fn takes_part_in_line_alignment(&self) -> bool {
-        !self.is_fully_truncated || self.is_hidden_by_text_overflow
+        !self.is_fully_truncated || self.is_hidden_by_text_overflow || self.is_atomic_inline
     }
 
     pub(crate) fn ends_in_whitespace(&self) -> bool {

@@ -1588,7 +1588,9 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
 
         let current_line_block_size = if self.line(line_index).inline_length_before_block_ellipsis.is_some() {
             self.line(line_index)
-                .visible_fragments()
+                .fragments
+                .iter()
+                .filter(|fragment| fragment.takes_part_in_line_alignment())
                 .map(|fragment| {
                     if fragment.is_atomic_inline {
                         fragment.box_cells().margin_box_block_size(false)

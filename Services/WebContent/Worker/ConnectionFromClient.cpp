@@ -320,7 +320,7 @@ Web::Page const& ConnectionFromClient::page() const
     return m_page_host->page();
 }
 
-void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type, Web::HTML::RequestCredentials credentials, String name, Web::HTML::TransferDataEncoder implicit_port, Web::HTML::SerializedEnvironmentSettingsObject outside_settings, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself)
+void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type, Web::HTML::RequestCredentials credentials, String name, Web::HTML::TransferDataEncoder implicit_port, Web::HTML::SerializedEnvironmentSettingsObject outside_settings, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself, Optional<Web::HTML::ServiceWorkerRegistrationSnapshot> service_worker_registration)
 {
     // Shutting down the agent drains the event queue after the agent state is released, and that can deliver a start
     // the client sent before the worker was closed. Then there's no page to run the worker in, and nobody waits for it.
@@ -345,7 +345,7 @@ void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type
             connection->run_service_worker_lifecycle_step(pending_steps[i], pending_step_ids[i]);
     }));
 
-    m_worker_host->run(page(), move(implicit_port), outside_settings, credentials, agent_type, move(origin), move(environment_id), has_process_to_itself);
+    m_worker_host->run(page(), move(implicit_port), outside_settings, credentials, agent_type, move(origin), move(environment_id), has_process_to_itself, move(service_worker_registration));
 }
 
 void ConnectionFromClient::connect_shared_worker(Web::HTML::TransferDataEncoder message_port, Web::HTML::SerializedEnvironmentSettingsObject outside_settings)
