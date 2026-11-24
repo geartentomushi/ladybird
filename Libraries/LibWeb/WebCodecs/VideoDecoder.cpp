@@ -310,6 +310,7 @@ void VideoDecoder::flush(GC::Ref<WebIDL::Promise> promise)
     // 4. Append promise to [[pending flush promises]].
     auto flush_id = m_next_flush_id++;
     m_pending_flush_promises.append({ flush_id, promise });
+    update_pending_flush_keep_alive();
 
     // 5. Queue a control message to flush the codec with promise.
     // 6. Process the control message queue.
@@ -442,6 +443,14 @@ void VideoDecoder::schedule_dequeue_event()
     });
 }
 
+void VideoDecoder::update_pending_flush_keep_alive()
+{
+    if (m_pending_flush_promises.is_empty())
+        m_pending_flush_keep_alive = nullptr;
+    else if (!m_pending_flush_keep_alive)
+        m_pending_flush_keep_alive = *this;
+}
+
 void VideoDecoder::release_codec()
 {
     if (m_media_client && m_codec_id.has_value())
@@ -476,6 +485,7 @@ void VideoDecoder::reset_video_decoder(GC::Ref<WebIDL::DOMException> exception)
 
     // 6. For each promise in [[pending flush promises]]:
     auto pending_flush_promises = move(m_pending_flush_promises);
+    update_pending_flush_keep_alive();
     for (auto& pending_flush : pending_flush_promises) {
         // 1. Reject promise with exception.
         WebIDL::reject_promise(*pending_flush.promise, exception);
@@ -546,6 +556,7 @@ void VideoDecoder::codec_flushed(u64 codec_generation, u64 flush_id)
         if (!index.has_value())
             return;
         auto promise = self.m_pending_flush_promises.take(*index).promise;
+        self.update_pending_flush_keep_alive();
 
         // 3. Resolve promise.
         auto& realm = WebIDL::promise_realm(*promise);

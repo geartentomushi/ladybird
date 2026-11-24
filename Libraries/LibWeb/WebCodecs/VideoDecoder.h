@@ -11,6 +11,7 @@
 #include <AK/RefPtr.h>
 #include <AK/Vector.h>
 #include <LibGC/Function.h>
+#include <LibGC/Root.h>
 #include <LibMediaClient/Forward.h>
 #include <LibMediaCodecs/Forward.h>
 #include <LibWeb/Bindings/VideoDecoder.h>
@@ -60,6 +61,7 @@ private:
     void reset_video_decoder(GC::Ref<WebIDL::DOMException>);
     void close_video_decoder(GC::Ref<WebIDL::DOMException>);
     void release_codec();
+    void update_pending_flush_keep_alive();
 
     void output_frame(u64 codec_generation, i64 timestamp, Optional<u64> duration, NonnullRefPtr<Gfx::Bitmap>);
     void codec_flushed(u64 codec_generation, u64 flush_id);
@@ -88,6 +90,9 @@ private:
     };
     Vector<PendingFlush> m_pending_flush_promises;
     u64 m_next_flush_id { 1 };
+
+    // NB: The promises returned by flush() must settle even when the page keeps nothing else that refers to us.
+    GC::Root<VideoDecoder> m_pending_flush_keep_alive;
 
     // https://w3c.github.io/webcodecs/#dom-videodecoder-codec-implementation-slot
     // NB: The codec runs in the MediaServer. Each instance has a generation, so that work it reports after it has
