@@ -218,8 +218,8 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     auto description = copy_of_description(config);
     auto media_client = MediaClient::Client::acquire();
     if (!is_recognized_video_codec_string(codec) || description.is_error() || media_client.is_error()) {
-        queue_a_codec_task(GC::captures(*this), [](VideoDecoder& self) {
-            if (self.m_state == CodecState::Closed)
+        queue_a_codec_task(GC::captures(*this, m_codec_generation), [](VideoDecoder& self, u64& codec_generation) {
+            if (codec_generation != self.m_codec_generation || self.m_state == CodecState::Closed)
                 return;
             HTML::TemporaryExecutionContext context(HTML::relevant_realm(self.relevant_global_object()), HTML::TemporaryExecutionContext::CallbacksEnabled::Yes);
             self.close_video_decoder(WebIDL::NotSupportedError::create("The VideoDecoderConfig is not supported"_utf16));
