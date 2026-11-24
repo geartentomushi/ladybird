@@ -45,6 +45,7 @@ STATUSES = ("success", "timeout", "crash", "load-error", "harness-error")
 ERROR_CATEGORIES = ("not_implemented", "javascript_exception", "console_error")
 SITE_LISTS = {path.stem.removeprefix("tranco-"): path for path in sorted(HERE.glob("tranco-top-*.csv"))}
 DEFAULT_SITE_LIST = "top-100"
+BASELINE_GUIDANCE = "See Meta/SiteSmoke/README.md#prepare-a-standalone-linux-baseline."
 
 
 class DriverError(RuntimeError):
@@ -726,6 +727,26 @@ def build_library_paths(driver):
     yield from linked_ladybird_libraries(driver, environment).items()
 
 
+def validate_baseline_build(baseline, candidate_build):
+    try:
+        baseline = resolve_webdriver(baseline)
+        candidate_build = candidate_build.resolve()
+        libraries = list(build_library_paths(baseline))
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        raise ValueError(f"Cannot verify baseline libraries: {error}. {BASELINE_GUIDANCE}") from error
+    for name, path in libraries:
+        if path.is_relative_to(candidate_build):
+            raise ValueError(contaminated_baseline(f"the baseline resolves {name} into the candidate build: {path}"))
+    return baseline
+
+
+def contaminated_baseline(reason):
+    return (
+        f"Contaminated SiteSmoke baseline: {reason}. "
+        f"A copied build can retain an absolute RUNPATH; WebContent does not inherit LD_LIBRARY_PATH. {BASELINE_GUIDANCE}"
+    )
+
+
 def validate_build_pair(baseline, candidate):
     if sys.platform != "linux":
         raise ValueError("Shared-library checks for paired builds currently support Linux only")
@@ -737,27 +758,26 @@ def validate_build_pair(baseline, candidate):
             libraries[(info.st_dev, info.st_ino)] = (name, path)
         return libraries
 
-    guidance = "See Meta/SiteSmoke/README.md#prepare-a-standalone-linux-baseline."
     try:
         baseline, candidate = resolve_webdriver(baseline), resolve_webdriver(candidate)
         same_driver = baseline.samefile(candidate)
         before, after = ({}, {}) if same_driver else (libraries_by_identity(baseline), libraries_by_identity(candidate))
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         raise ValueError(
-            f"Cannot verify separate Ladybird builds: {error}. Use built WebDriver binaries, not wrappers. {guidance}"
+            f"Cannot verify separate Ladybird builds: {error}. Use built WebDriver binaries, not wrappers. {BASELINE_GUIDANCE}"
         ) from error
     if same_driver:
         raise ValueError(
             f"Contaminated SiteSmoke baseline: both WebDriver paths identify the same executable "
-            f"(baseline: {baseline}; candidate: {candidate}). {guidance}"
+            f"(baseline: {baseline}; candidate: {candidate}). {BASELINE_GUIDANCE}"
         )
     for identity, (name, path) in before.items():
         if identity in after:
             candidate_path = after[identity][1]
             raise ValueError(
-                f"Contaminated SiteSmoke baseline: both builds resolve {name} to the same file "
-                f"(baseline: {path}; candidate: {candidate_path}). "
-                f"A copied build can retain an absolute RUNPATH; WebContent does not inherit LD_LIBRARY_PATH. {guidance}"
+                contaminated_baseline(
+                    f"both builds resolve {name} to the same file (baseline: {path}; candidate: {candidate_path})"
+                )
             )
 
 
@@ -1167,10 +1187,7 @@ def main():
             gate.error("Install `websockets` as pinned in requirements.txt")
         try:
             if args.baseline_webdriver is not None:
-                args.baseline_webdriver = resolve_webdriver(args.baseline_webdriver)
-                candidate = ROOT / "Build/release/bin/WebDriver"
-                if candidate.exists():
-                    validate_build_pair(args.baseline_webdriver, candidate)
+                args.baseline_webdriver = validate_baseline_build(args.baseline_webdriver, ROOT / "Build/release")
             if args.baseline is None:
                 name = "baseline.json" if args.list == DEFAULT_SITE_LIST else f"baseline-{args.list}.json"
                 args.baseline = HERE / name

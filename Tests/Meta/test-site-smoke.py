@@ -660,6 +660,38 @@ class SiteSmokeTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "both WebDriver paths identify the same executable"):
                 smoke.validate_build_pair(before, after)
 
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
+    def test_gate_preflight_inspects_only_the_baseline_and_refuses_candidate_libraries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "Build/release"
+            (candidate / "bin").mkdir(parents=True)
+            (candidate / "bin/WebDriver").touch(mode=0o755)
+            before = root / "baseline/WebDriver"
+            before.parent.mkdir()
+            before.touch(mode=0o755)
+            path = before.parent / "liblagom-web.so.0"
+            paths = Mock(return_value=[(path.name, path)])
+            run_gate = Mock(return_value=0)
+            argv = ["site-smoke.py", "gate", "--baseline-webdriver", str(before), "--output", str(root / "output")]
+            with (
+                patch.object(sys, "argv", argv),
+                patch.dict(
+                    smoke.main.__globals__,
+                    {"ROOT": root, "connect": object(), "build_library_paths": paths, "run_gate": run_gate},
+                ),
+                contextlib.redirect_stderr(io.StringIO()) as errors,
+            ):
+                self.assertEqual(smoke.main(), 0)
+                paths.assert_called_once_with(before)
+                run_gate.assert_called_once()
+                paths.return_value = [(path.name, candidate / "lib" / path.name)]
+                with self.assertRaises(SystemExit) as failure:
+                    smoke.main()
+            self.assertEqual(failure.exception.code, 2)
+            self.assertIn("the baseline resolves liblagom-web.so.0 into the candidate build", errors.getvalue())
+            run_gate.assert_called_once()
+
     def test_gate_stops_after_build_when_build_pair_is_contaminated(self):
         args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, baseline_webdriver=Path("baseline/WebDriver"))
         with tempfile.TemporaryDirectory() as temporary:
