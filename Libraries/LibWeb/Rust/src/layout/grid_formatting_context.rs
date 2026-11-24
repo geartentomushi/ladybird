@@ -4183,8 +4183,6 @@ impl<'pass> GridFormattingContext<'pass> {
         });
     }
 
-    /// The alignment of `node` in the given axis, where Start and End are the left/top and right/bottom sides of its
-    /// grid area.
     /// Whether a grid item with this style that is baseline-aligned in the block axis aligns by its last baseline.
     /// https://drafts.csswg.org/css-align-3/#valdef-align-self-last-baseline
     fn aligns_by_last_baseline(&self, style: StyleValues<'_>) -> bool {
@@ -4200,6 +4198,8 @@ impl<'pass> GridFormattingContext<'pass> {
             && self.aligns_by_last_baseline(self.item_style(item))
     }
 
+    /// The alignment of `node` in the given axis, where Start and End are the left/top and right/bottom sides of its
+    /// grid area.
     fn item_alignment_of(&self, node: Node, axis: Axis) -> SelfAlignment {
         let style = self.style(node);
         let (keyword, safety) = self.select_grid_axis(
@@ -4234,6 +4234,7 @@ impl<'pass> GridFormattingContext<'pass> {
         if axis == Axis::Row
             && container_start_is_low
             && !self.facts(node).is_absolutely_positioned()
+            && !self.lanes.is_some_and(|lanes| lanes.stacking_axis() == axis)
             && self.aligns_by_last_baseline(style)
         {
             return SelfAlignment {
@@ -4875,10 +4876,15 @@ impl<'pass> GridFormattingContext<'pass> {
             )
         };
         // NB: An item aligned by its last baseline is laid out at the end of its grid area, from where baseline
-        //     alignment moves it, and where it stays when it cannot participate in baseline alignment.
+        //     alignment moves it, and where it stays, safely, when it cannot participate in baseline alignment.
         let alignment_in_area = if !axis.is_column() && self.item_aligns_by_last_baseline(item) {
             SelfAlignment {
                 position: SelfPosition::Edge(AxisEdge::End),
+                safety: if self.item_participates_in_row_baseline_alignment(item) {
+                    alignment.safety
+                } else {
+                    OverflowSafety::Safe
+                },
                 ..alignment
             }
         } else {
@@ -5568,8 +5574,8 @@ impl<'pass> GridFormattingContext<'pass> {
 
     // NB: Only the vertical Row axis aligns items by their baselines, using the horizontal baselines of items in a
     //     horizontal writing mode, while items in other writing modes synthesize theirs.
-    // FIXME: Align items by their baselines in the horizontal Column axis and in a reversed Row axis, align by last
-    //        baselines, and shim baseline-aligned items for track sizing.
+    // FIXME: Align items by their baselines in the horizontal Column axis and in a reversed Row axis, and shim
+    //        baseline-aligned items for track sizing.
     fn item_participates_in_row_baseline_alignment(&self, item: GridItem) -> bool {
         if self.rows_are_reversed || self.item_alignment(item, Axis::Row).position != SelfPosition::Baseline {
             return false;
@@ -5680,8 +5686,8 @@ impl<'pass> GridFormattingContext<'pass> {
 
     /// The distance from the alignment baseline of `item` to the end of its grid area, as the item is laid out at the
     /// end of its area.
-    fn item_row_baseline_from_end(&self, item: GridItem) -> CssPixels {
-        let (_, area_size) = self.axis_grid_area(Axis::Row, Some((item.row, item.row_span)));
+    fn item_row_baseline_from_end(&self, item: GridItem, row_offsets: &AxisTrackOffsets) -> CssPixels {
+        let (_, area_size) = self.placed_axis_grid_area(Axis::Row, item.row, item.row_span, row_offsets);
         area_size - self.item_row_baseline(item)
     }
 
@@ -5715,6 +5721,7 @@ impl<'pass> GridFormattingContext<'pass> {
         // The shared last baseline, from the end of the grid areas, of the items that end in each row.
         let mut shared_last_baselines = Vec::<Option<CssPixels>>::new();
         let mut shared_column_baselines = Vec::<Option<CssPixels>>::new();
+        let row_offsets = self.axis_track_offsets(Axis::Row);
         let track_index =
             |position: i32| usize::try_from(position).expect("a placed grid item starts at a track of its grid");
         let share_baseline = |shared_baselines: &mut Vec<Option<CssPixels>>, track: usize, baseline: CssPixels| {
@@ -5731,7 +5738,7 @@ impl<'pass> GridFormattingContext<'pass> {
                     share_baseline(
                         &mut shared_last_baselines,
                         self.item_last_row(item),
-                        self.item_row_baseline_from_end(item),
+                        self.item_row_baseline_from_end(item, &row_offsets),
                     );
                 } else {
                     share_baseline(
@@ -5754,7 +5761,7 @@ impl<'pass> GridFormattingContext<'pass> {
             if self.item_participates_in_row_baseline_alignment(item) {
                 if self.item_aligns_by_last_baseline(item) {
                     offset.y -= shared_last_baselines[self.item_last_row(item)].unwrap()
-                        - self.item_row_baseline_from_end(item);
+                        - self.item_row_baseline_from_end(item, &row_offsets);
                 } else {
                     offset.y += shared_baselines[track_index(item.row)].unwrap() - self.item_row_baseline(item);
                 }
@@ -5841,7 +5848,7 @@ impl<'pass> GridFormattingContext<'pass> {
         //    baseline of those grid items.
         let is_last = baseline_set == formatting_context::BaselineSet::Last;
         let participating = self.items.iter().filter(|item| {
-            self.item_alignment(**item, Axis::Row).position == SelfPosition::Baseline
+            self.item_participates_in_row_baseline_alignment(**item)
                 && self.item_aligns_by_last_baseline(**item) == is_last
                 && if is_last {
                     !self.rows.is_empty() && self.item_last_row(**item) == self.rows.len() - 1
