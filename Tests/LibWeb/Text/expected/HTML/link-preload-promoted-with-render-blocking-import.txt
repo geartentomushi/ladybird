@@ -1,0 +1,1 @@
+Body color at first frame: rgb(0, 128, 0)

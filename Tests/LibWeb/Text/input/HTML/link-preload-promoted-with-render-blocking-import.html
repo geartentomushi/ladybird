@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const server = httpTestServer();
+        const imported = await server.createEcho("GET", "/promoted-preload-import.css", {
+            status: 200,
+            headers: { "Content-Type": "text/css" },
+            body: "body { color: green; }",
+            delay_ms: 600,
+        });
+        const outer = await server.createEcho("GET", "/promoted-preload-outer.css", {
+            status: 200,
+            headers: { "Content-Type": "text/css" },
+            body: `@import url("${imported}");`,
+        });
+
+        const link = document.createElement("link");
+        link.rel = "preload";
+        link.as = "style";
+        link.href = outer;
+        link.setAttribute("blocking", "render");
+        const preloadLoaded = new Promise(resolve => link.addEventListener("load", resolve, { once: true }));
+        document.head.append(link);
+        await preloadLoaded;
+
+        const body = document.body;
+        body.remove();
+        link.rel = "stylesheet";
+        document.documentElement.append(body);
+        await new Promise(resolve => requestAnimationFrame(resolve));
+        println(`Body color at first frame: ${getComputedStyle(body).color}`);
+    });
+</script>

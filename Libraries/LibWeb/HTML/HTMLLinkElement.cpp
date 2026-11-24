@@ -36,6 +36,7 @@
 #include <LibWeb/Fetch/Infrastructure/HTTP/Requests.h>
 #include <LibWeb/Fetch/Infrastructure/HTTP/ResponseView.h>
 #include <LibWeb/HTML/BrowsingContext.h>
+#include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/EventNames.h>
 #include <LibWeb/HTML/HTMLImageElement.h>
 #include <LibWeb/HTML/HTMLLinkElement.h>
@@ -47,9 +48,11 @@
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/Loader/ResourceLoader.h>
 #include <LibWeb/Page/Page.h>
+#include <LibWeb/Platform/EventLoopPlugin.h>
 #include <LibWeb/Platform/ImageCodecPlugin.h>
 #include <LibWeb/ReferrerPolicy/AbstractOperations.h>
 #include <LibWeb/SVG/SVGDecodedImageData.h>
+#include <LibWebCommon/Fetch/Infrastructure/URL.h>
 #include <LibWebCommon/Infra/CharacterTypes.h>
 
 namespace Web::HTML {
@@ -366,7 +369,9 @@ void HTMLLinkElement::attribute_changed(Utf16FlyString const& name, Optional<Utf
         }
 
         if (fetch)
-            fetch_and_process_linked_resource();
+            fetch_and_process_linked_resource(name == AttributeNames::rel
+                && (old_relationship & Relationship::Preload) && !(old_relationship & Relationship::Stylesheet)
+                && (m_relationship & Relationship::Stylesheet));
     }
 
     // NB: Disabling the link starts a fetch, which its setup steps end right away, so the kept sheet belongs with the
@@ -527,7 +532,7 @@ RefPtr<Fetch::Infrastructure::Request> HTMLLinkElement::create_link_request(HTML
 }
 
 // https://html.spec.whatwg.org/multipage/semantics.html#fetch-and-process-the-linked-resource
-void HTMLLinkElement::fetch_and_process_linked_resource()
+void HTMLLinkElement::fetch_and_process_linked_resource(bool promoting_preload)
 {
     auto fetch_generation = ++m_current_fetch_generation;
 
@@ -535,7 +540,8 @@ void HTMLLinkElement::fetch_and_process_linked_resource()
     cancel_pending_stylesheet_processing(UnblockRendering::No);
     ScopeGuard unblock_if_no_blocking_stylesheet = [this] {
         if (document().is_render_blocking_element(*this)
-            && ((m_relationship & Relationship::Icon) || !(m_relationship & Relationship::Stylesheet) || !m_fetch_controller || !is_potentially_render_blocking()
+            && ((m_relationship & Relationship::Icon) || !(m_relationship & Relationship::Stylesheet)
+                || (!m_fetch_controller && !m_stylesheet_processing_pending) || !is_potentially_render_blocking()
                 || !CSS::RustMediaList::parse(media()).evaluate(document())))
             unblock_rendering();
     };
@@ -547,7 +553,7 @@ void HTMLLinkElement::fetch_and_process_linked_resource()
     }
 
     if (m_relationship & ~(Relationship::DNSPrefetch | Relationship::Preconnect | Relationship::Preload | Relationship::ModulePreload | Relationship::Prefetch))
-        default_fetch_and_process_linked_resource(fetch_generation);
+        default_fetch_and_process_linked_resource(fetch_generation, promoting_preload);
     else if (m_relationship & Relationship::ModulePreload)
         fetch_and_process_linked_modulepreload_resource();
     else if (m_relationship & Relationship::Preload)
@@ -561,7 +567,7 @@ void HTMLLinkElement::fetch_and_process_linked_resource()
 }
 
 // https://html.spec.whatwg.org/multipage/semantics.html#default-fetch-and-process-the-linked-resource
-void HTMLLinkElement::default_fetch_and_process_linked_resource(u64 fetch_generation)
+void HTMLLinkElement::default_fetch_and_process_linked_resource(u64 fetch_generation, bool promoting_preload)
 {
     // https://html.spec.whatwg.org/multipage/semantics.html#the-link-element:attr-link-href-4
     // If both the href and imagesrcset attributes are absent, then the element does not define a link.
@@ -593,9 +599,20 @@ void HTMLLinkElement::default_fetch_and_process_linked_resource(u64 fetch_genera
         request->set_initiator_type(Fetch::Infrastructure::Request::InitiatorType::Link);
     }
 
+    // INTEROP: Script can read the style immediately when a link is promoted from a completed preload.
+    // Use Fetch's normal checks and reuse only a buffered response; never wait on a network load here.
+    bool synchronous = false;
+    if (promoting_preload && JS::VM::the().has_running_execution_context() && !(m_relationship & Relationship::Icon)
+        && Fetch::Infrastructure::is_http_or_https_scheme(request->url().scheme()) && request->integrity_metadata().is_empty()) {
+        auto preload = document().map_of_preloaded_resources().get(create_a_preload_key(*request));
+        synchronous = preload.has_value() && (*preload)->response
+            && (*preload)->response->unsafe_response()->body().has_value()
+            && (*preload)->response->unsafe_response()->body()->source().has_value();
+    }
+
     // 7. Fetch request with processResponseConsumeBody set to the following steps given response response and null, failure, or a byte sequence bodyBytes:
-    Fetch::Infrastructure::FetchAlgorithms::Input fetch_algorithms_input { Fetch::Engine::BodyIntent::ConsumeForCallback };
-    fetch_algorithms_input.process_response_consume_body = GC::create_function(GC::Heap::the(), GC::captures(*this, fetch_generation), [](auto& self, auto& fetch_generation, GC::Ref<Fetch::Infrastructure::ResponseView> response, Fetch::Infrastructure::FetchAlgorithms::BodyBytes body_bytes) {
+    Fetch::Infrastructure::FetchAlgorithms::Input fetch_algorithms_input { synchronous ? Fetch::Engine::BodyIntent::SyncAccumulate : Fetch::Engine::BodyIntent::ConsumeForCallback };
+    fetch_algorithms_input.process_response_consume_body = GC::create_function(GC::Heap::the(), GC::captures(*this, fetch_generation, synchronous), [](auto& self, auto& fetch_generation, auto& synchronous, GC::Ref<Fetch::Infrastructure::ResponseView> response, Fetch::Infrastructure::FetchAlgorithms::BodyBytes body_bytes) {
         // "if, since the resource in question was fetched, it has become appropriate to fetch it again"
         if (fetch_generation != self.m_current_fetch_generation)
             return;
@@ -628,10 +645,11 @@ void HTMLLinkElement::default_fetch_and_process_linked_resource(u64 fetch_genera
         // FIXME: 3. Otherwise, wait for the link resource's critical subresources to finish loading.
 
         // 4. Process the linked resource given el, success, response, and bodyBytes.
-        self.process_linked_resource(success, response, origin_clean, successful_body_bytes);
+        self.process_linked_resource(success, response, origin_clean, successful_body_bytes, synchronous);
     });
 
-    m_fetch_controller = Fetch::Fetching::fetch(HTML::relevant_realm(*this), *request, Fetch::Infrastructure::FetchAlgorithms::create(move(fetch_algorithms_input)));
+    m_fetch_controller = Fetch::Fetching::fetch(HTML::relevant_realm(*this), *request, Fetch::Infrastructure::FetchAlgorithms::create(move(fetch_algorithms_input)),
+        synchronous ? Fetch::Fetching::UseParallelQueue::Yes : Fetch::Fetching::UseParallelQueue::No);
 
     // AD-HOC: A stopped fetch, such as one of a document that was stopped, never processes its response. Stop blocking
     //         scripts, rendering and the load event on it then, as if the user agent had given up on loading it.
@@ -642,6 +660,13 @@ void HTMLLinkElement::default_fetch_and_process_linked_resource(u64 fetch_genera
         link_element->m_fetch_controller = nullptr;
         link_element->stop_blocking_on_style_sheet();
     }));
+
+    if (synchronous) {
+        auto pause_handle = HTML::current_event_loop().pause(HTML::EventLoop::UpdateTheRendering::No);
+        Platform::EventLoopPlugin::the().spin_until(GC::create_function(GC::Heap::the(), GC::captures(*this, fetch_generation), [](auto& self, auto& fetch_generation) {
+            return fetch_generation != self.m_current_fetch_generation || !self.m_fetch_controller;
+        }));
+    }
 }
 
 // https://html.spec.whatwg.org/multipage/links.html#link-type-dns-prefetch:fetch-and-process-the-linked-resource-2
@@ -1402,7 +1427,7 @@ bool HTMLLinkElement::apply_link_options_from_parsed_header_attributes(LinkProce
 }
 
 // https://html.spec.whatwg.org/multipage/semantics.html#process-the-linked-resource
-void HTMLLinkElement::process_linked_resource(bool success, Fetch::Infrastructure::ResponseView const& response, CSS::StyleScope::OriginClean origin_clean, Core::ImmutableBytes const* body_bytes)
+void HTMLLinkElement::process_linked_resource(bool success, Fetch::Infrastructure::ResponseView const& response, CSS::StyleScope::OriginClean origin_clean, Core::ImmutableBytes const* body_bytes, bool synchronous)
 {
     if (success)
         VERIFY(body_bytes);
@@ -1413,7 +1438,7 @@ void HTMLLinkElement::process_linked_resource(bool success, Fetch::Infrastructur
             icon_bytes = body_bytes->copy_to_byte_buffer().release_value_but_fixme_should_propagate_errors();
         process_icon_resource(success, response, move(icon_bytes));
     } else if (m_relationship & Relationship::Stylesheet) {
-        process_stylesheet_resource(success, response, origin_clean, success ? body_bytes->bytes() : ReadonlyBytes {});
+        process_stylesheet_resource(success, response, origin_clean, success ? body_bytes->bytes() : ReadonlyBytes {}, synchronous);
     }
 }
 
@@ -1487,7 +1512,7 @@ void HTMLLinkElement::process_icon_resource(bool success, Fetch::Infrastructure:
 }
 
 // https://html.spec.whatwg.org/multipage/links.html#link-type-stylesheet:process-the-linked-resource
-void HTMLLinkElement::process_stylesheet_resource(bool success, Fetch::Infrastructure::ResponseView const& response, CSS::StyleScope::OriginClean origin_clean, ReadonlyBytes body_bytes)
+void HTMLLinkElement::process_stylesheet_resource(bool success, Fetch::Infrastructure::ResponseView const& response, CSS::StyleScope::OriginClean origin_clean, ReadonlyBytes body_bytes, bool synchronous)
 {
     if (!document().is_fully_active())
         return;
@@ -1561,10 +1586,14 @@ void HTMLLinkElement::process_stylesheet_resource(bool success, Fetch::Infrastru
         if (maybe_decoded_string.is_error()) {
             dbgln("Failed to decode CSS file: {}", response.url().value_or(URL::URL()));
             associate_empty_style_sheet(response, origin_clean);
-            dispatch_event(create_event_for_element(*this, HTML::EventNames::error));
         } else {
             VERIFY(!response.url_list().is_empty());
             m_stylesheet_processing_pending = true;
+            if (synchronous) {
+                CSS::Parser::Parser parser { CSS::Parser::ParsingParams { document() } };
+                apply_stylesheet_rules(parser.parse_as_stylesheet_contents(maybe_decoded_string.value().utf16_view()), response.url_list().first(), response.url_list().last(), origin_clean, ReferrerPolicy::parse_a_referrer_policy_from_a_referrer_policy_header(*response.record()), fetch_generation, true);
+                return;
+            }
             // The sheet's relative URLs resolve against the URL the sheet was fetched from, after any redirect; its
             // location stays the URL it was linked at.
             CSS::Parser::Parser::parse_stylesheet_off_thread(
@@ -1592,25 +1621,7 @@ void HTMLLinkElement::process_stylesheet_resource(bool success, Fetch::Infrastru
                                 return;
                             }
 
-                            // NB: The sheet records its referrer policy as it is created, before its imports start to load.
-                            auto sheet = CSS::StyleSheetState::create(parsed.native_rules(), loaded_document.ptr(), {}, location, referrer_policy);
-                            if (base_url != location)
-                                sheet->set_base_url(move(base_url));
-                            link->associate_style_sheet(*sheet, origin_clean);
-
-                            // NB: The sheet has to be associated before its critical subresources (@import rules)
-                            //     get fetched. Wait for them before firing load and unblocking scripts.
-                            if (sheet->loading_state() == CSS::StyleSheetState::LoadingState::Loading) {
-                                link->m_fetch_generation_waiting_for_critical_subresources = fetch_generation;
-                                return;
-                            }
-
-                            // 2. Fire an event named load at el.
-                            // INTEROP: Other browsers fire error instead when an import failed, including before the
-                            //          sheet was associated with the link.
-                            auto event_name = sheet->loading_state() == CSS::StyleSheetState::LoadingState::Error ? HTML::EventNames::error : HTML::EventNames::load;
-                            link->dispatch_event(create_event_for_element(*link, event_name));
-                            link->finish_processing_stylesheet_resource(fetch_generation);
+                            link->apply_stylesheet_rules(parsed.native_rules(), move(location), move(base_url), origin_clean, referrer_policy, fetch_generation, false);
                         }));
                 });
             return;
@@ -1619,9 +1630,44 @@ void HTMLLinkElement::process_stylesheet_resource(bool success, Fetch::Infrastru
     // 5. Otherwise, fire an event named error at el.
     else {
         associate_empty_style_sheet(response, origin_clean);
-        dispatch_event(create_event_for_element(*this, HTML::EventNames::error));
     }
 
+    complete_stylesheet_load(HTML::EventNames::error, fetch_generation, synchronous);
+}
+
+void HTMLLinkElement::apply_stylesheet_rules(CSS::RustRuleList rules, URL::URL location, URL::URL base_url, CSS::StyleScope::OriginClean origin_clean, ReferrerPolicy::ReferrerPolicy referrer_policy, u64 fetch_generation, bool synchronous)
+{
+    // NB: The sheet records its referrer policy as it is created, before its imports start to load.
+    auto sheet = CSS::StyleSheetState::create(move(rules), &document(), {}, location, referrer_policy);
+    if (base_url != location)
+        sheet->set_base_url(move(base_url));
+    associate_style_sheet(*sheet, origin_clean);
+
+    // NB: The sheet has to be associated before its critical subresources (@import rules)
+    //     get fetched. Wait for them before firing load and unblocking scripts.
+    if (sheet->loading_state() == CSS::StyleSheetState::LoadingState::Loading) {
+        m_fetch_generation_waiting_for_critical_subresources = fetch_generation;
+        return;
+    }
+
+    // 2. Fire an event named load at el.
+    // INTEROP: Other browsers fire error instead when an import failed.
+    auto event_name = sheet->loading_state() == CSS::StyleSheetState::LoadingState::Error ? HTML::EventNames::error : HTML::EventNames::load;
+    complete_stylesheet_load(event_name, fetch_generation, synchronous);
+}
+
+void HTMLLinkElement::complete_stylesheet_load(Utf16FlyString const& event_name, u64 fetch_generation, bool synchronous)
+{
+    if (synchronous) {
+        m_stylesheet_processing_pending = true;
+        queue_an_element_task(Task::Source::Networking, GC::create_function(GC::Heap::the(), GC::captures(*this, fetch_generation, event_name), [](auto& self, auto& fetch_generation, auto& event_name) {
+            if (fetch_generation == self.m_current_fetch_generation && self.m_stylesheet_processing_pending)
+                self.complete_stylesheet_load(event_name, fetch_generation, false);
+        }));
+        return;
+    }
+
+    dispatch_event(create_event_for_element(*this, event_name));
     finish_processing_stylesheet_resource(fetch_generation);
 }
 
