@@ -26,7 +26,7 @@ Optional<DecoderCapabilities> FFmpegVideoDecoder::capabilities(FFmpegFunctions c
     return DecoderCapabilities { .smooth = true, .power_efficient = false };
 }
 
-DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> FFmpegVideoDecoder::try_create(FFmpegFunctions const& functions, CodecID codec_id, ReadonlyBytes codec_initialization_data)
+DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> FFmpegVideoDecoder::try_create(FFmpegFunctions const& functions, CodecID codec_id, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const& options)
 {
     AVCodecContext* codec_context = nullptr;
     AVPacket* packet = nullptr;
@@ -49,6 +49,15 @@ DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> FFmpegVideoDecoder::try_create
 
     TRY(set_codec_initialization_data(functions, *codec_context, codec_id, codec_initialization_data));
     VERIFY(functions.av_opt_set_int(codec_context, "threads", min(Core::System::hardware_concurrency(), 4u), 0) == 0);
+    // Frame threading holds back one frame per extra thread, so only split each frame across threads when latency matters.
+    // Decoders that thread internally, such as libdav1d, ignore the thread type and hold frames back unless low delay is set.
+    // NB: These are set as options, as the layout of AVCodecContext differs between the libavcodec versions that may be loaded.
+    if (options.optimize_for_latency) {
+        VERIFY(functions.av_opt_set_int(codec_context, "thread_type", FF_THREAD_SLICE, 0) == 0);
+        int64_t flags = 0;
+        VERIFY(functions.av_opt_get_int(codec_context, "flags", 0, &flags) == 0);
+        VERIFY(functions.av_opt_set_int(codec_context, "flags", flags | AV_CODEC_FLAG_LOW_DELAY, 0) == 0);
+    }
     codec_context->max_pixels = MAX_VIDEO_FRAME_AREA;
 
     if (functions.avcodec_open2(codec_context, codec, nullptr) < 0)
@@ -75,9 +84,9 @@ Optional<DecoderCapabilities> FFmpegVideoDecoder::capabilities(ParsedCodec const
     return capabilities(FFmpegFunctions::bundled(), codec);
 }
 
-DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> FFmpegVideoDecoder::try_create(CodecID codec_id, ReadonlyBytes codec_initialization_data)
+DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> FFmpegVideoDecoder::try_create(CodecID codec_id, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const& options)
 {
-    return try_create(FFmpegFunctions::bundled(), codec_id, codec_initialization_data);
+    return try_create(FFmpegFunctions::bundled(), codec_id, codec_initialization_data, options);
 }
 
 FFmpegVideoDecoder::FFmpegVideoDecoder(FFmpegFunctions const& functions, CodecID codec_id, ReadonlyBytes codec_initialization_data, AVCodecContext* codec_context, AVPacket* packet, AVFrame* frame, NonnullRefPtr<VideoFramePool> frame_pool)

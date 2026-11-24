@@ -231,7 +231,7 @@ private:
         return Media::DecoderCapabilities { .smooth = true, .power_efficient = false };
     }
 
-    static Media::DecoderErrorOr<NonnullOwnPtr<Media::VideoDecoder>> create(Media::CodecID, ReadonlyBytes)
+    static Media::DecoderErrorOr<NonnullOwnPtr<Media::VideoDecoder>> create(Media::CodecID, ReadonlyBytes, Media::VideoDecoderOptions const&)
     {
         RefPtr<WithheldOutputs> withheld_outputs;
         {

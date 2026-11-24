@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    // Single 16x16 solid red key frames.
+    const keyFrames = [
+        { codec: "vp09.00.10.08", data: "gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA" },
+        { codec: "av01.0.04M.08", data: "EgAKCgAAAAGf+bXyAIAyFBAAwAAAAoAAAACpjmy2qrHGtoVA" },
+    ];
+
+    function decodeOneFrame({ codec, data }) {
+        return new Promise(resolve => {
+            const decoder = new VideoDecoder({
+                output: frame => {
+                    println(`${codec}: output without flushing: ${frame.codedWidth}x${frame.codedHeight} at ${frame.timestamp}`);
+                    frame.close();
+                    decoder.close();
+                    resolve();
+                },
+                error: e => {
+                    println(`${codec}: decoder error: ${e.name}`);
+                    resolve();
+                },
+            });
+            decoder.configure({ codec, optimizeForLatency: true });
+            const bytes = Uint8Array.from(atob(data), c => c.charCodeAt(0));
+            decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 1234, data: bytes }));
+        });
+    }
+
+    asyncTest(async done => {
+        for (const keyFrame of keyFrames)
+            await decodeOneFrame(keyFrame);
+        done();
+    });
+</script>

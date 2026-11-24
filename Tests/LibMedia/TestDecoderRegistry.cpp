@@ -141,8 +141,8 @@ TEST_CASE(aac_selects_the_audiotoolbox_decoder_first)
 
 TEST_CASE(decoders_whose_frames_do_not_read_back_can_be_skipped)
 {
-    static constexpr auto create = [](Media::CodecID codec_id, ReadonlyBytes codec_initialization_data) -> Media::DecoderErrorOr<NonnullOwnPtr<Media::VideoDecoder>> {
-        return NonnullOwnPtr<Media::VideoDecoder> { TRY(Media::FFmpeg::FFmpegVideoDecoder::try_create(codec_id, codec_initialization_data)) };
+    static constexpr auto create = [](Media::CodecID codec_id, ReadonlyBytes codec_initialization_data, Media::VideoDecoderOptions const& options) -> Media::DecoderErrorOr<NonnullOwnPtr<Media::VideoDecoder>> {
+        return NonnullOwnPtr<Media::VideoDecoder> { TRY(Media::FFmpeg::FFmpegVideoDecoder::try_create(codec_id, codec_initialization_data, options)) };
     };
     static constexpr Array registrations {
         Media::VideoDecoderRegistration { Media::FFmpeg::FFmpegVideoDecoder::capabilities, create, false, false },

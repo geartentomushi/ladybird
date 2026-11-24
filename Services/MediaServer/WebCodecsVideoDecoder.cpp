@@ -15,9 +15,9 @@
 
 namespace MediaServer {
 
-NonnullRefPtr<WebCodecsVideoDecoder> WebCodecsVideoDecoder::create(Media::ParsedCodec codec, ByteBuffer description, Callbacks callbacks)
+NonnullRefPtr<WebCodecsVideoDecoder> WebCodecsVideoDecoder::create(Media::ParsedCodec codec, ByteBuffer description, Media::VideoDecoderOptions options, Callbacks callbacks)
 {
-    auto decoder = adopt_ref(*new WebCodecsVideoDecoder(Core::EventLoop::current(), codec, move(description), move(callbacks)));
+    auto decoder = adopt_ref(*new WebCodecsVideoDecoder(Core::EventLoop::current(), codec, move(description), options, move(callbacks)));
     // NB: The detached thread keeps itself, and so this decoder, alive until it exits.
     auto thread = Threading::Thread::construct("WebCodecsDecode"sv, [decoder] { return decoder->run(); });
     thread->start();
@@ -25,10 +25,11 @@ NonnullRefPtr<WebCodecsVideoDecoder> WebCodecsVideoDecoder::create(Media::Parsed
     return decoder;
 }
 
-WebCodecsVideoDecoder::WebCodecsVideoDecoder(Core::EventLoop& main_thread_event_loop, Media::ParsedCodec codec, ByteBuffer description, Callbacks callbacks)
+WebCodecsVideoDecoder::WebCodecsVideoDecoder(Core::EventLoop& main_thread_event_loop, Media::ParsedCodec codec, ByteBuffer description, Media::VideoDecoderOptions options, Callbacks callbacks)
     : m_main_thread_event_loop(main_thread_event_loop)
     , m_codec(codec)
     , m_description(move(description))
+    , m_options(options)
     , m_callbacks(move(callbacks))
 {
 }
@@ -119,7 +120,7 @@ Media::DecoderErrorOr<void> WebCodecsVideoDecoder::create_decoder()
     auto selection = Media::select_video_decoder(m_codec, {}, false, true);
     if (!selection.has_value())
         return Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "Could not find a decoder for the codec"sv);
-    m_decoder = TRY(Media::create_video_decoder(selection, m_codec.codec_id(), m_description.bytes()));
+    m_decoder = TRY(Media::create_video_decoder(selection, m_codec.codec_id(), m_description.bytes(), m_options));
     m_decoder->set_storage_freed_callback([self = NonnullRefPtr(*this)] {
         MutexLocker locker { self->m_mutex };
         self->m_storage_freed = true;

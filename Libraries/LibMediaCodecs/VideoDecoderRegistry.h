@@ -16,10 +16,11 @@
 #include <LibMediaCodecs/DecoderSelection.h>
 #include <LibMediaCodecs/Export.h>
 #include <LibMediaCodecs/VideoDecoder.h>
+#include <LibMediaCodecs/VideoDecoderOptions.h>
 
 namespace Media {
 
-using VideoDecoderFactory = DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> (*)(CodecID, ReadonlyBytes);
+using VideoDecoderFactory = DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> (*)(CodecID, ReadonlyBytes, VideoDecoderOptions const&);
 
 struct VideoDecoderRegistration {
     DecoderCapabilitiesFunction capabilities;
@@ -38,6 +39,6 @@ MEDIACODECS_API Optional<DecoderCapabilities> video_decoder_capabilities(ParsedC
 // Identifies the highest-priority decoder after the optionally-provided selection that can handle this codec.
 MEDIACODECS_API VideoDecoderSelection select_video_decoder(ParsedCodec const&, VideoDecoderSelection after = {}, bool requires_alpha = false, bool requires_frames_that_read_back = false);
 
-MEDIACODECS_API DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_video_decoder(VideoDecoderSelection, CodecID, ReadonlyBytes codec_initialization_data);
+MEDIACODECS_API DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_video_decoder(VideoDecoderSelection, CodecID, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const& = {});
 
 }

@@ -15,6 +15,7 @@
 
 #include <LibMediaCodecs/FFmpeg/FFmpegForward.h>
 #include <LibMediaCodecs/FFmpeg/VideoFramesAwaitingOutput.h>
+#include <LibMediaCodecs/VideoDecoderOptions.h>
 
 namespace Media::FFmpeg {
 
@@ -24,8 +25,8 @@ public:
 
     static Optional<DecoderCapabilities> capabilities(FFmpegFunctions const&, ParsedCodec const&);
     static Optional<DecoderCapabilities> capabilities(ParsedCodec const&);
-    static DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> try_create(FFmpegFunctions const&, CodecID, ReadonlyBytes codec_initialization_data);
-    static DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> try_create(CodecID, ReadonlyBytes codec_initialization_data);
+    static DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> try_create(FFmpegFunctions const&, CodecID, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const& = {});
+    static DecoderErrorOr<NonnullOwnPtr<FFmpegVideoDecoder>> try_create(CodecID, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const& = {});
     FFmpegVideoDecoder(FFmpegFunctions const&, CodecID, ReadonlyBytes codec_initialization_data, AVCodecContext* codec_context, AVPacket* packet, AVFrame* frame, NonnullRefPtr<VideoFramePool> frame_pool);
     virtual ~FFmpegVideoDecoder() override;
 
