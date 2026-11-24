@@ -61,7 +61,7 @@ impl ProvisionalTransitions {
         self.by_target.contains_key(&target)
     }
 
-    pub(crate) fn has_cancelled_transition(&self, target: TransitionTarget, animation: &AnimationCell) -> bool {
+    pub(crate) fn has_canceled_transition(&self, target: TransitionTarget, animation: &AnimationCell) -> bool {
         self.by_target.get(&target).is_some_and(|indices| {
             indices.iter().any(|&index| {
                 let state = &self.states[index];

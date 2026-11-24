@@ -2149,14 +2149,14 @@ pub extern "C" fn animations_document_animations_has_provisional_transitions(
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn animations_document_animations_transition_is_provisionally_cancelled(
+pub extern "C" fn animations_document_animations_transition_is_provisionally_canceled(
     document: &DocumentAnimations,
     owner: FfiOwningElement,
     animation: &AnimationCell,
 ) -> bool {
     document
         .provisional_transitions
-        .has_cancelled_transition(transition_target(owner), animation)
+        .has_canceled_transition(transition_target(owner), animation)
 }
 
 /// The effect of the transition at `index` among those the outermost style stabilization epoch of `document` started
