@@ -725,6 +725,7 @@ set(SOURCES
     ServiceWorker/Cache.cpp
     ServiceWorker/CacheStorage.cpp
     ServiceWorker/EventNames.cpp
+    ServiceWorker/ExtendableEvent.cpp
     ServiceWorker/Job.cpp
     ServiceWorker/NameToCacheMap.cpp
     ServiceWorker/Registration.cpp

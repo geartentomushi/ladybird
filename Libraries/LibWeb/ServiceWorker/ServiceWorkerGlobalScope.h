@@ -6,12 +6,13 @@
 
 #pragma once
 
+#include <LibWeb/HTML/DedicatedWorkerThreadLink.h>
 #include <LibWeb/HTML/WorkerGlobalScope.h>
 
 namespace Web::ServiceWorker {
 
 // https://w3c.github.io/ServiceWorker/#serviceworkerglobalscope
-class ServiceWorkerGlobalScope : public HTML::WorkerGlobalScope {
+class WEB_API ServiceWorkerGlobalScope : public HTML::WorkerGlobalScope {
     WEB_WRAPPABLE(ServiceWorkerGlobalScope, HTML::WorkerGlobalScope);
     GC_DECLARE_ALLOCATOR(ServiceWorkerGlobalScope);
 
@@ -35,10 +36,16 @@ public:
 
     [[nodiscard]] GC::Ref<CookieStore::CookieStore> cookie_store();
 
+    GC::Ref<WebIDL::Promise> skip_waiting();
+
+    // Runs a step of the service worker's lifecycle that its registration asked for from another agent.
+    void run_lifecycle_step(HTML::ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
+
 protected:
     explicit ServiceWorkerGlobalScope(GC::Ref<Web::Page>);
 
 private:
+    virtual void initialize_web_interfaces_impl() override;
     virtual void visit_edges(Cell::Visitor&) override;
 
     GC::Ptr<CookieStore::CookieStore> m_cookie_store;

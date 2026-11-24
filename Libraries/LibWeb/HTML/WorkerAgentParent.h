@@ -33,9 +33,13 @@ public:
     static WEB_API void did_report_content_security_policy_violation(WorkerAgentOwnerToken, u64 policy_index, String effective_directive, URL::URL resource);
     static WEB_API void did_close_worker(WorkerAgentOwnerToken);
     static WEB_API void did_worker_agent_die(WorkerAgentOwnerToken);
+    static WEB_API void did_finish_service_worker_lifecycle_step(WorkerAgentOwnerToken, u64 request_id, bool succeeded);
     static WEB_API void did_write_rtc_transform_encoded_audio_frame(WorkerAgentOwnerToken, u64 transform_id, ByteBuffer payload, u32 ssrc, u8 payload_type, u32 rtp_timestamp, u16 sequence_number);
 
     void terminate();
+
+    // Fails the step if the service worker's script fails to load or run, or the worker goes away.
+    void run_service_worker_lifecycle_step(ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
 
 protected:
     virtual void visit_edges(Cell::Visitor&) override;
@@ -56,6 +60,7 @@ private:
 
     void start();
     void forget_agent();
+    void fail_pending_service_worker_lifecycle_steps();
     void give_up_on_parked_end();
     void dispatch_error_event();
     void dispatch_worker_exception(Utf16String message, Utf16String filename, u32 lineno, u32 colno);
@@ -78,6 +83,9 @@ private:
     GC::Ref<DOM::EventTarget> m_worker_event_target;
 
     HashMap<u64, TransformFrameWrittenCallback> m_transform_frame_callbacks;
+
+    HashMap<u64, GC::Ref<GC::Function<void(bool succeeded)>>> m_pending_service_worker_lifecycle_steps;
+    u64 m_next_service_worker_lifecycle_step_id { 1 };
 };
 
 }

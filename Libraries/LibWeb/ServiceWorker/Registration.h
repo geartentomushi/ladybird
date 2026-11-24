@@ -48,9 +48,12 @@ public:
     void set_last_update_check_time(MonotonicTime time) { m_last_update_check_time = time; }
 
     ServiceWorkerRecord* newest_worker() const;
-    ServiceWorkerRecord* installing_worker() const { return m_installing_worker; }
-    ServiceWorkerRecord* waiting_worker() const { return m_waiting_worker; }
-    ServiceWorkerRecord* active_worker() const { return m_active_worker; }
+    ServiceWorkerRecord* installing_worker() const { return m_installing_worker.ptr(); }
+    void set_installing_worker(RefPtr<ServiceWorkerRecord> worker) { m_installing_worker = move(worker); }
+    ServiceWorkerRecord* waiting_worker() const { return m_waiting_worker.ptr(); }
+    void set_waiting_worker(RefPtr<ServiceWorkerRecord> worker) { m_waiting_worker = move(worker); }
+    ServiceWorkerRecord* active_worker() const { return m_active_worker.ptr(); }
+    void set_active_worker(RefPtr<ServiceWorkerRecord> worker) { m_active_worker = move(worker); }
 
     bool is_stale() const;
 
@@ -61,9 +64,9 @@ private:
     URL::URL m_scope_url;                 // https://w3c.github.io/ServiceWorker/#dfn-scope-url
 
     // NOTE: These are "service workers", not "ServiceWorker"s - (i.e, not what is exposed over JS)
-    ServiceWorkerRecord* m_installing_worker { nullptr }; // https://w3c.github.io/ServiceWorker/#dfn-installing-worker
-    ServiceWorkerRecord* m_waiting_worker { nullptr };    // https://w3c.github.io/ServiceWorker/#dfn-waiting-worker
-    ServiceWorkerRecord* m_active_worker { nullptr };     // https://w3c.github.io/ServiceWorker/#dfn-active-worker
+    RefPtr<ServiceWorkerRecord> m_installing_worker; // https://w3c.github.io/ServiceWorker/#dfn-installing-worker
+    RefPtr<ServiceWorkerRecord> m_waiting_worker;    // https://w3c.github.io/ServiceWorker/#dfn-waiting-worker
+    RefPtr<ServiceWorkerRecord> m_active_worker;     // https://w3c.github.io/ServiceWorker/#dfn-active-worker
 
     Optional<MonotonicTime> m_last_update_check_time;                                           // https://w3c.github.io/ServiceWorker/#dfn-last-update-check-time
     ServiceWorkerUpdateViaCache m_update_via_cache_mode = ServiceWorkerUpdateViaCache::Imports; // https://w3c.github.io/ServiceWorker/#dfn-update-via-cache

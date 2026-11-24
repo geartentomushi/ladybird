@@ -845,4 +845,20 @@ GC::Ref<ServiceWorker::ServiceWorker> EnvironmentSettingsObject::get_service_wor
     return *object_map.get(service_worker);
 }
 
+GC::Ptr<ServiceWorker::ServiceWorkerRegistration> EnvironmentSettingsObject::existing_service_worker_registration_object(ServiceWorker::Registration const& registration) const
+{
+    auto registration_object = m_service_worker_registration_object_map.get(&registration);
+    if (!registration_object.has_value())
+        return nullptr;
+    return registration_object.value();
+}
+
+GC::Ptr<ServiceWorker::ServiceWorker> EnvironmentSettingsObject::existing_service_worker_object(ServiceWorker::ServiceWorkerRecord& service_worker) const
+{
+    auto service_worker_object = m_service_worker_object_map.get(&service_worker);
+    if (!service_worker_object.has_value())
+        return nullptr;
+    return service_worker_object.value();
+}
+
 }

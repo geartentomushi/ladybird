@@ -101,9 +101,10 @@ ALLOWED_REALM_MENTIONS = {
     ),
     "SVG": (2, 8, "SVG length objects still store/use realms for detached/reflected JS/CSS materialization"),
     "ServiceWorker": (
-        6,
-        41,
-        "service worker jobs, caches, and container promises still materialize results in selected realms",
+        8,
+        45,
+        "service worker jobs, caches, and container promises still materialize results in selected realms, and "
+        "ExtendableEvent waits for waitUntil() promises in the service worker's realm",
     ),
     "StorageAPI": (2, 3, "the C++ glue of the Rust StorageManager creates one in a realm"),
     "Streams": (7, 17, "the C++ facade of the Rust streams creates streams and promises in caller-selected realms"),

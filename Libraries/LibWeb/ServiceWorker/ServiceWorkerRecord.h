@@ -6,6 +6,8 @@
 
 #pragma once
 
+#include <AK/RefCounted.h>
+#include <LibGC/Root.h>
 #include <LibURL/URL.h>
 #include <LibWeb/Bindings/ServiceWorker.h>
 #include <LibWeb/Bindings/Worker.h>
@@ -17,7 +19,10 @@ namespace Web::ServiceWorker {
 // This class corresponds to "service worker", not "ServiceWorker"
 // FIXME: This should be owned and managed at the user agent level
 // FIXME: A lot of the fields for this struct actually need to live in the Agent for the service worker
-struct ServiceWorkerRecord {
+struct ServiceWorkerRecord : public RefCounted<ServiceWorkerRecord> {
+    ServiceWorkerRecord();
+    ~ServiceWorkerRecord();
+
     // https://w3c.github.io/ServiceWorker/#dfn-state
     // A service worker has an associated state, which is one of "parsed", "installing", "installed", "activating", "activated", and "redundant". It is initially "parsed".
     ServiceWorkerState state = ServiceWorkerState::Parsed;
@@ -33,6 +38,10 @@ struct ServiceWorkerRecord {
     // https://w3c.github.io/ServiceWorker/#dfn-classic-scripts-imported-flag
     // A service worker has an associated classic scripts imported flag. It is initially unset.
     bool classic_scripts_imported { false };
+
+    // The agent the service worker runs in, while it is running.
+    // FIXME: This should be owned by the user agent, not by the client that registered the service worker.
+    GC::Root<HTML::WorkerAgentParent> agent;
 
     // FIXME: A lot more fields after this...
 };

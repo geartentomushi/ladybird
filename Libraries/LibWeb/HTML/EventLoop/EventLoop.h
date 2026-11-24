@@ -15,6 +15,7 @@
 #include <AK/Time.h>
 #include <LibCore/Forward.h>
 #include <LibGC/Ptr.h>
+#include <LibGC/RootVector.h>
 #include <LibGC/Weak.h>
 #include <LibJS/Forward.h>
 #include <LibWeb/Export.h>
@@ -182,6 +183,16 @@ public:
     void unregister_environment_settings_object(Badge<EnvironmentSettingsObject>, EnvironmentSettingsObject&);
     GC::Ptr<EnvironmentSettingsObject> environment_settings_object_at(EnvironmentSettingsObjectAddress) const;
     GC::Ptr<EnvironmentSettingsObject> environment_settings_object_with_id(EnvironmentId const&) const;
+
+    template<typename Callback>
+    void for_each_related_environment_settings_object(Callback callback) const
+    {
+        GC::RootVector<GC::Ref<EnvironmentSettingsObject>> environments;
+        for (auto const& entry : m_related_environment_settings_objects)
+            environments.append(*entry.value);
+        for (auto& environment : environments)
+            callback(*environment);
+    }
 
     double compute_deadline() const;
 
