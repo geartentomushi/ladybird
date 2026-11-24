@@ -23,6 +23,7 @@
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
 #include <LibWeb/HTML/EventNames.h>
 #include <LibWeb/HTML/MessagePort.h>
+#include <LibWeb/HTML/Navigator.h>
 #include <LibWeb/HTML/Scripting/ClassicScript.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/Scripting/Fetching.h>
@@ -30,12 +31,14 @@
 #include <LibWeb/HTML/Scripting/ModuleScript.h>
 #include <LibWeb/HTML/Scripting/Script.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
+#include <LibWeb/HTML/Window.h>
 #include <LibWeb/HTML/WorkerAgentParent.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/ServiceWorker/EventNames.h>
 #include <LibWeb/ServiceWorker/Job.h>
 #include <LibWeb/ServiceWorker/Registration.h>
 #include <LibWeb/ServiceWorker/ServiceWorker.h>
+#include <LibWeb/ServiceWorker/ServiceWorkerContainer.h>
 #include <LibWeb/ServiceWorker/ServiceWorkerRegistration.h>
 #include <LibWeb/WebIDL/Promise.h>
 #include <LibWebCommon/SecureContexts/AbstractOperations.h>
@@ -384,6 +387,11 @@ static void run_service_worker(HTML::EnvironmentSettingsObject& client, Registra
     options.type = worker.worker_type;
     auto worker_object = client.get_service_worker_object(&worker);
     auto outside_port = HTML::MessagePort::create(client.realm());
+    // NB: The service worker replies to the messages it receives through its port, so those replies arrive as message
+    //     events at the ServiceWorkerContainer of the client that runs it.
+    // FIXME: Implement the client message queue, and deliver messages to every client through its own Client object.
+    if (auto* window = HTML::window_from_global_object(client.global_object()))
+        outside_port->set_message_event_target(window->navigator()->service_worker());
     HTML::ServiceWorkerRegistrationSnapshot registration_snapshot {
         .scope_url = registration.scope_url(),
         .update_via_cache = registration.update_via_cache(),

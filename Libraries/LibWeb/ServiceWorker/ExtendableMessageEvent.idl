@@ -1,0 +1,11 @@
+// https://w3c.github.io/ServiceWorker/#extendablemessageevent-interface
+[Exposed=ServiceWorker]
+interface ExtendableMessageEvent : ExtendableEvent {
+    // FIXME: constructor(DOMString type, optional ExtendableMessageEventInit eventInitDict = {});
+    readonly attribute any data;
+    readonly attribute USVString origin;
+    readonly attribute DOMString lastEventId;
+    // FIXME: The source is (Client or ServiceWorker or MessagePort)?, once Client is implemented.
+    [SameObject] readonly attribute any source;
+    [ReturnsJSValue] readonly attribute FrozenArray<MessagePort> ports;
+};

@@ -32,7 +32,7 @@ use crate::bindings::interface::{
 use crate::bindings::promise::{TaskSource, queue_a_global_task};
 use crate::bindings::structured_data::{TransferDataReader, TransferDataWriter, Transferable};
 use crate::bindings::{CallContext, Exception, WebIdlResult};
-use crate::html::message_event::{MessageEvent, MessageEventInit};
+use crate::html::message_event::{MessageEvent, MessageEventInit, MessageEventSource};
 use crate::html::port_channel::{PeerState, PortChannelEnd};
 use crate::html::structured_serialize::transfer_data_holder::{
     RawAttachment, ReceivePayload, TransferPayload, append_attachments,
@@ -57,6 +57,9 @@ pub(crate) struct MessagePort {
 
     // The port this port is entangled with, if that port is in this agent. A port entangled over a transport has none.
     remote_port: Cell<Option<Ref<MessagePort>>>,
+
+    // The source of the message events fired at the message event target, if any.
+    message_event_source: Cell<Option<Ref<MessagePort>>>,
 
     // https://html.spec.whatwg.org/multipage/web-messaging.html#has-been-shipped
     has_been_shipped: Cell<bool>,
@@ -174,6 +177,7 @@ impl MessagePort {
             event_target,
             realm,
             remote_port: Cell::new(None),
+            message_event_source: Cell::new(None),
             has_been_shipped: Cell::new(false),
             has_ever_been_entangled: Cell::new(false),
             fail_next_transfer_for_testing: Cell::new(false),
@@ -234,6 +238,10 @@ impl MessagePort {
     // https://html.spec.whatwg.org/multipage/web-messaging.html#message-event-target
     pub(crate) fn set_message_event_target(&self, target: CppEventTarget) {
         self.message_event_target.replace(target);
+    }
+
+    pub(crate) fn set_message_event_source(&self, source: Option<Ref<MessagePort>>) {
+        self.message_event_source.set(source);
     }
 
     /// Disentangles every port whose relevant realm is the realm, for a document that is destroyed.
@@ -546,6 +554,9 @@ impl MessagePort {
         let mut event_init = MessageEventInit::new(vm);
         event_init.data = message_clone;
         event_init.ports = new_ports;
+        if let Some(source) = final_target_port.message_event_source.get() {
+            event_init.source = Some(MessageEventSource::MessagePort(source));
+        }
         let event = MessageEvent::create(vm, target_realm, &Utf16String::from_utf8("message"), event_init, None);
         event.event().set_is_trusted(true);
         message_event_target.dispatch_event(event.event());

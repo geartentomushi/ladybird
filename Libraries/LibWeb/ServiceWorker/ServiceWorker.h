@@ -6,14 +6,22 @@
 
 #pragma once
 
-#include <LibWeb/Bindings/ServiceWorker.h>
 #include <AK/RefPtr.h>
+#include <LibGC/RootVector.h>
+#include <LibWeb/Bindings/ServiceWorker.h>
 #include <LibWeb/DOM/EventTarget.h>
 #include <LibWeb/ServiceWorker/ServiceWorkerRecord.h>
+#include <LibWeb/WebIDL/ExceptionOr.h>
 
 #define ENUMERATE_SERVICE_WORKER_EVENT_HANDLERS(E)  \
     E(onstatechange, HTML::EventNames::statechange) \
     E(onerror, HTML::EventNames::error)
+
+namespace Web::Bindings {
+
+struct StructuredSerializeOptions;
+
+}
 
 namespace Web::ServiceWorker {
 
@@ -30,6 +38,9 @@ public:
     Utf16String script_url() const;
     ServiceWorkerState service_worker_state() const { return m_state; }
     void set_service_worker_state(ServiceWorkerState state) { m_state = state; }
+
+    WebIDL::ExceptionOr<void> post_message(JS::Realm&, JS::Value message, GC::RootVector<GC::Ref<JS::Object>> const& transfer);
+    WebIDL::ExceptionOr<void> post_message(JS::Realm&, JS::Value message, Bindings::StructuredSerializeOptions const&);
 
 #undef __ENUMERATE
 #define __ENUMERATE(attribute_name, event_name)       \

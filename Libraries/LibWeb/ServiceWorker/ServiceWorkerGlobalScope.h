@@ -46,6 +46,10 @@ public:
 
     void set_up_service_worker(HTML::ServiceWorkerRegistrationSnapshot const&);
 
+    // The message event target of the service worker's inside port. It fires the messages that arrive there at this
+    // global as ExtendableMessageEvents.
+    GC::Ref<DOM::EventTarget> message_event_relay();
+
     // https://w3c.github.io/ServiceWorker/#dfn-active-worker
     bool is_active_worker() const;
 
@@ -62,6 +66,7 @@ private:
     void did_finish_install(bool succeeded);
 
     GC::Ptr<CookieStore::CookieStore> m_cookie_store;
+    GC::Ptr<DOM::EventTarget> m_message_event_relay;
     GC::Ptr<Clients> m_clients;
 
     // NB: The service worker registration and the service worker live in the agent of the client that registered the

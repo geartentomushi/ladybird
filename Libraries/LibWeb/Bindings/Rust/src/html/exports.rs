@@ -283,6 +283,20 @@ pub unsafe extern "C" fn web_rust_message_port_set_message_event_target(port: *m
     port.set_message_event_target(event_target);
 }
 
+/// # Safety
+/// `port` must be the live cell of a MessagePort, and `source` null or the live cell of a MessagePort.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn web_rust_message_port_set_message_event_source(port: *mut c_void, source: *mut c_void) {
+    // SAFETY: The caller passes a live cell of a MessagePort, and a source that is null or a live MessagePort.
+    let (port, source) = unsafe {
+        (
+            cell_from_abi::<MessagePort>(port),
+            (!source.is_null()).then(|| cell_from_abi::<MessagePort>(source)),
+        )
+    };
+    port.set_message_event_source(source);
+}
+
 /// postMessage(message, transfer) on the port, https://html.spec.whatwg.org/multipage/web-messaging.html#dom-messageport-postmessage
 ///
 /// # Safety
