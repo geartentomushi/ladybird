@@ -713,15 +713,17 @@ def build_library_paths(driver):
     # LibWebView's helper-process environment does not forward dynamic-loader overrides.
     helper_environment = {name: value for name, value in environment.items() if not name.startswith("LD_")}
     libexec = driver.parent.parent / "libexec"
-    for name in ("Ladybird", "WebContent"):
+    for name in ("Ladybird", "WebContent", "Hub", "ImageDecoder"):
         for directory in (libexec, driver.parent):
             executable = directory / name
             if executable.is_file() and os.access(executable, os.X_OK):
                 break
         else:
+            if name in ("Hub", "ImageDecoder"):
+                continue
             raise ValueError(f"Cannot find {name} alongside {driver} or in {libexec}")
         libraries = linked_ladybird_libraries(
-            executable.resolve(), helper_environment if name == "WebContent" else environment
+            executable.resolve(), helper_environment if name in ("WebContent", "ImageDecoder") else environment
         )
         yield from libraries.items()
     yield from linked_ladybird_libraries(driver, environment).items()

@@ -600,7 +600,10 @@ class SiteSmokeTests(unittest.TestCase):
             soname = "liblagom-web.so.0"
             for name in ("before", "after"):
                 build = root / name
-                for directory, executables in (("bin", ("WebDriver", "Ladybird")), ("libexec", ("WebContent",))):
+                for directory, executables in (
+                    ("bin", ("WebDriver", "Ladybird")),
+                    ("libexec", ("WebContent", "Hub", "ImageDecoder")),
+                ):
                     (build / directory).mkdir(parents=True)
                     for executable in executables:
                         (build / directory / executable).touch(mode=0o755)
@@ -612,13 +615,13 @@ class SiteSmokeTests(unittest.TestCase):
                 tool, executable = command
                 self.assertEqual(tool, "ldd")
                 build = executable.parents[1].name
-                if executable.name == "WebContent":
+                if executable.name in ("WebContent", "ImageDecoder"):
                     self.assertNotIn("LD_LIBRARY_PATH", env)
                     self.assertNotIn("LD_PRELOAD", env)
-                    if build == "before":
-                        build = helper_build
                 else:
                     self.assertEqual(env["LD_LIBRARY_PATH"], "/example")
+                if build == "before" and executable.name == contaminated_process:
+                    build = "after"
                 line = f"\t{soname} => {libraries[build]} (0x1234)\n"
                 return subprocess.CompletedProcess(command, 0, stdout=line, stderr="")
 
@@ -626,10 +629,13 @@ class SiteSmokeTests(unittest.TestCase):
                 patch.dict(os.environ, {"LD_LIBRARY_PATH": "/example", "LD_PRELOAD": "/example/library.so"}),
                 patch.object(smoke.subprocess, "run", side_effect=resolve),
             ):
-                helper_build = "after"
-                with self.assertRaisesRegex(ValueError, "Contaminated SiteSmoke baseline:.*absolute RUNPATH"):
-                    smoke.validate_build_pair(drivers["before"], drivers["after"])
-                helper_build = "before"
+                for contaminated_process in ("WebContent", "Hub", "ImageDecoder"):
+                    with (
+                        self.subTest(process=contaminated_process),
+                        self.assertRaisesRegex(ValueError, "Contaminated SiteSmoke baseline:.*absolute RUNPATH"),
+                    ):
+                        smoke.validate_build_pair(drivers["before"], drivers["after"])
+                contaminated_process = None
                 smoke.validate_build_pair(drivers["before"], drivers["after"])
                 libraries["before"].unlink()
                 os.link(libraries["after"], libraries["before"])
