@@ -111,7 +111,7 @@ static bool is_valid_video_decoder_config(VideoDecoderConfig const& config)
     if (config.codec.trim_ascii_whitespace().is_empty())
         return false;
 
-    // 2. If one of codedWidth or codedHeight is provided and the other isn't, return false.
+    // 2. If one of codedWidth or codedHeight is provided and the other is not, return false.
     if (config.coded_width.has_value() != config.coded_height.has_value())
         return false;
 
@@ -119,7 +119,7 @@ static bool is_valid_video_decoder_config(VideoDecoderConfig const& config)
     if (config.coded_width == 0u || config.coded_height == 0u)
         return false;
 
-    // 4. If one of displayAspectWidth or displayAspectHeight is provided and the other isn't, return false.
+    // 4. If one of displayAspectWidth or displayAspectHeight is provided and the other is not, return false.
     if (config.display_aspect_width.has_value() != config.display_aspect_height.has_value())
         return false;
 
