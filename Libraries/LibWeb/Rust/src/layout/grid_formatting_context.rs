@@ -5770,20 +5770,34 @@ impl<'pass> GridFormattingContext<'pass> {
                 self.intrinsic_contribution_constraints(item, Axis::Row),
             )
         };
-        let distance_from_margin_box_top = if content_baselines.first.is_some() {
-            formatting_context::box_baseline_with_content_baselines(
-                &self.run.pass,
-                item.box_,
-                &metrics,
-                formatting_context::BaselineSet::First,
-                content_baselines,
-            )
+        // NB: A replaced box has no content to measure, so its natural block size is its content size.
+        let content_block_size = if metrics.has_definite_block_size {
+            metrics.content_block_size
+        } else if self.item_facts(item).is_replaced_box() {
+            self.min_content_size(item, Axis::Row)
         } else {
-            let content_block_size = if metrics.has_definite_block_size {
-                metrics.content_block_size
+            measured_content_block_size
+        };
+        let distance_from_margin_box_top = if let Some(content_baseline) = content_baselines.first {
+            if self.item_facts(item).is_scroll_container() && !metrics.has_definite_block_size {
+                // https://drafts.csswg.org/css-align-3/#baseline-export
+                // NB: Its content box is not sized yet, so its baseline is clamped to the border box it is measured at.
+                let border_box_top = metrics.margin_top();
+                let border_box_bottom =
+                    metrics.margin_box_top(collapsed) + content_block_size + metrics.border_box_bottom(collapsed);
+                (metrics.margin_box_top(collapsed) + content_baseline)
+                    .max(border_box_top)
+                    .min(border_box_bottom)
             } else {
-                measured_content_block_size
-            };
+                formatting_context::box_baseline_with_content_baselines(
+                    &self.run.pass,
+                    item.box_,
+                    &metrics,
+                    formatting_context::BaselineSet::First,
+                    content_baselines,
+                )
+            }
+        } else {
             // https://drafts.csswg.org/css-align-3/#synthesize-baseline
             // NB: As in item_row_baseline(), the central baseline is synthesized halfway between the line-over and
             //     line-under edges of the border box, and the alphabetic one at its line-under edge.
