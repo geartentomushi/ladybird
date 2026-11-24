@@ -123,7 +123,8 @@ body element count drops, document widths or heights that differ by more than
 2×, and at least five more console errors than Chrome. These are leads for
 review, not regressions: server responses, ads, consent prompts and bot checks
 differ between browsers and runs, so inspect both screenshots before filing an
-engine bug. It always exits 0.
+engine bug. It exits 0 after listing the differences, and 2 when the runs use
+different viewports or targets.
 
 ## Gate a batch of fixes
 
