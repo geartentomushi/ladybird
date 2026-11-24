@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Array.h>
+#include <AK/ScopeGuard.h>
 #include <LibMedia/DecoderRegistrations.h>
 #include <LibMedia/FFmpeg/FFmpegAudioDecoder.h>
 #include <LibMediaCodecs/FFmpeg/FFmpegVideoDecoder.h>
@@ -136,3 +138,27 @@ TEST_CASE(aac_selects_the_audiotoolbox_decoder_first)
     EXPECT(is<Media::AudioToolbox::AudioToolboxAudioDecoder>(*decoder));
 }
 #endif
+
+TEST_CASE(decoders_whose_frames_do_not_read_back_can_be_skipped)
+{
+    static constexpr auto create = [](Media::CodecID codec_id, ReadonlyBytes codec_initialization_data) -> Media::DecoderErrorOr<NonnullOwnPtr<Media::VideoDecoder>> {
+        return NonnullOwnPtr<Media::VideoDecoder> { TRY(Media::FFmpeg::FFmpegVideoDecoder::try_create(codec_id, codec_initialization_data)) };
+    };
+    static constexpr Array registrations {
+        Media::VideoDecoderRegistration { Media::FFmpeg::FFmpegVideoDecoder::capabilities, create, false, false },
+        Media::VideoDecoderRegistration { Media::FFmpeg::FFmpegVideoDecoder::capabilities, create },
+    };
+    Media::install_video_decoders({ registrations.span() });
+    ScopeGuard restore_decoders = [] {
+        Media::install_video_decoders({ Media::hardware_video_decoders(), Media::ffmpeg_video_decoders() });
+    };
+
+    auto codec = Media::ParsedCodec { Media::CodecID::VP9 };
+    EXPECT_EQ(Media::select_video_decoder(codec).registration_index(), 0);
+    EXPECT_EQ(Media::select_video_decoder(codec, {}, false, true).registration_index(), 1);
+
+    Media::install_video_decoders({ registrations.span().trim(1) });
+    EXPECT(Media::video_decoder_capabilities(codec).has_value());
+    EXPECT(!Media::video_decoder_capabilities(codec, true).has_value());
+    EXPECT(!Media::select_video_decoder(codec, {}, false, true).has_value());
+}

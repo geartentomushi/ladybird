@@ -52,7 +52,7 @@ private:
     virtual void connect_video_presentation_channel(int client_id, IPC::TransportHandle handle) override;
 
     virtual void request_file_media_support(u64 request_id, String type, String subtype, Optional<String> codecs_parameter) override;
-    virtual void request_decoder_capabilities(u64 request_id, String codecs_parameter) override;
+    virtual void request_decoder_capabilities(u64 request_id, String codecs_parameter, bool requires_frames_that_read_back) override;
     virtual void decode_audio_data(u64 request_id, Core::AnonymousBuffer data, u32 output_sample_rate) override;
 
     virtual void create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description) override;

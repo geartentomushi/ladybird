@@ -62,7 +62,7 @@ public:
     using FileMediaSupportPromise = Core::Promise<Media::MediaSupportInfo>;
     NonnullRefPtr<FileMediaSupportPromise> request_file_media_support(String const& type, String const& subtype, Optional<String const&> codecs_parameter);
     using DecoderCapabilitiesPromise = Core::Promise<Optional<Media::DecoderCapabilities>>;
-    NonnullRefPtr<DecoderCapabilitiesPromise> request_decoder_capabilities(StringView codecs_parameter);
+    NonnullRefPtr<DecoderCapabilitiesPromise> request_decoder_capabilities(StringView codecs_parameter, bool requires_frames_that_read_back = false);
 
     // Linear PCM decoded by the server, one channel after another in shared memory.
     struct DecodedAudioData {

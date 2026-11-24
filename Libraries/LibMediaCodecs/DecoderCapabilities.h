@@ -25,7 +25,7 @@ class ParsedCodec;
 using DecoderCapabilitiesFunction = Optional<DecoderCapabilities> (*)(ParsedCodec const&);
 
 // Asks the installed decoders for the codec's track type.
-MEDIACODECS_API Optional<DecoderCapabilities> decoder_capabilities(ParsedCodec const&);
+MEDIACODECS_API Optional<DecoderCapabilities> decoder_capabilities(ParsedCodec const&, bool requires_frames_that_read_back = false);
 
 }
 

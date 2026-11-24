@@ -115,7 +115,8 @@ intptr_t WebCodecsVideoDecoder::run()
 
 Media::DecoderErrorOr<void> WebCodecsVideoDecoder::create_decoder()
 {
-    auto selection = Media::select_video_decoder(m_codec);
+    // Each frame is read back into memory to be shared with the page.
+    auto selection = Media::select_video_decoder(m_codec, {}, false, true);
     if (!selection.has_value())
         return Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "Could not find a decoder for the codec"sv);
     m_decoder = TRY(Media::create_video_decoder(selection, m_codec.codec_id(), m_description.bytes()));

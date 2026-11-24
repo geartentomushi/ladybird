@@ -55,7 +55,7 @@ ReadonlySpan<VideoDecoderRegistration> hardware_video_decoders()
 #elif defined(USE_VULKAN_DMABUF_IMAGES)
     // Without a Vulkan device in the process, this answers no capabilities and creates nothing.
     static constexpr Array decoders {
-        VideoDecoderRegistration { FFmpeg::FFmpegVulkanVideoDecoder::capabilities, create_vulkan_video_decoder },
+        VideoDecoderRegistration { FFmpeg::FFmpegVulkanVideoDecoder::capabilities, create_vulkan_video_decoder, false, false },
     };
     return decoders;
 #else
