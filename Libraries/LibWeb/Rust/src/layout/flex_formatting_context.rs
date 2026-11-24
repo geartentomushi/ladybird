@@ -3254,18 +3254,23 @@ impl<'pass> FlexFormattingContext<'pass> {
                 None => metrics.margin_left(),
             };
         }
+        let central = self.dominant_baseline_is_central();
         if self.item_baseline_is_synthesized(index) {
             let collapsed = metrics.uses_collapsing_borders_model();
+            if central {
+                return metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2;
+            }
             return metrics.margin_box_top(collapsed)
                 + metrics.content_block_size()
                 + metrics.border_box_bottom(collapsed);
         }
-        formatting_context::box_baseline_with_content_baselines(
+        formatting_context::box_baseline_with_content_dominant_baselines(
             &self.run.pass,
             self.flex_items[index].box_,
             metrics,
             self.item_baseline_set(index),
             extras.content_baselines,
+            central,
         )
     }
 
@@ -4703,7 +4708,13 @@ impl<'pass> FlexFormattingContext<'pass> {
             baseline_set,
             source,
             purpose,
+            self.dominant_baseline_is_central(),
         )
+    }
+
+    /// Whether the container's items align by their central baselines rather than their alphabetic ones.
+    fn dominant_baseline_is_central(&self) -> bool {
+        formatting_context::dominant_baseline_is_central(self.style(self.run.box_))
     }
 
     fn baseline_source_for_item(&self, item: usize) -> formatting_context::ChildBaselineSource {

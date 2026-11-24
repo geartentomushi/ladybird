@@ -721,7 +721,7 @@ pub(crate) fn box_baseline_with_content_baselines(
 /// With `central`, the box aligns by its central baseline rather than its alphabetic one, which matters only where it
 /// synthesizes its baseline: content gives the baselines lines align by, which are central ones in a vertical
 /// typographic mode.
-fn box_baseline_with_content_dominant_baselines(
+pub(crate) fn box_baseline_with_content_dominant_baselines(
     pass: &LayoutPass<'_>,
     box_: Node,
     metrics: &impl BoxMetricCells,
@@ -774,6 +774,9 @@ fn box_baseline_with_content_dominant_baselines(
 
     // INTEROP: A range input's baseline is its bottom border edge in Chrome, whatever its internal layout.
     if facts.is_range_input_box() {
+        if central {
+            return metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2;
+        }
         return metrics.margin_box_top(collapsed) + metrics.content_block_size() + metrics.border_box_bottom(collapsed);
     }
 
@@ -782,6 +785,9 @@ fn box_baseline_with_content_dominant_baselines(
     //         text instead of above it. With "appearance: none" it's an ordinary box, and its baseline is synthesized
     //         as usual.
     if facts.is_non_devolvable_widget() {
+        if central {
+            return metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2;
+        }
         return metrics.margin_box_top(collapsed) + metrics.content_block_size() + metrics.border_box_bottom(collapsed);
     }
 
@@ -848,7 +854,12 @@ fn box_baseline_with_content_dominant_baselines(
     // https://drafts.csswg.org/css-inline-3/#baseline-synthesis-box
     // A box with no baseline set synthesizes its alphabetic baseline at its line-under margin edge, and its central
     // baseline halfway between its line-over and line-under margin edges.
+    // https://drafts.csswg.org/css-align-3/#synthesize-baseline
+    // NB: A flex or grid item synthesizes its baselines from its border box instead.
     if central {
+        if is_flex_or_grid_item {
+            return metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2;
+        }
         return metrics.margin_box_block_size(collapsed) / 2;
     }
     metrics.margin_box_block_size(collapsed)
@@ -1040,7 +1051,7 @@ pub(crate) fn baselines_laid_out_child_gives_container(
     child: LaidOutChild<'_, impl BoxMetricCells>,
 ) -> DerivedBaselines {
     let baseline = |baseline_set, purpose| {
-        baseline_of_laid_out_child_for_purpose(pass, child, baseline_set, ChildBaselineSource::Own, purpose)
+        baseline_of_laid_out_child_for_purpose(pass, child, baseline_set, ChildBaselineSource::Own, purpose, false)
     };
     DerivedBaselines {
         first: baseline(BaselineSet::First, BaselinePurpose::Container),
@@ -1081,6 +1092,7 @@ pub(crate) fn baseline_of_laid_out_child_for_purpose(
     baseline_set: BaselineSet,
     source: ChildBaselineSource,
     purpose: BaselinePurpose,
+    central: bool,
 ) -> Option<CssPixels> {
     let LaidOutChild {
         node,
@@ -1098,10 +1110,14 @@ pub(crate) fn baseline_of_laid_out_child_for_purpose(
             return None;
         }
         // https://drafts.csswg.org/css-align-3/#synthesize-baseline
-        // The alphabetic baseline is synthesized from the line-under edge of the border box.
-        return Some(
-            content_offset.y + child_metrics.content_block_size() + child_metrics.border_box_bottom(collapsed),
-        );
+        // The alphabetic baseline is synthesized from the line-under edge of the border box, and the central baseline
+        // halfway between its line-over and line-under edges.
+        let border_box_bottom =
+            content_offset.y + child_metrics.content_block_size() + child_metrics.border_box_bottom(collapsed);
+        if central {
+            return Some(border_box_bottom - child_metrics.border_box_block_size(collapsed) / 2);
+        }
+        return Some(border_box_bottom);
     }
     let child_offset_from_margin_edge = content_offset.y - child_metrics.margin_box_top(collapsed);
     Some(
