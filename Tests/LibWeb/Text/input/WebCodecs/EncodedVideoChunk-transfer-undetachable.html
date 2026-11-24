@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    test(() => {
+        const buffer = new Uint8Array([1, 2, 3, 4]).buffer;
+        const memory = new WebAssembly.Memory({ initial: 1 });
+        try {
+            new EncodedVideoChunk({ type: "key", timestamp: 0, data: buffer, transfer: [buffer, memory.buffer] });
+            println("FAIL: No exception was thrown");
+        } catch (e) {
+            println(`Exception: ${e.name}`);
+        }
+        println(`Transferable buffer byteLength: ${buffer.byteLength}`);
+        println(`Memory buffer byteLength: ${memory.buffer.byteLength}`);
+
+        const detached = new ArrayBuffer(4);
+        detached.transfer();
+        try {
+            new EncodedVideoChunk({ type: "key", timestamp: 0, data: buffer, transfer: [memory.buffer, detached] });
+            println("FAIL: No exception was thrown");
+        } catch (e) {
+            println(`Exception with a detached buffer after the memory buffer: ${e.name}`);
+        }
+    });
+</script>

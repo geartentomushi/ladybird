@@ -162,6 +162,7 @@ DragEvent
 DynamicsCompressorNode
 Element
 ElementInternals
+EncodedVideoChunk
 Error
 ErrorEvent
 EvalError

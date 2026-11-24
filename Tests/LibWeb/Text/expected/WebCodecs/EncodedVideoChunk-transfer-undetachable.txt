@@ -1,0 +1,4 @@
+Exception: TypeError
+Transferable buffer byteLength: 4
+Memory buffer byteLength: 65536
+Exception with a detached buffer after the memory buffer: DataCloneError
