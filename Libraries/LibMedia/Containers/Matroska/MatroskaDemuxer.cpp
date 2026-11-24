@@ -191,7 +191,7 @@ DecoderErrorOr<CodedFrame> MatroskaDemuxer::get_next_sample_for_track(Track cons
     auto track_entry = TRY(m_reader.track_for_track_number(track.identifier()));
     auto codec_id = codec_id_from_matroska_track_entry(track_entry);
     FixedArray<u8> alpha_data;
-    if (status.frames.size() == 1 && codec_id == CodecID::VP9 && track.video_data().has_alpha) {
+    if (status.frames.size() == 1 && track.type() == TrackType::Video && codec_id == CodecID::VP9 && track.video_data().has_alpha) {
         if (auto range = status.block->alpha_data(); range.has_value())
             alpha_data = TRY(status.iterator.read_alpha_data(*range));
     }
