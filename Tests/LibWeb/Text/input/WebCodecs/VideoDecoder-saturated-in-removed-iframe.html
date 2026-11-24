@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<iframe></iframe>
+<script>
+    // A single 16x16 solid red VP9 key frame.
+    const keyFrame = Uint8Array.from(atob("gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA"), c => c.charCodeAt(0));
+
+    asyncTest(async done => {
+        const iframe = document.querySelector("iframe");
+        const frameWindow = iframe.contentWindow;
+        const decoder = new frameWindow.VideoDecoder({
+            output: frame => frame.close(),
+            error: e => println(`decoder error: ${e.name}`),
+        });
+        decoder.configure({ codec: "vp09.00.10.08" });
+        for (let i = 0; i < 40; ++i)
+            decoder.decode(new frameWindow.EncodedVideoChunk({ type: "key", timestamp: i, data: keyFrame }));
+        decoder.flush().catch(() => {});
+        println(`Chunks waiting before removing the iframe: ${decoder.decodeQueueSize > 0}`);
+
+        iframe.remove();
+
+        const deadline = performance.now() + 5000;
+        while (decoder.decodeQueueSize > 0 && performance.now() < deadline)
+            await new Promise(resolve => setTimeout(resolve, 10));
+        println(`decodeQueueSize after removing the iframe: ${decoder.decodeQueueSize}`);
+        done();
+    });
+</script>
