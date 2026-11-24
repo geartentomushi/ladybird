@@ -279,7 +279,6 @@ fn hide_fragment_for_text_overflow(
     context: &InlineFormattingContext<'_>,
 ) {
     fragment.is_fully_truncated = true;
-    fragment.is_hidden_by_text_overflow = true;
     if fragment.is_atomic_inline {
         context.hide_atomic_inline(fragment.layout_node);
     }
@@ -649,7 +648,6 @@ fn apply_block_ellipsis(
     };
     for fragment in &mut line.fragments[first_displaced_fragment..] {
         fragment.is_fully_truncated = true;
-        fragment.is_hidden_by_text_overflow = false;
         if fragment.is_atomic_inline {
             context.hide_atomic_inline(fragment.layout_node);
         }
