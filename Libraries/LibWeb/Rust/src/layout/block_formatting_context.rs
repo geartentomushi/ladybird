@@ -1240,8 +1240,8 @@ impl OutsideMarkerLine {
 struct LaidOutOutsideMarker {
     marker: Node,
     layout: formatting_context::ChildLayout,
-    /// How far the dominant baseline the marker's lines give lies above the alphabetic one that the line box it creates
-    /// is built around.
+    /// How far the dominant baseline of the list item, which the marker aligns its own dominant baseline with, lies above
+    /// the alphabetic one that the line box the marker creates is built around.
     distance_to_dominant_baseline: CssPixels,
 }
 
@@ -3930,7 +3930,7 @@ impl<'pass> BlockFormattingContext<'pass> {
             marker,
             layout,
             distance_to_dominant_baseline: formatting_context::distance_from_alphabetic_to_dominant_baseline(
-                self.style(marker),
+                self.style(list_item.node),
             ),
         })
     }
