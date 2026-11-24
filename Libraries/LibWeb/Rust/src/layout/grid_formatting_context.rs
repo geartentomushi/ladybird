@@ -5645,10 +5645,16 @@ impl<'pass> GridFormattingContext<'pass> {
                     .and_then(|baselines| baselines.first)
             })
             .flatten();
+        let border_box_right = margin_box_left + metrics.content_inline_size() + metrics.border_box_right(collapsed);
         match baseline {
+            // https://drafts.csswg.org/css-align-3/#baseline-export
+            // NB: A scroll container's content-derived baseline is clamped to its border box.
+            Some(baseline) if self.item_facts(item).is_scroll_container() => (margin_box_left + baseline)
+                .max(metrics.margin_left)
+                .min(border_box_right),
             Some(baseline) => margin_box_left + baseline,
             // https://drafts.csswg.org/css-align-3/#synthesize-baseline
-            None => margin_box_left + metrics.content_inline_size() + metrics.border_box_right(collapsed),
+            None => border_box_right,
         }
     }
 

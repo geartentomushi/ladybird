@@ -3230,6 +3230,11 @@ impl<'pass> FlexFormattingContext<'pass> {
                     formatting_context::BaselineSet::First => baselines.first,
                     formatting_context::BaselineSet::Last => baselines.last,
                 }) {
+                // https://drafts.csswg.org/css-align-3/#baseline-export
+                // NB: A scroll container's content-derived baseline is clamped to its border box.
+                Some(baseline) if extras.inputs.is_scroll_container => (margin_box_left + baseline)
+                    .max(metrics.margin_left())
+                    .min(margin_box_left + metrics.content_inline_size() + metrics.border_box_right(collapsed)),
                 Some(baseline) => margin_box_left + baseline,
                 // https://drafts.csswg.org/css-align-3/#synthesize-baseline
                 // The alphabetic baseline is synthesized from the line-under edge of the border box: its left edge
