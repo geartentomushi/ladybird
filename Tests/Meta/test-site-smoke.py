@@ -636,6 +636,30 @@ class SiteSmokeTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "both builds resolve liblagom-web.so.0 to the same file"):
                     smoke.validate_build_pair(drivers["before"], drivers["after"])
 
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
+    def test_build_pair_accepts_distinct_builds_without_shared_ladybird_libraries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("before", "after"):
+                directory = root / name / "bin"
+                directory.mkdir(parents=True)
+                for executable in ("WebDriver", "Ladybird", "WebContent"):
+                    path = directory / executable
+                    path.write_bytes(b"\x7fELF")
+                    path.chmod(0o755)
+            before, after = (root / name / "bin/WebDriver" for name in ("before", "after"))
+            for result in (
+                subprocess.CompletedProcess([], 0, stdout="\tstatically linked\n", stderr=""),
+                subprocess.CompletedProcess([], 1, stdout="", stderr="\tnot a dynamic executable\n"),
+                subprocess.CompletedProcess([], 0, stdout="\tlibc.so.6 => /lib/libc.so.6 (0x123)\n", stderr=""),
+            ):
+                with self.subTest(result=result), patch.object(smoke.subprocess, "run", return_value=result):
+                    smoke.validate_build_pair(before, after)
+            before.unlink()
+            os.link(after, before)
+            with self.assertRaisesRegex(ValueError, "both WebDriver paths identify the same executable"):
+                smoke.validate_build_pair(before, after)
+
     def test_gate_stops_after_build_when_build_pair_is_contaminated(self):
         args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, baseline_webdriver=Path("baseline/WebDriver"))
         with tempfile.TemporaryDirectory() as temporary:

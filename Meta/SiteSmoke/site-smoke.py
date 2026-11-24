@@ -692,6 +692,10 @@ def linked_ladybird_libraries(executable, environment):
     result = subprocess.run(
         ["ldd", executable], check=False, env=environment, capture_output=True, text=True, timeout=30
     )
+    if result.returncode and result.stderr.strip() == "not a dynamic executable":
+        with executable.open("rb") as file:
+            if file.read(4) == b"\x7fELF":
+                return {}
     if result.returncode or "=> not found" in result.stdout:
         raise ValueError(f"Cannot resolve libraries for {executable}: {(result.stderr or result.stdout).strip()}")
     libraries = {}
@@ -699,8 +703,6 @@ def linked_ladybird_libraries(executable, environment):
         match = re.fullmatch(r"\s*(liblagom-\S+\.so(?:\.\S+)?)\s+=>\s+(.+?)\s+\(0x[0-9a-fA-F]+\)", line)
         if match:
             libraries[match[1]] = Path(match[2]).resolve(strict=True)
-    if not libraries:
-        raise ValueError(f"No Ladybird shared libraries found for {executable}")
     return libraries
 
 
@@ -720,8 +722,6 @@ def build_library_paths(driver):
         libraries = linked_ladybird_libraries(
             executable.resolve(), helper_environment if name == "WebContent" else environment
         )
-        if name == "WebContent" and not any(re.fullmatch(r"liblagom-web\.so(?:\.\S+)?", lib) for lib in libraries):
-            raise ValueError(f"No LibWeb dependency found for {executable}")
         yield from libraries.items()
     yield from linked_ladybird_libraries(driver, environment).items()
 
@@ -739,11 +739,18 @@ def validate_build_pair(baseline, candidate):
 
     guidance = "See Meta/SiteSmoke/README.md#prepare-a-standalone-linux-baseline."
     try:
-        before, after = libraries_by_identity(baseline), libraries_by_identity(candidate)
+        baseline, candidate = resolve_webdriver(baseline), resolve_webdriver(candidate)
+        same_driver = baseline.samefile(candidate)
+        before, after = ({}, {}) if same_driver else (libraries_by_identity(baseline), libraries_by_identity(candidate))
     except (OSError, ValueError, subprocess.TimeoutExpired) as error:
         raise ValueError(
             f"Cannot verify separate Ladybird builds: {error}. Use built WebDriver binaries, not wrappers. {guidance}"
         ) from error
+    if same_driver:
+        raise ValueError(
+            f"Contaminated SiteSmoke baseline: both WebDriver paths identify the same executable "
+            f"(baseline: {baseline}; candidate: {candidate}). {guidance}"
+        )
     for identity, (name, path) in before.items():
         if identity in after:
             candidate_path = after[identity][1]
