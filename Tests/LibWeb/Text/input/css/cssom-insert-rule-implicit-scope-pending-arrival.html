@@ -1,0 +1,25 @@
+<!doctype html>
+<div class="in" id="outside"></div>
+<script src="../include.js"></script>
+<script>
+test(() => {
+    // Build the scoping roots and their sheets by script, so that they still wait to arrive in the style engine when
+    // rules are inserted, before anything reads style.
+    const host = document.createElement("div");
+    host.innerHTML = `<style>.plain { width: 3px; } @scope { @media all { .nested-target { height: 4px; } } }</style><div class="in"></div><div class="plain"></div><div class="nested-target"></div>`;
+    document.body.appendChild(host);
+    const sheet = host.querySelector("style").sheet;
+
+    for (let i = 0; i < 200; ++i)
+        sheet.insertRule(`.filler-${i} { width: ${i}px; }`, sheet.cssRules.length);
+    sheet.insertRule("@scope { .in { width: 11px; } }", sheet.cssRules.length);
+    sheet.insertRule(".plain { height: 5px; }", sheet.cssRules.length);
+    sheet.cssRules[1].cssRules[0].insertRule(".nested-target { width: 13px; }", 1);
+
+    const style = selector => getComputedStyle(host.querySelector(selector));
+    println(`inserted implicit @scope rule applies inside its root: ${style(".in").width}`);
+    println(`inserted implicit @scope rule does not apply outside its root: ${getComputedStyle(document.getElementById("outside")).width !== "11px"}`);
+    println(`inserted plain rule applies: ${style(".plain").width} ${style(".plain").height}`);
+    println(`rule inserted inside an implicit @scope rule applies: ${style(".nested-target").width} ${style(".nested-target").height}`);
+});
+</script>

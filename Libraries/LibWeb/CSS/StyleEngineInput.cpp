@@ -2680,12 +2680,12 @@ static StyleNodeID implicit_scope_root_of(StyleSheetState const* owner_style_she
 
 using CompilationVisitor = Function<bool(RustRule::Type, StyleSheetState const&, Parser::ValueParserFFI::NativeCompilationContext const&, Parser::ValueParserFFI::NativeCompilationResult const&)>;
 
-static void visit_compilation(StyleSheetState const& sheet, u64 rule_identity, DOM::Document const& document, Parser::ValueParserFFI::NativeCompilationPurpose purpose, CompilationVisitor const& visit, Parser::ValueParserFFI::NativeStylePublication const& publication)
+static void visit_compilation(StyleSheetState const& sheet, u64 rule_identity, DOM::Document const& document, Parser::ValueParserFFI::NativeCompilationPurpose purpose, CompilationVisitor const& visit, Parser::ValueParserFFI::NativeStylePublication const& publication, bool may_reach_implicit_scope)
 {
     // An implicit scope is named by its root's identity, which a root still waiting to arrive takes first.
     // OPTIMIZATION: Finding an implicit scope walks the whole sheet, which is wasted for each rule a script inserts
-    //               while no root is waiting to arrive.
-    if (document.descendant_style_arrival_pending() && sheet.native_rules().has_implicit_scope())
+    //               while no root is waiting to arrive, or that the caller knows reaches no implicit scope.
+    if (may_reach_implicit_scope && document.descendant_style_arrival_pending() && sheet.native_rules().has_implicit_scope())
         take_in_pending_style_arrivals(const_cast<DOM::Document&>(document));
     MediaEnvironmentSnapshot environment { document };
     Parser::ValueParserFFI::NativeCompilationCallbacks callbacks {
@@ -2733,7 +2733,7 @@ static void publish_layer_order_for_sheet(StyleSheetState const& sheet, DOM::Doc
     });
 }
 
-static void compile_rules_into(RuleCompilationContext const& context, StyleSheetState const& sheet, u64 rule_identity = 0, Parser::ValueParserFFI::NativeCompilationPurpose purpose = Parser::ValueParserFFI::NativeCompilationPurpose::Rules)
+static void compile_rules_into(RuleCompilationContext const& context, StyleSheetState const& sheet, u64 rule_identity = 0, Parser::ValueParserFFI::NativeCompilationPurpose purpose = Parser::ValueParserFFI::NativeCompilationPurpose::Rules, bool may_reach_implicit_scope = true)
 {
     Parser::ValueParserFFI::NativeStylePublication publication {
         .host = context.style_engine.host(),
@@ -2758,7 +2758,7 @@ static void compile_rules_into(RuleCompilationContext const& context, StyleSheet
             context.style_computer->register_style_engine_sheet_source(source);
         return true;
     };
-    visit_compilation(sheet, rule_identity, *context.document, purpose, visit, publication);
+    visit_compilation(sheet, rule_identity, *context.document, purpose, visit, publication, may_reach_implicit_scope);
     if (purpose == Parser::ValueParserFFI::NativeCompilationPurpose::Rules && may_declare_layer)
         publish_layer_order_for_sheet(sheet, *context.document);
 }
@@ -2938,7 +2938,7 @@ bool stop_sharing_compiled_style_sheet(StyleSheetState& sheet)
 
 // A rule arrived in one document's engine. Compile it, and everything it brings with it, into the
 // position it holds there.
-static void record_style_rule_inserted_in(u64 identity, bool changes_environment, StyleSheetState& sheet, DOM::Document& document)
+static void record_style_rule_inserted_in(u64 identity, bool changes_environment, bool may_reach_implicit_scope, StyleSheetState& sheet, DOM::Document& document)
 {
     document.flush_deferred_style_change_event();
     auto& style_computer = document.style_computer();
@@ -2956,7 +2956,7 @@ static void record_style_rule_inserted_in(u64 identity, bool changes_environment
         document,
         style_computer
     };
-    compile_rules_into(context, sheet, identity);
+    compile_rules_into(context, sheet, identity, Parser::ValueParserFFI::NativeCompilationPurpose::Rules, may_reach_implicit_scope);
 }
 
 // A rule arrived. Compile it, and everything it brings with it, into the position it holds.
@@ -2966,19 +2966,24 @@ void record_style_rule_inserted(CSSRule& rule)
         record_style_rule_inserted(rule.native_rule(), *source_sheet);
 }
 
-static void record_style_rule_inserted(u64 identity, bool changes_environment, StyleSheetState& source_sheet)
+static void record_style_rule_inserted(u64 identity, bool changes_environment, StyleSheetState& source_sheet, Function<bool(StyleSheetState const&)> const& may_reach_implicit_scope = nullptr)
 {
     auto* sheet = owning_compiled_sheet(&source_sheet);
     if (!sheet || stop_sharing_compiled_style_sheet(*sheet))
         return;
+    bool reaches_implicit_scope = !may_reach_implicit_scope || may_reach_implicit_scope(*sheet);
     for_each_document_with_engine_copy(*sheet, [&](DOM::Document& document) {
-        record_style_rule_inserted_in(identity, changes_environment, *sheet, document);
+        record_style_rule_inserted_in(identity, changes_environment, reaches_implicit_scope, *sheet, document);
     });
 }
 
-void record_style_rule_inserted(RustRule const& rule, StyleSheetState& source_sheet)
+void record_style_rule_inserted(RustRule const& rule, StyleSheetState& source_sheet, RuleInsertionDepth depth)
 {
-    record_style_rule_inserted(rule.identity(), rule_change_needs_style_environment_bump(rule), source_sheet);
+    // A rule at the top level of the sheet compiled from has no ancestor, so only its own subtree can hold an implicit
+    // scope. One nested in a rule, or in an imported sheet, can be in an implicit scope that encloses it.
+    record_style_rule_inserted(rule.identity(), rule_change_needs_style_environment_bump(rule), source_sheet, [&](StyleSheetState const& compiled_sheet) {
+        return depth == RuleInsertionDepth::Nested || &compiled_sheet != &source_sheet || Parser::ValueParserFFI::rust_rule_has_implicit_scope(rule.handle());
+    });
 }
 
 void record_imported_style_sheet_loaded(u64 import_rule_identity, StyleSheetState& source_sheet)
