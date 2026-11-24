@@ -2148,6 +2148,17 @@ pub extern "C" fn animations_document_animations_has_provisional_transitions(
     document.provisional_transitions.has_states(transition_target(owner))
 }
 
+#[unsafe(no_mangle)]
+pub extern "C" fn animations_document_animations_transition_is_provisionally_canceled(
+    document: &DocumentAnimations,
+    owner: FfiOwningElement,
+    animation: &AnimationCell,
+) -> bool {
+    document
+        .provisional_transitions
+        .has_canceled_transition(transition_target(owner), animation)
+}
+
 /// The effect of the transition at `index` among those the outermost style stabilization epoch of `document` started
 /// provisionally for `owner`, which the transition borrows for as long as the epoch holds it, or null past the last.
 /// NB: A provisionally started transition already contributed to the style published by the pass that started it,

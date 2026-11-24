@@ -7,7 +7,7 @@
 //! The transition actions a style stabilization epoch decides, which stay provisional until the epoch commits.
 //! https://drafts.csswg.org/css-transitions/#starting
 
-use super::animation::{AnimationHandle, HostCellKind};
+use super::animation::{AnimationCell, AnimationHandle, HostCellKind};
 use super::effect::AnimationEffectCell;
 use super::element_animations::{AnimationOwnerSlot, ElementAnimations, TransitionProperty};
 use crate::css::retained_fly_string::RetainedUtf16FlyString;
@@ -59,6 +59,18 @@ impl ProvisionalTransitions {
 
     pub(crate) fn has_states(&self, target: TransitionTarget) -> bool {
         self.by_target.contains_key(&target)
+    }
+
+    pub(crate) fn has_canceled_transition(&self, target: TransitionTarget, animation: &AnimationCell) -> bool {
+        self.by_target.get(&target).is_some_and(|indices| {
+            indices.iter().any(|&index| {
+                let state = &self.states[index];
+                matches!(
+                    state.action,
+                    FfiTransitionActionKind::Cancel | FfiTransitionActionKind::CancelRemoveAndStart
+                ) && state.committed.as_ref().is_some_and(|committed| committed.is(animation))
+            })
+        })
     }
 
     /// The indices of the states of `target`.

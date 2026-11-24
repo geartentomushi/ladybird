@@ -199,13 +199,22 @@ void AnimationUpdateContext::publish()
             .pseudo_element = element.pseudo_element().has_value() ? to_underlying(*element.pseudo_element()) : u8 { 0 },
             .has_pseudo_element = element.pseudo_element().has_value(),
         };
+        auto const& document_animations = target->document().document_animations();
+        // A new transition decision still reads the running transitions at the style change event.
+        // Other samples must respect the decision already made, even before it commits.
+        auto is_provisionally_canceled = [&](RustFFI::AnimationCell const* animation) {
+            return !it.value.before_transition_decision && animation
+                && RustFFI::animations_document_animations_transition_is_provisionally_canceled(&document_animations, owner, animation);
+        };
         for (size_t index = 0;; ++index) {
-            auto const* effect = RustFFI::animations_document_animations_proposed_transition_effect(&target->document().document_animations(), owner, index);
+            auto const* effect = RustFFI::animations_document_animations_proposed_transition_effect(&document_animations, owner, index);
             if (!effect)
                 break;
             effects_to_collect.append(EffectRef { *effect });
         }
         for (auto const& animation : target->associated_animations_in_composite_order()) {
+            if (is_provisionally_canceled(&animation.record()))
+                continue;
             auto effect = animation.effect();
             if (!effect.has_value() || animation.play_state() == RustFFI::AnimationPlayState::Idle)
                 continue;
@@ -216,8 +225,9 @@ void AnimationUpdateContext::publish()
         // A dirty effect may have just become irrelevant. Include it once so rebuilding the
         // animated overlay removes its terminal contribution.
         for (auto& dirty_effect : it.value.effects) {
-            if (!effects_to_collect.contains_slow(dirty_effect))
-                effects_to_collect.append(dirty_effect);
+            if (effects_to_collect.contains_slow(dirty_effect) || is_provisionally_canceled(RustFFI::animations_effect_associated_animation(&dirty_effect.record())))
+                continue;
+            effects_to_collect.append(dirty_effect);
         }
         samples.append({ element, it.value, move(effects_to_collect) });
     }
