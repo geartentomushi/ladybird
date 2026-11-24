@@ -437,6 +437,9 @@ static void activate(GC::Ref<UpdateAlgorithmState> state)
         // 12. Run the Update Worker State algorithm passing registration's active worker and "activated" as the arguments.
         if (auto* active_worker = state->registration().active_worker(); active_worker && active_worker->state == ServiceWorkerState::Activating)
             update_worker_state(state->event_loop(), *active_worker, ServiceWorkerState::Activated);
+
+        // NB: A replacement that finished installing while this worker was activating waits for it in Try Activate.
+        try_activate(state);
     }));
 }
 
