@@ -20,6 +20,7 @@
 #include <LibMediaCodecs/CodecParameters.h>
 #include <LibMediaCodecs/DecoderError.h>
 #include <LibMediaCodecs/VideoDecoder.h>
+#include <LibMediaCodecs/VideoDecoderOptions.h>
 #include <LibThreading/Thread.h>
 
 namespace MediaServer {
@@ -34,7 +35,7 @@ public:
         Function<void(Media::DecoderError)> on_error;
     };
 
-    static NonnullRefPtr<WebCodecsVideoDecoder> create(Media::ParsedCodec, ByteBuffer description, Callbacks);
+    static NonnullRefPtr<WebCodecsVideoDecoder> create(Media::ParsedCodec, ByteBuffer description, Media::VideoDecoderOptions, Callbacks);
     ~WebCodecsVideoDecoder();
 
     void decode(bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data);
@@ -54,7 +55,7 @@ private:
     };
     using Command = Variant<DecodeCommand, FlushCommand>;
 
-    WebCodecsVideoDecoder(Core::EventLoop& main_thread_event_loop, Media::ParsedCodec, ByteBuffer description, Callbacks);
+    WebCodecsVideoDecoder(Core::EventLoop& main_thread_event_loop, Media::ParsedCodec, ByteBuffer description, Media::VideoDecoderOptions, Callbacks);
 
     intptr_t run();
     void enqueue(Command);
@@ -74,6 +75,7 @@ private:
     Core::EventLoop& m_main_thread_event_loop;
     Media::ParsedCodec m_codec;
     ByteBuffer m_description;
+    Media::VideoDecoderOptions m_options;
     Callbacks m_callbacks;
 
     Mutex m_mutex;

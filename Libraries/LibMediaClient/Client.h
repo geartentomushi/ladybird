@@ -86,7 +86,7 @@ public:
         Function<void(u64 flush_id)> on_flushed;
         Function<void(Media::DecoderError)> on_error;
     };
-    u64 create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, WebCodecsVideoDecoderCallbacks);
+    u64 create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, bool optimize_for_latency, WebCodecsVideoDecoderCallbacks);
     void webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ReadonlyBytes data);
     void webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id);
     void destroy_webcodecs_video_decoder(u64 decoder_id);

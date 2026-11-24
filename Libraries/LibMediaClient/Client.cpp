@@ -239,7 +239,7 @@ void Client::audio_data_decode_failed(u64 request_id, Media::DecoderError error)
     (*callback)(move(error));
 }
 
-u64 Client::create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, WebCodecsVideoDecoderCallbacks callbacks)
+u64 Client::create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, bool optimize_for_latency, WebCodecsVideoDecoderCallbacks callbacks)
 {
     auto decoder_id = allocate_id();
     if (!is_open()) {
@@ -250,7 +250,7 @@ u64 Client::create_webcodecs_video_decoder(String const& codec, ReadonlyBytes de
     }
     m_webcodecs_video_decoders.set(decoder_id, move(callbacks));
     update_idle_timer();
-    async_create_webcodecs_video_decoder(decoder_id, codec, description);
+    async_create_webcodecs_video_decoder(decoder_id, codec, description, optimize_for_latency);
     return decoder_id;
 }
 

@@ -55,7 +55,7 @@ private:
     virtual void request_decoder_capabilities(u64 request_id, String codecs_parameter) override;
     virtual void decode_audio_data(u64 request_id, Core::AnonymousBuffer data, u32 output_sample_rate) override;
 
-    virtual void create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description) override;
+    virtual void create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description, bool optimize_for_latency) override;
     virtual void destroy_webcodecs_video_decoder(u64 decoder_id) override;
     virtual void webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data) override;
     virtual void webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id) override;

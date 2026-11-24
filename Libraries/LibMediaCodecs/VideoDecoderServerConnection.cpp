@@ -143,7 +143,7 @@ private:
     {
         auto decoder_or_error = [&] -> DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> {
             for (auto const& registration : m_hosted_decoders) {
-                auto decoder = registration.create(m_codec_id, m_codec_initialization_data);
+                auto decoder = registration.create(m_codec_id, m_codec_initialization_data, {});
                 if (!decoder.is_error() || decoder.error().category() != DecoderErrorCategory::NotImplemented)
                     return decoder;
             }

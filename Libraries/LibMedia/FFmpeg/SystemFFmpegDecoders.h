@@ -14,12 +14,13 @@
 #include <LibMediaCodecs/DecoderCapabilities.h>
 #include <LibMediaCodecs/DecoderError.h>
 #include <LibMediaCodecs/VideoDecoder.h>
+#include <LibMediaCodecs/VideoDecoderOptions.h>
 
 namespace Media::FFmpeg {
 
 Optional<DecoderCapabilities> system_ffmpeg_video_decoder_capabilities(ParsedCodec const&);
 Optional<DecoderCapabilities> system_ffmpeg_audio_decoder_capabilities(ParsedCodec const&);
-DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_system_ffmpeg_video_decoder(CodecID, ReadonlyBytes codec_initialization_data);
+DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_system_ffmpeg_video_decoder(CodecID, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const&);
 DecoderErrorOr<NonnullOwnPtr<AudioDecoder>> create_system_ffmpeg_audio_decoder(CodecID, Audio::SampleSpecification const&, ReadonlyBytes codec_initialization_data);
 
 }

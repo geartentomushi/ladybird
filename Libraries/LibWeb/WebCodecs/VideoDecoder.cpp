@@ -247,7 +247,7 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
         if (auto self = weak_this.ptr())
             self->codec_failed(codec_generation, error);
     };
-    m_codec_id = m_media_client->create_webcodecs_video_decoder(codec, description.value().bytes(), move(callbacks));
+    m_codec_id = m_media_client->create_webcodecs_video_decoder(codec, description.value().bytes(), config.optimize_for_latency.value_or(false), move(callbacks));
     return {};
 }
 

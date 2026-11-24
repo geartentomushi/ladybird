@@ -278,7 +278,7 @@ void ConnectionFromClient::decode_audio_data(u64 request_id, Core::AnonymousBuff
     });
 }
 
-void ConnectionFromClient::create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description)
+void ConnectionFromClient::create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description, bool optimize_for_latency)
 {
     if (!verify_renderer_role())
         return;
@@ -310,7 +310,7 @@ void ConnectionFromClient::create_webcodecs_video_decoder(u64 decoder_id, String
         async_webcodecs_video_decoder_failed(decoder_id, Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "The codec string is not supported"sv));
         return;
     }
-    m_webcodecs_video_decoders.set(decoder_id, WebCodecsVideoDecoder::create(parsed_codec.release_value(), move(description), move(callbacks)));
+    m_webcodecs_video_decoders.set(decoder_id, WebCodecsVideoDecoder::create(parsed_codec.release_value(), move(description), Media::VideoDecoderOptions { .optimize_for_latency = optimize_for_latency }, move(callbacks)));
 }
 
 void ConnectionFromClient::destroy_webcodecs_video_decoder(u64 decoder_id)
