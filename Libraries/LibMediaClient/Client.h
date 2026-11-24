@@ -15,6 +15,8 @@
 #include <LibCore/EventLoop.h>
 #include <LibCore/Forward.h>
 #include <LibCore/Promise.h>
+#include <LibGfx/Bitmap.h>
+#include <LibGfx/ShareableBitmap.h>
 #include <LibIPC/ConnectionToServer.h>
 #include <LibIPC/TransportHandle.h>
 #include <LibMedia/MediaSupport.h>
@@ -77,6 +79,18 @@ public:
     // The callback runs on this event loop once the server answers, or at once with an error if it cannot be asked.
     void decode_audio_data(ReadonlyBytes, u32 output_sample_rate, DecodeAudioDataCallback);
 
+    // A codec instance in the server that decodes the chunks a WebCodecs VideoDecoder is given, in order.
+    // Its callbacks run on this event loop; once the connection is lost, on_error runs and nothing else does.
+    struct WebCodecsVideoDecoderCallbacks {
+        Function<void(i64 timestamp, Optional<u64> duration, NonnullRefPtr<Gfx::Bitmap>)> on_frame;
+        Function<void(u64 flush_id)> on_flushed;
+        Function<void(Media::DecoderError)> on_error;
+    };
+    u64 create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, WebCodecsVideoDecoderCallbacks);
+    void webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ReadonlyBytes data);
+    void webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id);
+    void destroy_webcodecs_video_decoder(u64 decoder_id);
+
     u64 allocate_id();
 
     void register_media_stream(Badge<RemoteMediaStream>, RemoteMediaStream&);
@@ -93,6 +107,10 @@ private:
     virtual void decoder_capabilities_reported(u64 request_id, Optional<Media::DecoderCapabilities> capabilities) override;
     virtual void audio_data_decoded(u64 request_id, u32 sample_rate, u32 channel_count, u64 frame_count, Core::AnonymousBuffer planar_samples) override;
     virtual void audio_data_decode_failed(u64 request_id, Media::DecoderError error) override;
+
+    virtual void webcodecs_video_frame_decoded(u64 decoder_id, i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap bitmap) override;
+    virtual void webcodecs_video_decoder_flushed(u64 decoder_id, u64 flush_id) override;
+    virtual void webcodecs_video_decoder_failed(u64 decoder_id, Media::DecoderError error) override;
 
     virtual void media_stream_data_requested(u64 stream_id, Optional<u64> offset) override;
 
@@ -128,6 +146,7 @@ private:
     HashMap<u64, NonnullRefPtr<FileMediaSupportPromise>> m_pending_file_media_support_requests;
     HashMap<u64, NonnullRefPtr<DecoderCapabilitiesPromise>> m_pending_decoder_capabilities_requests;
     HashMap<u64, RemoteMediaStream*> m_media_streams;
+    HashMap<u64, WebCodecsVideoDecoderCallbacks> m_webcodecs_video_decoders;
     HashMap<u64, RemotePlaybackManager*> m_playback_managers;
     RefPtr<Core::Timer> m_idle_timer;
 };

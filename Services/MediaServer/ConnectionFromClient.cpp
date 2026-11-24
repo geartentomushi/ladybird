@@ -21,6 +21,7 @@
 #include <LibThreading/ThreadPool.h>
 #include <MediaServer/ConnectionFromClient.h>
 #include <MediaServer/PlaybackSession.h>
+#include <MediaServer/WebCodecsVideoDecoder.h>
 
 namespace MediaServer {
 
@@ -53,6 +54,9 @@ ConnectionFromClient::~ConnectionFromClient()
 void ConnectionFromClient::die()
 {
     auto connection = s_connections->take(client_id());
+    for (auto& [id, decoder] : m_webcodecs_video_decoders)
+        decoder->stop();
+    m_webcodecs_video_decoders.clear();
     // A renderer can be connected while the previous one is going away, and the server must stay up for it.
     auto a_renderer_remains = any_of(*s_connections, [](auto const& entry) { return entry.value->m_role == Role::Renderer; });
     if (m_role == Role::Controller || !a_renderer_remains)
@@ -272,6 +276,69 @@ void ConnectionFromClient::decode_audio_data(u64 request_id, Core::AnonymousBuff
             strong_this->async_audio_data_decoded(request_id, decoded.sample_rate, decoded.channel_count, decoded.frame_count, move(decoded.planar_samples));
         });
     });
+}
+
+void ConnectionFromClient::create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description)
+{
+    if (!verify_renderer_role())
+        return;
+    if (m_webcodecs_video_decoders.contains(decoder_id)) {
+        did_misbehave("Duplicate WebCodecs video decoder ID");
+        return;
+    }
+
+    auto parsed_codec = Media::parse_codec_parameters_string(codec);
+    auto weak_this = make_weak_ptr<ConnectionFromClient>();
+    WebCodecsVideoDecoder::Callbacks callbacks;
+    callbacks.on_frame = [weak_this, decoder_id](i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap bitmap) {
+        if (!weak_this || !weak_this->is_open())
+            return;
+        weak_this->async_webcodecs_video_frame_decoded(decoder_id, timestamp, duration, move(bitmap));
+    };
+    callbacks.on_flushed = [weak_this, decoder_id](u64 flush_id) {
+        if (!weak_this || !weak_this->is_open())
+            return;
+        weak_this->async_webcodecs_video_decoder_flushed(decoder_id, flush_id);
+    };
+    callbacks.on_error = [weak_this, decoder_id](Media::DecoderError error) {
+        if (!weak_this || !weak_this->is_open())
+            return;
+        weak_this->async_webcodecs_video_decoder_failed(decoder_id, move(error));
+    };
+
+    if (!parsed_codec.has_value()) {
+        async_webcodecs_video_decoder_failed(decoder_id, Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "The codec string is not supported"sv));
+        return;
+    }
+    m_webcodecs_video_decoders.set(decoder_id, WebCodecsVideoDecoder::create(parsed_codec.release_value(), move(description), move(callbacks)));
+}
+
+void ConnectionFromClient::destroy_webcodecs_video_decoder(u64 decoder_id)
+{
+    if (!verify_renderer_role())
+        return;
+    if (auto decoder = m_webcodecs_video_decoders.take(decoder_id); decoder.has_value())
+        decoder.value()->stop();
+}
+
+void ConnectionFromClient::webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data)
+{
+    if (!verify_renderer_role())
+        return;
+    auto decoder = m_webcodecs_video_decoders.get(decoder_id);
+    if (!decoder.has_value())
+        return;
+    decoder.value()->decode(is_key, timestamp, duration, move(data));
+}
+
+void ConnectionFromClient::webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id)
+{
+    if (!verify_renderer_role())
+        return;
+    auto decoder = m_webcodecs_video_decoders.get(decoder_id);
+    if (!decoder.has_value())
+        return;
+    decoder.value()->flush(flush_id);
 }
 
 Media::IncrementallyPopulatedStream* ConnectionFromClient::find_media_stream(u64 stream_id)

@@ -17,6 +17,7 @@
 #include <MediaServer/Forward.h>
 #include <MediaServer/MediaClientEndpoint.h>
 #include <MediaServer/MediaServerEndpoint.h>
+#include <MediaServer/WebCodecsVideoDecoder.h>
 
 namespace MediaServer {
 
@@ -53,6 +54,11 @@ private:
     virtual void request_file_media_support(u64 request_id, String type, String subtype, Optional<String> codecs_parameter) override;
     virtual void request_decoder_capabilities(u64 request_id, String codecs_parameter) override;
     virtual void decode_audio_data(u64 request_id, Core::AnonymousBuffer data, u32 output_sample_rate) override;
+
+    virtual void create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description) override;
+    virtual void destroy_webcodecs_video_decoder(u64 decoder_id) override;
+    virtual void webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data) override;
+    virtual void webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id) override;
 
     virtual void create_media_stream(u64 stream_id) override;
     virtual void destroy_media_stream(u64 stream_id) override;
@@ -111,6 +117,7 @@ private:
 
     HashMap<u64, NonnullOwnPtr<PlaybackSession>> m_playback_sessions;
     HashMap<u64, NonnullRefPtr<Media::IncrementallyPopulatedStream>> m_media_streams;
+    HashMap<u64, NonnullRefPtr<WebCodecsVideoDecoder>> m_webcodecs_video_decoders;
     RefPtr<Media::VideoPresentationServerConnection> m_video_presentation_connection;
 };
 

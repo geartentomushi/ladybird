@@ -1,5 +1,6 @@
 #include <AK/Time.h>
 #include <LibCore/AnonymousBuffer.h>
+#include <LibGfx/ShareableBitmap.h>
 #include <LibIPC/TransportHandle.h>
 #include <LibMediaCodecs/DecoderCapabilities.h>
 #include <LibMediaCodecs/DecoderError.h>
@@ -27,6 +28,10 @@ endpoint MediaClient
     decoder_capabilities_reported(u64 request_id, Optional<Media::DecoderCapabilities> capabilities) =|
     audio_data_decoded(u64 request_id, u32 sample_rate, u32 channel_count, u64 frame_count, Core::AnonymousBuffer planar_samples) =|
     audio_data_decode_failed(u64 request_id, Media::DecoderError error) =|
+
+    webcodecs_video_frame_decoded(u64 decoder_id, i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap bitmap) =|
+    webcodecs_video_decoder_flushed(u64 decoder_id, u64 flush_id) =|
+    webcodecs_video_decoder_failed(u64 decoder_id, Media::DecoderError error) =|
 
     media_stream_data_requested(u64 stream_id, Optional<u64> offset) =|
 
