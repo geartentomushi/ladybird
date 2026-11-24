@@ -18,7 +18,15 @@
                     return;
                 }
                 if (event.data === "reply") {
-                    event.source.postMessage(\`worker replied from an \${event.constructor.name}, waitUntil is a \${typeof event.waitUntil}\`);
+                    Promise.resolve().then(() => {
+                        let result = "succeeds";
+                        try {
+                            event.waitUntil(Promise.resolve());
+                        } catch (error) {
+                            result = \`throws \${error.name}\`;
+                        }
+                        event.source.postMessage(\`worker replied from an \${event.constructor.name}, waitUntil() in a microtask \${result}\`);
+                    });
                     return;
                 }
                 channel.postMessage(\`worker received: \${JSON.stringify(event.data)}\`);

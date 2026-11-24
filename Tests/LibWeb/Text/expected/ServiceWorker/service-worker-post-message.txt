@@ -3,5 +3,5 @@ postMessage() with a function throws DataCloneError
 worker received: {"hello":"world"}
 port received: ping
 port received: pong
-navigator.serviceWorker received: worker replied from an ExtendableMessageEvent, waitUntil is a function
+navigator.serviceWorker received: worker replied from an ExtendableMessageEvent, waitUntil() in a microtask succeeds
 unregister() resolves with: true

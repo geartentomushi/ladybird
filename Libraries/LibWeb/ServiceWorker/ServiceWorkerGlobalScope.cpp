@@ -285,7 +285,11 @@ GC::Ref<DOM::EventTarget> ServiceWorkerGlobalScope::message_event_relay()
                 event->set_is_trusted(true);
 
                 // 3. Dispatch e at the service worker's global object.
-                self.dispatch_event(event);
+                // NB: This runs inside a listener of the relay. Dispatch in a task of its own, so that microtasks run
+                //     after each listener of e while e is still being dispatched.
+                HTML::queue_global_task(HTML::Task::Source::PostedMessage, self.realm().global_object(), GC::create_function(GC::Heap::the(), GC::captures(self, event), [](ServiceWorkerGlobalScope& self, GC::Ref<ExtendableMessageEvent>& event) {
+                    self.dispatch_event(event);
+                }));
                 return JS::js_undefined();
             }),
             0, Utf16FlyString {}, &realm);
