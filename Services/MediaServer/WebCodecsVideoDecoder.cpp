@@ -4,9 +4,11 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Atomic.h>
 #include <AK/FixedArray.h>
 #include <LibCore/EventLoop.h>
 #include <LibGfx/Bitmap.h>
+#include <LibMediaClient/WebCodecsLimits.h>
 #include <LibMediaCodecs/CodedFrame.h>
 #include <LibMediaCodecs/Color/ColorMetadata.h>
 #include <LibMediaCodecs/VideoDecoderRegistry.h>
@@ -15,10 +17,18 @@
 
 namespace MediaServer {
 
+static Atomic<size_t> s_live_count { 0 };
+
+size_t WebCodecsVideoDecoder::live_count()
+{
+    return s_live_count.load();
+}
+
 NonnullRefPtr<WebCodecsVideoDecoder> WebCodecsVideoDecoder::create(Media::ParsedCodec codec, ByteBuffer description, Callbacks callbacks)
 {
     auto decoder = adopt_ref(*new WebCodecsVideoDecoder(Core::EventLoop::current(), codec, move(description), move(callbacks)));
     // NB: The detached thread keeps itself, and so this decoder, alive until it exits.
+    s_live_count++;
     auto thread = Threading::Thread::construct("WebCodecsDecode"sv, [decoder] { return decoder->run(); });
     thread->start();
     thread->detach();
@@ -42,9 +52,16 @@ void WebCodecsVideoDecoder::enqueue(Command command)
     m_condition.broadcast();
 }
 
-void WebCodecsVideoDecoder::decode(bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data)
+bool WebCodecsVideoDecoder::decode(bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data)
 {
-    enqueue(DecodeCommand { is_key, timestamp, duration, move(data) });
+    MutexLocker locker { m_mutex };
+    if (!MediaClient::webcodecs_video_decoder_can_accept_chunk(m_pending_chunks, m_pending_bytes, data.size()))
+        return false;
+    m_pending_chunks++;
+    m_pending_bytes += data.size();
+    m_commands.enqueue(DecodeCommand { is_key, timestamp, duration, move(data) });
+    m_condition.broadcast();
+    return true;
 }
 
 void WebCodecsVideoDecoder::flush(u64 flush_id)
@@ -58,6 +75,8 @@ void WebCodecsVideoDecoder::stop()
         MutexLocker locker { m_mutex };
         m_stopped = true;
         m_commands.clear();
+        m_pending_chunks = 0;
+        m_pending_bytes = 0;
         m_condition.broadcast();
     }
 
@@ -102,6 +121,15 @@ intptr_t WebCodecsVideoDecoder::run()
             if (m_stopped)
                 break;
             command = m_commands.dequeue();
+            if (auto* decode_command = command->get_pointer<DecodeCommand>()) {
+                m_pending_chunks--;
+                m_pending_bytes -= decode_command->data.size();
+            }
+        }
+        if (command->has<DecodeCommand>()) {
+            invoke_on_main_thread([](WebCodecsVideoDecoder& self) {
+                self.m_callbacks.on_chunk_dequeued();
+            });
         }
         if (m_failed)
             continue;
@@ -110,6 +138,7 @@ intptr_t WebCodecsVideoDecoder::run()
             report_error(result.release_error());
     }
     m_decoder = nullptr;
+    s_live_count--;
     return 0;
 }
 

@@ -85,8 +85,11 @@ public:
         Function<void(i64 timestamp, Optional<u64> duration, NonnullRefPtr<Gfx::Bitmap>)> on_frame;
         Function<void(u64 flush_id)> on_flushed;
         Function<void(Media::DecoderError)> on_error;
+        // Runs when the server starts decoding a chunk, so that the next one may be sent. See WebCodecsLimits.h.
+        Function<void()> on_chunk_dequeued;
     };
     u64 create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, WebCodecsVideoDecoderCallbacks);
+    size_t webcodecs_video_decoder_count() const { return m_webcodecs_video_decoders.size(); }
     void webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ReadonlyBytes data);
     void webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id);
     void destroy_webcodecs_video_decoder(u64 decoder_id);
@@ -111,6 +114,7 @@ private:
     virtual void webcodecs_video_frame_decoded(u64 decoder_id, i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap bitmap) override;
     virtual void webcodecs_video_decoder_flushed(u64 decoder_id, u64 flush_id) override;
     virtual void webcodecs_video_decoder_failed(u64 decoder_id, Media::DecoderError error) override;
+    virtual void webcodecs_video_decoder_chunk_dequeued(u64 decoder_id) override;
 
     virtual void media_stream_data_requested(u64 stream_id, Optional<u64> offset) override;
 

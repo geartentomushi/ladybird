@@ -297,6 +297,14 @@ void Client::webcodecs_video_decoder_flushed(u64 decoder_id, u64 flush_id)
     callbacks->on_flushed(flush_id);
 }
 
+void Client::webcodecs_video_decoder_chunk_dequeued(u64 decoder_id)
+{
+    auto callbacks = m_webcodecs_video_decoders.get(decoder_id);
+    if (!callbacks.has_value())
+        return;
+    callbacks->on_chunk_dequeued();
+}
+
 void Client::webcodecs_video_decoder_failed(u64 decoder_id, Media::DecoderError error)
 {
     auto callbacks = m_webcodecs_video_decoders.take(decoder_id);

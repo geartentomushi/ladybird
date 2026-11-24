@@ -8,7 +8,9 @@
 
 #include <AK/ByteBuffer.h>
 #include <AK/Optional.h>
+#include <AK/Queue.h>
 #include <AK/RefPtr.h>
+#include <AK/Variant.h>
 #include <AK/Vector.h>
 #include <LibGC/Function.h>
 #include <LibGC/Root.h>
@@ -63,9 +65,25 @@ private:
     void release_codec();
     void update_pending_flush_keep_alive();
 
+    struct DecodeControlMessage {
+        GC::Ref<EncodedVideoChunk> chunk;
+    };
+    struct FlushControlMessage {
+        u64 flush_id { 0 };
+    };
+    using ControlMessage = Variant<DecodeControlMessage, FlushControlMessage>;
+    enum class ControlMessageOutcome {
+        Processed,
+        NotProcessed,
+    };
+    void process_control_message_queue();
+    ControlMessageOutcome run_control_message(DecodeControlMessage const&);
+    ControlMessageOutcome run_control_message(FlushControlMessage const&);
+
     void output_frame(u64 codec_generation, i64 timestamp, Optional<u64> duration, NonnullRefPtr<Gfx::Bitmap>);
     void codec_flushed(u64 codec_generation, u64 flush_id);
     void codec_failed(u64 codec_generation, Media::DecoderError const&);
+    void codec_chunk_dequeued(u64 codec_generation);
 
     GC::Ref<DOM::EventTarget> m_global_object;
 
@@ -73,6 +91,13 @@ private:
     GC::Ref<WebIDL::CallbackType> m_output_callback;
     // https://w3c.github.io/webcodecs/#dom-videodecoder-error-callback-slot
     GC::Ref<WebIDL::CallbackType> m_error_callback;
+
+    // https://w3c.github.io/webcodecs/#dom-videodecoder-control-message-queue-slot
+    // NB: Only decode and flush messages wait here, behind a decode the saturated codec cannot take yet. The other
+    //     control messages run as soon as they are queued.
+    Queue<ControlMessage> m_control_message_queue;
+    // https://w3c.github.io/webcodecs/#dom-videodecoder-codec-saturated-slot
+    bool m_codec_saturated { false };
 
     // https://w3c.github.io/webcodecs/#dom-videodecoder-state-slot
     CodecState m_state { CodecState::Unconfigured };
@@ -104,6 +129,9 @@ private:
     Optional<u64> m_codec_id;
     u64 m_codec_generation { 0 };
     u64 m_reset_generation { 0 };
+    // NB: The sizes of the chunks given to the codec that it has not started decoding yet, oldest first.
+    Vector<size_t> m_chunk_sizes_waiting_in_codec;
+    size_t m_bytes_waiting_in_codec { 0 };
 };
 
 }

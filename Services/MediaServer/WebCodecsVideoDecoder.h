@@ -32,12 +32,17 @@ public:
         Function<void(i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap)> on_frame;
         Function<void(u64 flush_id)> on_flushed;
         Function<void(Media::DecoderError)> on_error;
+        Function<void()> on_chunk_dequeued;
     };
 
     static NonnullRefPtr<WebCodecsVideoDecoder> create(Media::ParsedCodec, ByteBuffer description, Callbacks);
     ~WebCodecsVideoDecoder();
 
-    void decode(bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data);
+    // How many decoders have a thread that has not exited yet.
+    static size_t live_count();
+
+    // Returns false, leaving the chunk undecoded, when more chunks are waiting than the client may queue.
+    [[nodiscard]] bool decode(bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data);
     void flush(u64 flush_id);
     // Stops the thread once its current work is done. No callback runs after this.
     void stop();
@@ -79,6 +84,8 @@ private:
     Mutex m_mutex;
     ConditionVariable m_condition { m_mutex };
     Queue<Command> m_commands;
+    size_t m_pending_chunks { 0 };
+    size_t m_pending_bytes { 0 };
     bool m_stopped { false };
     bool m_decode_completed { false };
     bool m_storage_freed { false };

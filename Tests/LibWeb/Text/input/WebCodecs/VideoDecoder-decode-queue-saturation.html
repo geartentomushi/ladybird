@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    // A single 16x16 solid red VP9 key frame.
+    const keyFrame = Uint8Array.from(atob("gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA"), c => c.charCodeAt(0));
+
+    function makeDecoder(counts) {
+        const decoder = new VideoDecoder({
+            output: frame => {
+                ++counts.outputs;
+                frame.close();
+            },
+            error: e => println(`decoder error: ${e.name}`),
+        });
+        decoder.configure({ codec: "vp09.00.10.08" });
+        return decoder;
+    }
+
+    function decodeKeyFrames(decoder, count) {
+        for (let i = 0; i < count; ++i)
+            decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: i, data: keyFrame }));
+    }
+
+    asyncTest(async done => {
+        const counts = { outputs: 0 };
+        const decoder = makeDecoder(counts);
+        decodeKeyFrames(decoder, 40);
+        println(`decodeQueueSize after 40 decodes: ${decoder.decodeQueueSize}`);
+        await decoder.flush();
+        println(`After flushing: ${counts.outputs} outputs, decodeQueueSize ${decoder.decodeQueueSize}`);
+
+        decodeKeyFrames(decoder, 40);
+        const flushed = decoder.flush().catch(e => println(`Flush after reset: ${e.name}`));
+        decoder.reset();
+        println(`decodeQueueSize after reset: ${decoder.decodeQueueSize}`);
+        await flushed;
+
+        counts.outputs = 0;
+        decoder.configure({ codec: "vp09.00.10.08" });
+        decodeKeyFrames(decoder, 3);
+        await decoder.flush();
+        println(`After reconfiguring: ${counts.outputs} outputs`);
+        decoder.close();
+        done();
+    });
+</script>

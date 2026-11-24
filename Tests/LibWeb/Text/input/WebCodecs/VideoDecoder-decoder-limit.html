@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    // A single 16x16 solid red VP9 key frame.
+    const keyFrame = Uint8Array.from(atob("gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA"), c => c.charCodeAt(0));
+
+    function openDecoder() {
+        let errorName = null;
+        const decoder = new VideoDecoder({
+            output: frame => frame.close(),
+            error: e => (errorName = e.name),
+        });
+        decoder.configure({ codec: "vp09.00.10.08" });
+        const outcome = decoder.flush().then(
+            () => "opened",
+            () => errorName
+        );
+        return { decoder, outcome };
+    }
+
+    asyncTest(async done => {
+        const opened = [];
+        const errors = new Set();
+        const attempts = Array.from({ length: 80 }, openDecoder);
+        for (const { decoder, outcome } of attempts) {
+            const result = await outcome;
+            if (result === "opened")
+                opened.push(decoder);
+            else
+                errors.add(result);
+        }
+        println(`Some decoders opened: ${opened.length > 0}`);
+        println(`No more than 16 decoders opened: ${opened.length <= 16}`);
+        println(`The others failed with: ${[...errors].join(", ")}`);
+
+        for (const decoder of opened)
+            decoder.close();
+
+        const frame = await new Promise(resolve => {
+            const decoder = new VideoDecoder({
+                output: frame => {
+                    resolve(`${frame.codedWidth}x${frame.codedHeight}`);
+                    frame.close();
+                    decoder.close();
+                },
+                error: e => resolve(e.name),
+            });
+            decoder.configure({ codec: "vp09.00.10.08" });
+            decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 0, data: keyFrame }));
+            decoder.flush().catch(() => {});
+        });
+        println(`A decoder opened after closing the others decodes: ${frame}`);
+        done();
+    });
+</script>

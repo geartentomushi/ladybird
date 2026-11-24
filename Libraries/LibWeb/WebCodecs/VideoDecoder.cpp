@@ -7,10 +7,12 @@
 #include <AK/AnyOf.h>
 #include <AK/Array.h>
 #include <AK/CharacterTypes.h>
+#include <LibCore/EventLoop.h>
 #include <LibGC/Heap.h>
 #include <LibGC/RootVector.h>
 #include <LibJS/Runtime/ArrayBuffer.h>
 #include <LibMediaClient/Client.h>
+#include <LibMediaClient/WebCodecsLimits.h>
 #include <LibWeb/Bindings/Wrappable.h>
 #include <LibWeb/Bindings/WrapperWorld.h>
 #include <LibWeb/DOM/Event.h>
@@ -28,6 +30,7 @@
 #include <LibWeb/WebIDL/CallbackType.h>
 #include <LibWeb/WebIDL/DOMException.h>
 #include <LibWeb/WebIDL/Promise.h>
+#include <LibWeb/WebIDL/QuotaExceededError.h>
 
 namespace Web::WebCodecs {
 
@@ -53,8 +56,6 @@ GC::Ref<VideoDecoder> VideoDecoder::create_for_constructor(JS::Object& relevant_
     // 12. Assign a new list to [[pending flush promises]].
     // 13. Assign false to [[dequeue event scheduled]].
     // 14. Return d.
-    // NB: The control messages run as soon as they are queued, as the codec in the MediaServer queues its own work and
-    //     so never becomes saturated.
     return GC::Heap::the().allocate<VideoDecoder>(global_scope->this_impl(), init.output, init.error);
 }
 
@@ -75,6 +76,10 @@ void VideoDecoder::visit_edges(Cell::Visitor& visitor)
     visitor.visit(m_error_callback);
     for (auto& pending_flush : m_pending_flush_promises)
         visitor.visit(pending_flush.promise);
+    m_control_message_queue.for_each([&](auto const& message) {
+        if (auto const* decode_message = message.template get_pointer<DecodeControlMessage>())
+            visitor.visit(decode_message->chunk);
+    });
 }
 
 void VideoDecoder::finalize()
@@ -213,6 +218,18 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     //        is not dropped.
     release_codec();
 
+    // NB: The chunks still waiting for the replaced codec are dropped with its output.
+    size_t dropped_chunk_count = 0;
+    m_control_message_queue.for_each([&](auto const& message) {
+        if (message.template has<DecodeControlMessage>())
+            ++dropped_chunk_count;
+    });
+    m_control_message_queue.clear();
+    if (dropped_chunk_count > 0) {
+        m_decode_queue_size -= dropped_chunk_count;
+        schedule_dequeue_event();
+    }
+
     // NB: The replaced codec drops its pending outputs, so the flushes waiting on it are complete.
     for (auto const& pending_flush : m_pending_flush_promises)
         codec_flushed(m_codec_generation, pending_flush.flush_id);
@@ -232,6 +249,17 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     }
 
     m_media_client = media_client.release_value();
+
+    // NB: A decoder the page dropped without closing keeps its codec until it is collected, so collect those before
+    //     MediaServer would reject this one for having too many open. This happens at most once per event loop
+    //     iteration, as a page that keeps its decoders would otherwise make each configure() scan the whole heap.
+    static thread_local bool collected_for_this_iteration = false;
+    if (!collected_for_this_iteration && m_media_client->webcodecs_video_decoder_count() >= MediaClient::max_webcodecs_video_decoders_per_client) {
+        collected_for_this_iteration = true;
+        Core::deferred_invoke([] { collected_for_this_iteration = false; });
+        heap().collect_garbage();
+    }
+
     auto codec_generation = ++m_codec_generation;
     auto weak_this = GC::Weak { *this };
     MediaClient::Client::WebCodecsVideoDecoderCallbacks callbacks;
@@ -246,6 +274,10 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     callbacks.on_error = [weak_this, codec_generation](Media::DecoderError error) {
         if (auto self = weak_this.ptr())
             self->codec_failed(codec_generation, error);
+    };
+    callbacks.on_chunk_dequeued = [weak_this, codec_generation] {
+        if (auto self = weak_this.ptr())
+            self->codec_chunk_dequeued(codec_generation);
     };
     m_codec_id = m_media_client->create_webcodecs_video_decoder(codec, description.value().bytes(), move(callbacks));
     return {};
@@ -274,28 +306,93 @@ WebIDL::ExceptionOr<void> VideoDecoder::decode(EncodedVideoChunk& chunk)
     ++m_decode_queue_size;
 
     // 4. Queue a control message to decode the chunk.
+    m_control_message_queue.enqueue(DecodeControlMessage { chunk });
+
     // 5. Process the control message queue.
-    // NB: The control message runs here.
-    //     1. If [[codec saturated]] equals true, return "not processed".
-    //     2. If decoding chunk will cause the [[codec implementation]] to become saturated, assign true to
-    //        [[codec saturated]].
-    //     3. Decrement [[decodeQueueSize]] and run the Schedule Dequeue Event algorithm.
+    process_control_message_queue();
+    return {};
+}
+
+// https://w3c.github.io/webcodecs/#dom-videodecoder-decode
+VideoDecoder::ControlMessageOutcome VideoDecoder::run_control_message(DecodeControlMessage const& message)
+{
+    auto const& chunk = *message.chunk;
+    auto has_codec = m_media_client && m_codec_id.has_value();
+
+    // 1. If [[codec saturated]] equals true, return "not processed".
+    // 2. If decoding chunk will cause the [[codec implementation]] to become saturated, assign true to
+    //    [[codec saturated]].
+    // NB: The codec is saturated when it cannot take this chunk, so the chunk waits here until it can.
+    if (m_codec_saturated)
+        return ControlMessageOutcome::NotProcessed;
+    if (has_codec && !MediaClient::webcodecs_video_decoder_can_accept_chunk(m_chunk_sizes_waiting_in_codec.size(), m_bytes_waiting_in_codec, chunk.data().size())) {
+        m_codec_saturated = true;
+        return ControlMessageOutcome::NotProcessed;
+    }
+
+    // 3. Decrement [[decodeQueueSize]] and run the Schedule Dequeue Event algorithm.
     --m_decode_queue_size;
     schedule_dequeue_event();
 
-    //     4. Enqueue the following steps to the [[codec work queue]]:
-    //        1. Attempt to use [[codec implementation]] to decode the chunk.
-    //        2. If decoding results in an error, queue a task to run the Close VideoDecoder algorithm with
-    //           EncodingError and return.
-    //        3. If [[codec saturated]] equals true and [[codec implementation]] is no longer saturated, queue a task
-    //           to perform the following steps: ...
-    //        4. Let decoded outputs be a list of decoded video data outputs emitted by [[codec implementation]] in
-    //           presentation order.
-    //        5. If decoded outputs is not empty, queue a task to run the Output VideoFrame algorithm with decoded
-    //           outputs.
-    if (m_media_client && m_codec_id.has_value())
+    // 4. Enqueue the following steps to the [[codec work queue]]:
+    //    1. Attempt to use [[codec implementation]] to decode the chunk.
+    //    2. If decoding results in an error, queue a task to run the Close VideoDecoder algorithm with EncodingError
+    //       and return.
+    //    3. If [[codec saturated]] equals true and [[codec implementation]] is no longer saturated, queue a task to
+    //       perform the following steps: ...
+    //    4. Let decoded outputs be a list of decoded video data outputs emitted by [[codec implementation]] in
+    //       presentation order.
+    //    5. If decoded outputs is not empty, queue a task to run the Output VideoFrame algorithm with decoded outputs.
+    // NB: The codec in the MediaServer does this, and tells us when it starts on the chunk; see codec_chunk_dequeued().
+    if (has_codec) {
+        m_chunk_sizes_waiting_in_codec.append(chunk.data().size());
+        m_bytes_waiting_in_codec += chunk.data().size();
         m_media_client->webcodecs_video_decoder_decode(*m_codec_id, chunk.type() == Bindings::EncodedVideoChunkType::Key, chunk.timestamp(), chunk.duration(), chunk.data());
-    return {};
+    }
+
+    // 5. Return "processed".
+    return ControlMessageOutcome::Processed;
+}
+
+void VideoDecoder::codec_chunk_dequeued(u64 codec_generation)
+{
+    if (codec_generation != m_codec_generation || m_chunk_sizes_waiting_in_codec.is_empty())
+        return;
+    m_bytes_waiting_in_codec -= m_chunk_sizes_waiting_in_codec.take_first();
+
+    // https://w3c.github.io/webcodecs/#dom-videodecoder-decode
+    // 3. If [[codec saturated]] equals true and [[codec implementation]] is no longer saturated, queue a task to
+    //    perform the following steps:
+    // NB: These steps run here rather than in a task, as a destroyed document discards its tasks, and the flushes
+    //     waiting behind the chunks would then never settle and so keep us and our codec alive.
+    if (!m_codec_saturated)
+        return;
+
+    // 1. Assign false to [[codec saturated]].
+    m_codec_saturated = false;
+
+    // 2. Process the control message queue.
+    process_control_message_queue();
+}
+
+// https://w3c.github.io/webcodecs/#process-the-control-message-queue
+void VideoDecoder::process_control_message_queue()
+{
+    // 1. While [[message queue blocked]] is false and [[control message queue]] is not empty:
+    while (!m_control_message_queue.is_empty()) {
+        // 1. Let front message be the first message in [[control message queue]].
+        auto front_message = m_control_message_queue.head();
+
+        // 2. Let outcome be the result of running the control message steps described by front message.
+        auto outcome = front_message.visit([&](auto const& message) { return run_control_message(message); });
+
+        // 3. If outcome equals "not processed", break.
+        if (outcome == ControlMessageOutcome::NotProcessed)
+            break;
+
+        // 4. Otherwise, dequeue front message from the [[control message queue]].
+        (void)m_control_message_queue.dequeue();
+    }
 }
 
 // https://w3c.github.io/webcodecs/#dom-videodecoder-flush
@@ -317,20 +414,27 @@ void VideoDecoder::flush(GC::Ref<WebIDL::Promise> promise)
     update_pending_flush_keep_alive();
 
     // 5. Queue a control message to flush the codec with promise.
-    // 6. Process the control message queue.
-    // NB: The control message runs here.
-    //     1. Signal [[codec implementation]] to emit all internal pending outputs.
-    //     2. Let decoded outputs be a list of decoded video data outputs emitted by [[codec implementation]].
-    //     3. Queue a task to perform these steps: ...
-    if (m_media_client && m_codec_id.has_value()) {
-        m_media_client->webcodecs_video_decoder_flush(*m_codec_id, flush_id);
-        return;
-    }
+    m_control_message_queue.enqueue(FlushControlMessage { flush_id });
 
-    // NB: Without a codec, there is nothing to flush.
-    codec_flushed(m_codec_generation, flush_id);
+    // 6. Process the control message queue.
+    process_control_message_queue();
 
     // 7. Return promise.
+}
+
+// https://w3c.github.io/webcodecs/#dom-videodecoder-flush
+VideoDecoder::ControlMessageOutcome VideoDecoder::run_control_message(FlushControlMessage const& message)
+{
+    // 1. Signal [[codec implementation]] to emit all internal pending outputs.
+    // 2. Let decoded outputs be a list of decoded video data outputs emitted by [[codec implementation]].
+    // 3. Queue a task to perform these steps: ...
+    if (m_media_client && m_codec_id.has_value())
+        m_media_client->webcodecs_video_decoder_flush(*m_codec_id, message.flush_id);
+    else
+        codec_flushed(m_codec_generation, message.flush_id); // NB: Without a codec, there is nothing to flush.
+
+    // 4. Return "processed".
+    return ControlMessageOutcome::Processed;
 }
 
 // https://w3c.github.io/webcodecs/#dom-videodecoder-reset
@@ -464,6 +568,9 @@ void VideoDecoder::release_codec()
     m_codec_id = {};
     m_media_client = nullptr;
     ++m_codec_generation;
+    m_codec_saturated = false;
+    m_chunk_sizes_waiting_in_codec.clear();
+    m_bytes_waiting_in_codec = 0;
 }
 
 // https://w3c.github.io/webcodecs/#reset-videodecoder
@@ -481,6 +588,7 @@ void VideoDecoder::reset_video_decoder(GC::Ref<WebIDL::DOMException> exception)
     release_codec();
 
     // 4. Remove all control messages from the [[control message queue]].
+    m_control_message_queue.clear();
     // 5. If [[decodeQueueSize]] is greater than zero:
     if (m_decode_queue_size > 0) {
         // 1. Set [[decodeQueueSize]] to zero.
@@ -586,14 +694,18 @@ void VideoDecoder::codec_flushed(u64 codec_generation, u64 flush_id)
 void VideoDecoder::codec_failed(u64 codec_generation, Media::DecoderError const& error)
 {
     auto is_unsupported = error.category() == Media::DecoderErrorCategory::NotImplemented || error.category() == Media::DecoderErrorCategory::UnrecognizedFormat;
-    queue_a_codec_task(GC::captures(*this, codec_generation, is_unsupported), [](VideoDecoder& self, u64& codec_generation, bool& is_unsupported) {
+    auto is_out_of_resources = error.category() == Media::DecoderErrorCategory::Memory;
+    queue_a_codec_task(GC::captures(*this, codec_generation, is_unsupported, is_out_of_resources), [](VideoDecoder& self, u64& codec_generation, bool& is_unsupported, bool& is_out_of_resources) {
         if (codec_generation != self.m_codec_generation || self.m_state == CodecState::Closed)
             return;
 
         // NB: A codec that cannot be created for the configuration closes the decoder with NotSupportedError, and
-        //     one that fails to decode closes it with EncodingError.
+        //     one that fails to decode closes it with EncodingError. One that is out of resources, such as when too many
+        //     decoders are open, closes it with QuotaExceededError, as reclaiming a codec does.
         HTML::TemporaryExecutionContext context(HTML::relevant_realm(self.relevant_global_object()), HTML::TemporaryExecutionContext::CallbacksEnabled::Yes);
-        if (is_unsupported)
+        if (is_out_of_resources)
+            self.close_video_decoder(WebIDL::QuotaExceededError::create("The video decoder is out of resources"_utf16));
+        else if (is_unsupported)
             self.close_video_decoder(WebIDL::NotSupportedError::create("The VideoDecoderConfig is not supported"_utf16));
         else
             self.close_video_decoder(WebIDL::EncodingError::create("The video could not be decoded"_utf16));
