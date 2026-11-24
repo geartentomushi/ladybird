@@ -1,0 +1,4 @@
+ready resolves with the registration: true
+ready registration has an active worker: true
+ready is still the same promise: true
+unregister() resolves with: true

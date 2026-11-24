@@ -431,7 +431,10 @@ static void activate(GC::Ref<UpdateAlgorithmState> state)
     // 5. Run the Update Worker State algorithm passing registration's active worker and "activating" as the arguments.
     update_worker_state(event_loop, *waiting_worker, ServiceWorkerState::Activating);
 
-    // FIXME: 6-9. Update the service worker clients that use registration, and resolve their ready promises.
+    // 6-7. Resolve the ready promises of the service worker clients whose creation URL matches registration.
+    ServiceWorkerContainer::resolve_ready_promises_after_activation();
+
+    // FIXME: 8-9. Update the service worker clients that use registration.
 
     // 10. Let activeWorker be registration's active worker.
     // 11. If the result of running the Should Skip Event algorithm with activeWorker and "activate" is false, then

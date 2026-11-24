@@ -38,6 +38,8 @@ public:
     GC::Ptr<ServiceWorker> controller() const;
     GC::Ref<WebIDL::Promise> ready();
     void register_(JS::Realm&, TrustedTypes::TrustedScriptURLOrString script_url, RegistrationOptions const&, GC::Ref<WebIDL::Promise>);
+
+    static void resolve_ready_promises_after_activation();
     void get_registration(JS::Realm&, Utf16String const& client_url, GC::Ref<WebIDL::Promise>);
     void get_registrations(JS::Realm&, GC::Ref<WebIDL::Promise>);
 

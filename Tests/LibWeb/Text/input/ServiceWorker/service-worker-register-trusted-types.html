@@ -1,0 +1,13 @@
+<!doctype html>
+<meta http-equiv="Content-Security-Policy" content="require-trusted-types-for 'script'">
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        try {
+            await navigator.serviceWorker.register("service-worker.js");
+            println("register() with a string resolved");
+        } catch (error) {
+            println(`register() with a string rejects with ${error.name}: ${error.message}`);
+        }
+    });
+</script>
