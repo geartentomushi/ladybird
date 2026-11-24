@@ -601,7 +601,7 @@ void HTMLLinkElement::default_fetch_and_process_linked_resource(u64 fetch_genera
     // INTEROP: Script can read the style immediately when a link is promoted from a completed preload.
     // Use Fetch's normal checks and reuse only a buffered response; never wait on a network load here.
     bool synchronous = false;
-    if (promoting_preload && !(m_relationship & Relationship::Icon)
+    if (promoting_preload && JS::VM::the().has_running_execution_context() && !(m_relationship & Relationship::Icon)
         && Fetch::Infrastructure::is_http_or_https_scheme(request->url().scheme()) && request->integrity_metadata().is_empty()) {
         auto preload = document().map_of_preloaded_resources().get(create_a_preload_key(*request));
         synchronous = preload.has_value() && (*preload)->response
