@@ -90,6 +90,9 @@ pub(crate) struct LineBoxFragmentData {
     /// Shaping boundaries and internal soft wraps needed to shorten text for a standard block ellipsis.
     pub(crate) block_ellipsis_text: Option<Box<BlockEllipsisText>>,
     pub(crate) is_fully_truncated: bool,
+    /// Whether the fragment is fully truncated because a text-overflow ellipsis took its place. Such a fragment only
+    /// paints nothing: It's still on its line, so it still counts toward the line's height and baseline.
+    pub(crate) is_hidden_by_text_overflow: bool,
     pub(crate) trailing_whitespace: TrailingWhitespace,
     pub(crate) text_utf16: *const u16,
     pub(crate) text_length_in_code_units: usize,
@@ -178,6 +181,7 @@ impl LineBoxFragmentData {
             has_soft_wrap_opportunity_after: false,
             block_ellipsis_text: None,
             is_fully_truncated: false,
+            is_hidden_by_text_overflow: false,
             trailing_whitespace: TrailingWhitespace::default(),
             text_utf16: std::ptr::null(),
             text_length_in_code_units: 0,
@@ -262,6 +266,12 @@ impl LineBoxFragmentData {
         let mut glyphs = prefix.glyphs.unwrap();
         glyphs.width = inline_size.to_double() as f32;
         (inline_size, glyphs)
+    }
+
+    /// Whether the fragment counts toward the height and baseline of its line: Text that a block overflow ellipsis
+    /// displaced doesn't, but an atomic inline it displaced and content that a text-overflow ellipsis hides do.
+    pub(crate) fn takes_part_in_line_alignment(&self) -> bool {
+        !self.is_fully_truncated || self.is_hidden_by_text_overflow || self.is_atomic_inline
     }
 
     pub(crate) fn ends_in_whitespace(&self) -> bool {

@@ -66,7 +66,7 @@ struct LineTextFacts {
     kept_fragments: std::ops::Range<usize>,
     /// The inline boxes that hold text the line keeps directly, found only in quirks mode.
     boxes_holding_text: std::collections::HashSet<Node>,
-    /// Whether the line holds a block ellipsis and no other content.
+    /// Whether a block ellipsis displaced all of the line's content.
     holds_only_block_ellipsis: bool,
 }
 
@@ -1188,6 +1188,9 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         };
         let fragment_count = self.line(line_index).fragments.len();
         for fragment_index in 0..fragment_count {
+            if !self.line(line_index).fragments[fragment_index].takes_part_in_line_alignment() {
+                continue;
+            }
             // NB: An ellipsis is text in the block's style, whichever node it stands at.
             let (node, style_source, content_baselines, box_cells, is_ellipsis) = {
                 let fragment = &self.line(line_index).fragments[fragment_index];
@@ -1282,7 +1285,9 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             .document_in_line_height_quirks_mode();
         let line = self.line(line_index);
         let fragments = &line.fragments[..strut_fragment_start];
-        let is_content = |fragment: &line_box_fragment::LineBoxFragmentData| !Self::is_collapsible_whitespace(fragment);
+        let is_content = |fragment: &line_box_fragment::LineBoxFragmentData| {
+            fragment.takes_part_in_line_alignment() && !Self::is_collapsible_whitespace(fragment)
+        };
         let kept_fragments = match (
             fragments.iter().position(is_content),
             fragments.iter().rposition(is_content),
@@ -1295,7 +1300,8 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             for (fragment_index, fragment) in fragments.iter().enumerate() {
                 // NB: A block ellipsis borrows the text node of the content it displaces, but isn't text in the
                 //     block container.
-                if !fragment.is_block_ellipsis
+                if fragment.takes_part_in_line_alignment()
+                    && !fragment.is_block_ellipsis
                     && (kept_fragments.contains(&fragment_index) || !Self::is_collapsible_whitespace(fragment))
                     && self.facts(fragment.layout_node).is_text_node()
                 {
@@ -1330,7 +1336,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         // NB: The zero-width inline box that starts each line is the block container's own, so it matches them on a
         //     line with no text directly in the block container. Only a forced break directly in the block container
         //     that's alone on its line gives it its strut back, and a list item keeps its strut on every line.
-        // NB: So does a line that holds a block ellipsis and no other content.
+        // NB: So does a line whose content a block ellipsis displaced, which holds the ellipsis alone.
         let containing_block = self.context().containing_block;
         if self.containing_style().display().is_list_item()
             || text.boxes_holding_text.contains(&containing_block)
@@ -1340,11 +1346,12 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         }
         let line = self.line(line_index);
         let has_content = line.fragments.iter().enumerate().any(|(fragment_index, fragment)| {
-            if fragment_index < text.strut_fragment_start {
-                !Self::is_collapsible_whitespace(fragment)
-            } else {
-                self.strut_brings_line_height(line_index, text, fragment.style_source)
-            }
+            fragment.takes_part_in_line_alignment()
+                && if fragment_index < text.strut_fragment_start {
+                    !Self::is_collapsible_whitespace(fragment)
+                } else {
+                    self.strut_brings_line_height(line_index, text, fragment.style_source)
+                }
         });
         !has_content
             && line.forced_break.is_some_and(|forced_break| {
@@ -1583,6 +1590,7 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
             self.line(line_index)
                 .fragments
                 .iter()
+                .filter(|fragment| fragment.takes_part_in_line_alignment())
                 .map(|fragment| {
                     if fragment.is_atomic_inline {
                         fragment.box_cells().margin_box_block_size(false)
@@ -1858,11 +1866,10 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         let containing_style = self.containing_style();
         let strut_baseline = Self::baseline_for_style(containing_style, containing_style.line_height());
         let fragment_count = self.line(line_index).fragments.len();
-        let has_line_relative_aligned_subtree = self
-            .line(line_index)
-            .fragments
-            .iter()
-            .any(|fragment| self.line_relative_aligned_subtree_root(fragment.style_source).is_some());
+        let has_line_relative_aligned_subtree = self.line(line_index).fragments.iter().any(|fragment| {
+            fragment.takes_part_in_line_alignment()
+                && self.line_relative_aligned_subtree_root(fragment.style_source).is_some()
+        });
         let text = self.line_text_facts(line_index, strut_fragment_start);
         let line_box_baseline = self.line_box_baseline(line_index, &text, has_line_relative_aligned_subtree);
 
@@ -1893,6 +1900,9 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
         let mut inline_box_alignments: Vec<InlineBoxAlignment> = Vec::new();
 
         for fragment_index in 0..fragment_count {
+            if !self.line(line_index).fragments[fragment_index].takes_part_in_line_alignment() {
+                continue;
+            }
             inline_box_alignments.clear();
             let mut snapshot = {
                 let fragment = &self.line(line_index).fragments[fragment_index];
@@ -2110,7 +2120,8 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
 
             let text_fragment_baseline = {
                 let fragment = &self.line(line_index).fragments[fragment_index];
-                is_text_node.then(|| fragment.block_offset + fragment.baseline)
+                (is_text_node && fragment.takes_part_in_line_alignment())
+                    .then(|| fragment.block_offset + fragment.baseline)
             };
             if let Some(fragment_baseline) = text_fragment_baseline {
                 // Aligned-subtree fragments are placed at their baseline position here and moved by the
