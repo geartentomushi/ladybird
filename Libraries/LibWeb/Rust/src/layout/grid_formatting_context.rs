@@ -5664,24 +5664,30 @@ impl<'pass> GridFormattingContext<'pass> {
         let metrics = self.cells_of(item);
         let collapsed = metrics.uses_collapsing_borders_model;
         let content_baselines = self.laid_out_item(item).content_baselines;
-        let distance_from_margin_box_top =
-            if !self.item_establishes_orthogonal_flow(item) && content_baselines.first.is_some() {
-                formatting_context::box_baseline_with_content_baselines(
-                    &self.run.pass,
-                    item.box_,
-                    &metrics,
-                    if self.item_aligns_by_last_baseline(item) {
-                        formatting_context::BaselineSet::Last
-                    } else {
-                        formatting_context::BaselineSet::First
-                    },
-                    content_baselines,
-                )
+        let distance_from_margin_box_top = if !self.item_establishes_orthogonal_flow(item)
+            && content_baselines.first.is_some()
+        {
+            formatting_context::box_baseline_with_content_baselines(
+                &self.run.pass,
+                item.box_,
+                &metrics,
+                if self.item_aligns_by_last_baseline(item) {
+                    formatting_context::BaselineSet::Last
+                } else {
+                    formatting_context::BaselineSet::First
+                },
+                content_baselines,
+            )
+        } else {
+            // https://drafts.csswg.org/css-align-3/#synthesize-baseline
+            // NB: The alphabetic baseline is synthesized from the line-under edge of the border box, and the
+            //     central baseline halfway between its line-over and line-under edges.
+            if formatting_context::dominant_baseline_is_central(self.container_style) {
+                metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2
             } else {
-                // https://drafts.csswg.org/css-align-3/#synthesize-baseline
-                // NB: The alphabetic baseline is synthesized from the line-under edge of the border box.
                 metrics.margin_box_top(collapsed) + metrics.content_block_size() + metrics.border_box_bottom(collapsed)
-            };
+            }
+        };
         item.extra_margin_top + distance_from_margin_box_top
     }
 
@@ -5821,6 +5827,7 @@ impl<'pass> GridFormattingContext<'pass> {
             baseline_set,
             source,
             formatting_context::BaselinePurpose::Container,
+            formatting_context::dominant_baseline_is_central(self.container_style),
         )
     }
 

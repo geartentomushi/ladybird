@@ -65,8 +65,8 @@ Viewport <#document> at [0,0] [0+0+0 800 0+0+0] [0+0+0 600 0+0+0] [BFC] children
           BlockContainer <span.overlay> at [30,472] positioned [0+0+0 20 0+0+0] [0+0+0 18 0+0+0] [BFC] children: not-inline
       BlockContainer <div.case.vertical> at [20,510] [20+0+0 20 0+0+20] [20+0+0 10 0+0+20] [BFC] children: inline
         InlineNode <span.host> at [20,510] [0+0+0 20 0+0+0] [0+0+0 10 0+0+0]
-          frag 0 from BlockContainer start: 0, length: 0, rect: [29,515 0x0] baseline: 10
-          BlockContainer <span.atomic.baseline.border-only> at [29,515] inline-block [0+5+0 0 0+5+0] [0+5+0 0 0+5+0] [BFC] children: not-inline
+          frag 0 from BlockContainer start: 0, length: 0, rect: [30,515 0x0] baseline: 11
+          BlockContainer <span.atomic.baseline.border-only> at [30,515] inline-block [0+5+0 0 0+5+0] [0+5+0 0 0+5+0] [BFC] children: not-inline
           BlockContainer <span.overlay> at [20,510] positioned [0+0+0 20 0+0+0] [0+0+0 10 0+0+0] [BFC] children: not-inline
       BlockContainer <div.case.vertical> at [20,540] [20+0+0 20 0+0+20] [20+0+0 10 0+0+20] [BFC] children: inline
         InlineNode <span.host> at [20,540] [0+0+0 20 0+0+0] [0+0+0 10 0+0+0]
