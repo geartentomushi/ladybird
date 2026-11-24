@@ -1,0 +1,13 @@
+Viewport <#document> at [0,0] [0+0+0 800 0+0+0] [0+0+0 600 0+0+0] [BFC] children: not-inline
+  BlockContainer <html> at [0,0] [0+0+0 800 0+0+0] [0+0+0 84 0+0+0] [BFC] children: not-inline
+    BlockContainer <body> at [0,0] [0+0+0 800 0+0+0] [0+0+0 84 0+0+0] children: not-inline
+      BlockContainer <div.clamp> at [0,0] [0+0+0 100 0+0+700] [0+0+0 84 0+0+0] [BFC] children: inline overflow: [0,0 100x104]
+        frag 0 from BlockContainer start: 0, length: 1, rect: [30,64 7.3125x20] baseline: 16
+            ""
+        BlockContainer <div.float> at [0,25] floating [0+0+0 30 0+0+0] [25+0+0 50 0+0+0] [BFC] children: not-inline
+        BlockContainer <span.atom> at [30,0] inline-block [0+0+0 65 0+0+0] [0+0+0 80 0+0+0] [BFC] children: not-inline
+        BreakNode <br> (not painted)
+        TextNode <#text> (not painted)
+
+SC for Viewport<#document> [0,0 800x600] (z-index: auto)
+ SC for BlockContainer<HTML> [0,0 800x84] (z-index: auto)
