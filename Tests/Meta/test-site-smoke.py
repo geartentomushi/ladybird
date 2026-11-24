@@ -18,6 +18,7 @@ import unittest
 
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 from typing import Optional
 from unittest.mock import Mock
 from unittest.mock import patch
@@ -49,6 +50,77 @@ class SiteSmokeTests(unittest.TestCase):
         self.assertEqual(ranks, sorted(set(ranks)))
         self.assertEqual(len({url for _, url in sites}), 100)
         self.assertEqual(sites[0], (1, "https://google.com/"))
+
+    def test_top_500_list_is_a_separate_pinned_snapshot(self):
+        self.assertEqual(set(smoke.SITE_LISTS), {"top-100", "top-500"})
+        source, sites = smoke.targets(None, "top-500")
+        self.assertIn("8PW6V (2026-11-22)", source)
+        self.assertEqual(len(sites), 500)
+        ranks = [rank for rank, _ in sites]
+        self.assertEqual(ranks, sorted(set(ranks)))
+        self.assertEqual(len({url for _, url in sites}), 500)
+        baseline = json.loads((Path(smoke.__file__).with_name("baseline-top-500.json")).read_text())
+        self.assertEqual([(row["rank"], row["url"]) for row in baseline["sites"]], sites)
+
+    def test_reference_differences_only_report_sites_the_reference_loaded(self):
+        def sized(url, width=1280, height=2000, **kwargs):
+            return site(url, **kwargs) | {"rank": 1, "document_size": {"width": width, "height": height}}
+
+        settings = {"viewport": smoke.VIEWPORT}
+        chrome = {
+            "settings": settings,
+            "sites": [
+                sized("https://a/", elements=100),
+                sized("https://b/", elements=100),
+                sized("https://c/", elements=100),
+                sized("https://d/", status="timeout"),
+                sized("https://e/", elements=100),
+                sized("https://f/", elements=100),
+            ],
+        }
+        ladybird = {
+            "settings": settings,
+            "sites": [
+                sized("https://a/", elements=95, height=2100),
+                sized("https://b/", status="crash"),
+                sized("https://c/", elements=40, width=3000, height=900),
+                sized("https://d/", status="load-error"),
+                sized("https://e/", elements=0, javascript_exception=5),
+                sized("https://f/", status="harness-error"),
+            ],
+        }
+        differences = smoke.reference_differences(chrome, ladybird)
+        self.assertEqual(
+            [(difference["url"], difference["metric"]) for difference in differences],
+            [
+                ("https://b/", "status"),
+                ("https://c/", "body_element_count"),
+                ("https://c/", "document_width"),
+                ("https://c/", "document_height"),
+                ("https://e/", "body_element_count"),
+                ("https://e/", "total_console_errors"),
+            ],
+        )
+        with self.assertRaises(ValueError):
+            smoke.reference_differences(chrome, ladybird | {"settings": {"viewport": {"width": 1, "height": 1}}})
+        with self.assertRaises(ValueError):
+            smoke.reference_differences(chrome, ladybird | {"sites": ladybird["sites"][:1]})
+        run = {"schema_version": 1, "settings": settings, "sites": []}
+        with self.assertRaises(ValueError):
+            smoke.compare(run | {"browser": "chrome"}, run | {"browser": "ladybird"})
+
+    def test_chrome_reference_uses_a_private_profile_and_regular_user_agent(self):
+        version = subprocess.CompletedProcess([], 0, "Google Chrome for Testing 156.0.8078.47\n", "")
+        with patch.object(subprocess, "run", return_value=version):
+            chrome = smoke.ChromeReference(Path("/driver"), Path("/chrome"))
+        self.assertEqual(chrome.command(4444, Path("/profile"))[:2], [Path("/driver"), "--port=4444"])
+        options = chrome.capabilities(Path("/profile"))["goog:chromeOptions"]
+        self.assertEqual(options["binary"], "/chrome")
+        self.assertIn("--headless=new", options["args"])
+        self.assertIn("--user-data-dir=/profile", options["args"])
+        agent = next(arg for arg in options["args"] if arg.startswith("--user-agent="))
+        self.assertIn("Chrome/156.0.0.0", agent)
+        self.assertNotIn("Headless", agent)
 
     def test_tranco_filter_requires_a_successful_html_response(self):
         for returncode, response, expected in (
@@ -348,7 +420,7 @@ class SiteSmokeTests(unittest.TestCase):
         )
 
     def test_paired_reruns_confirm_or_clear_existing_regressions(self):
-        scenarios = (
+        scenarios: tuple[tuple[str, dict[str, Any], dict[str, Any], dict[str, Any], dict[str, Any], str, bool], ...] = (
             ("empty", {"elements": 0}, {}, {"elements": 0}, {"elements": 0}, "nonempty_body", True),
             ("transient-empty", {"elements": 0}, {}, {"elements": 0}, {}, "nonempty_body", False),
             ("baseline-empty", {"elements": 0}, {"elements": 0}, {"elements": 0}, {}, "nonempty_body", False),
@@ -475,7 +547,13 @@ class SiteSmokeTests(unittest.TestCase):
         baseline = dict(run(site("example")), revision="baseline", settings=settings)
         current = dict(run(site("example", "timeout")), settings=settings, summary={"sites": 1})
         args = SimpleNamespace(
-            cc=None, cxx=None, build_jobs=None, test_jobs=6, console_error_increase=5, baseline_webdriver=None
+            cc=None,
+            cxx=None,
+            build_jobs=None,
+            test_jobs=6,
+            console_error_increase=5,
+            baseline_webdriver=None,
+            list="top-100",
         )
         with tempfile.TemporaryDirectory() as temporary:
             output = Path(temporary)
