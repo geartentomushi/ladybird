@@ -851,6 +851,13 @@ pub(crate) fn box_baseline_with_content_dominant_baselines(
         return metrics.margin_box_top(collapsed) + metrics.content_block_size();
     }
 
+    // https://drafts.csswg.org/css-align-3/#baseline-rules
+    // NB: Every baseline in the last baseline set of a scroll container that does not derive it from its content
+    //     corresponds to its block-end margin edge, the central one included.
+    if !derive_baseline_from_content {
+        return metrics.margin_box_block_size(collapsed);
+    }
+
     // https://drafts.csswg.org/css-inline-3/#baseline-synthesis-box
     // A box with no baseline set synthesizes its alphabetic baseline at its line-under margin edge, and its central
     // baseline halfway between its line-over and line-under margin edges.
