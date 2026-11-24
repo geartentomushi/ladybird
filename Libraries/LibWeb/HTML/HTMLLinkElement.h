@@ -178,8 +178,8 @@ private:
     static RefPtr<Fetch::Infrastructure::Request> create_link_request(LinkProcessingOptions const&);
     static bool apply_link_options_from_parsed_header_attributes(LinkProcessingOptions&, HTTP::Link const&);
 
-    void fetch_and_process_linked_resource();
-    void default_fetch_and_process_linked_resource(u64 fetch_generation);
+    void fetch_and_process_linked_resource(bool promoting_preload = false);
+    void default_fetch_and_process_linked_resource(u64 fetch_generation, bool promoting_preload);
     void fetch_and_process_linked_dns_prefetch_resource();
     void fetch_and_process_linked_preconnect_resource();
     void fetch_and_process_linked_preload_resource();
@@ -194,9 +194,11 @@ private:
     static void preload(LinkProcessingOptions&, GC::Ptr<GC::Function<void(Fetch::Infrastructure::Response&)>> process_response = {});
     static void modulepreload(LinkProcessingOptions const&);
 
-    void process_linked_resource(bool success, Fetch::Infrastructure::ResponseView const&, CSS::StyleScope::OriginClean, Core::ImmutableBytes const*);
+    void process_linked_resource(bool success, Fetch::Infrastructure::ResponseView const&, CSS::StyleScope::OriginClean, Core::ImmutableBytes const*, bool synchronous);
     void process_icon_resource(bool success, Fetch::Infrastructure::ResponseView const&, ByteBuffer);
-    void process_stylesheet_resource(bool success, Fetch::Infrastructure::ResponseView const&, CSS::StyleScope::OriginClean, ReadonlyBytes);
+    void process_stylesheet_resource(bool success, Fetch::Infrastructure::ResponseView const&, CSS::StyleScope::OriginClean, ReadonlyBytes, bool synchronous);
+    void apply_stylesheet_rules(CSS::RustRuleList, URL::URL location, URL::URL base_url, CSS::StyleScope::OriginClean, ReferrerPolicy::ReferrerPolicy, u64 fetch_generation, bool synchronous);
+    void complete_stylesheet_load(Utf16FlyString const& event_name, u64 fetch_generation, bool synchronous);
     void associate_style_sheet(CSS::StyleSheetState&, CSS::StyleScope::OriginClean);
     void associate_empty_style_sheet(Fetch::Infrastructure::ResponseView const&, CSS::StyleScope::OriginClean);
     void finish_processing_stylesheet_resource(u64 fetch_generation);
