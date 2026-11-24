@@ -2683,7 +2683,9 @@ using CompilationVisitor = Function<bool(RustRule::Type, StyleSheetState const&,
 static void visit_compilation(StyleSheetState const& sheet, u64 rule_identity, DOM::Document const& document, Parser::ValueParserFFI::NativeCompilationPurpose purpose, CompilationVisitor const& visit, Parser::ValueParserFFI::NativeStylePublication const& publication)
 {
     // An implicit scope is named by its root's identity, which a root still waiting to arrive takes first.
-    if (sheet.native_rules().has_implicit_scope())
+    // OPTIMIZATION: Finding an implicit scope walks the whole sheet, which is wasted for each rule a script inserts
+    //               while no root is waiting to arrive.
+    if (document.descendant_style_arrival_pending() && sheet.native_rules().has_implicit_scope())
         take_in_pending_style_arrivals(const_cast<DOM::Document&>(document));
     MediaEnvironmentSnapshot environment { document };
     Parser::ValueParserFFI::NativeCompilationCallbacks callbacks {

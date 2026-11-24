@@ -1,0 +1,56 @@
+<!doctype html>
+<link id="link" rel="stylesheet" href="data:text/css,.base { height: 3px; } @media (min-width: 1px) { .media { width: 5px; } } @media (max-width: 1px) { .unmatched { width: 9px; } }">
+<div class="base media"></div>
+<div class="unmatched"></div>
+<div id="container" style="container: q / inline-size; width: 200px"><div class="rewritten"></div><div class="nested-inside"></div></div>
+<div class="outside-container rewritten"></div>
+<div class="supported"></div>
+<div class="nested"></div>
+<script src="../include.js"></script>
+<script>
+asyncTest(async done => {
+    const link = document.getElementById("link");
+    if (!link.sheet)
+        await new Promise(resolve => link.onload = resolve);
+    const sheet = link.sheet;
+    const width = selector => getComputedStyle(document.querySelector(selector)).width;
+
+    // Rewrite every @media rule into an @container rule many times over, as some sites' container query shims do.
+    const count = 3000;
+    for (let i = 0; i < count; ++i)
+        sheet.insertRule(`@media (min-width: ${i + 1}px) { .r${i} { margin-left: 1px; } }`, sheet.cssRules.length);
+    for (let i = sheet.cssRules.length - 1; i >= 0; --i) {
+        const rule = sheet.cssRules[i];
+        if (!(rule instanceof CSSMediaRule) || i < 3)
+            continue;
+        const text = rule.cssText.replace("@media", "@container q");
+        sheet.deleteRule(i);
+        sheet.insertRule(text, i);
+    }
+    println(`rules: ${sheet.cssRules.length}, container rules: ${[...sheet.cssRules].filter(rule => rule instanceof CSSContainerRule).length}`);
+    println(`plain rule still applies: ${getComputedStyle(document.querySelector(".base")).height}`);
+    println(`matching @media rule still applies: ${width(".media")}`);
+    println(`unmatched @media rule still does not apply: ${width(".unmatched") !== "9px"}`);
+
+    sheet.insertRule(".rewritten { width: 1px; }", sheet.cssRules.length);
+    sheet.insertRule("@container q (min-width: 100px) { .rewritten { width: 7px; } }", sheet.cssRules.length);
+    println(`inserted @container rule applies in the container: ${width("#container .rewritten")}`);
+    println(`inserted @container rule does not apply outside it: ${width(".outside-container")}`);
+
+    sheet.insertRule("@supports (display: grid) { .supported { width: 11px; } }", sheet.cssRules.length);
+    println(`inserted @supports rule applies: ${width(".supported")}`);
+
+    sheet.insertRule("@container q (min-width: 1px) { @media (min-width: 1px) { .nested-inside { width: 17px; } } }", sheet.cssRules.length);
+    println(`inserted @media rule nested in an @container rule applies: ${width(".nested-inside")}`);
+    sheet.insertRule("@container q (min-width: 1px) { @media (max-width: 1px) { .nested-inside { height: 19px; } } }", sheet.cssRules.length);
+    println(`unmatched @media rule nested in an @container rule does not apply: ${getComputedStyle(document.querySelector(".nested-inside")).height !== "19px"}`);
+    sheet.insertRule("@media (min-width: 1px) { .nested { width: 13px; } }", sheet.cssRules.length);
+    println(`inserted @media rule applies: ${width(".nested")}`);
+
+    sheet.deleteRule(sheet.cssRules.length - 1);
+    println(`deleted @media rule stops applying: ${width(".nested") !== "13px"}`);
+    sheet.deleteRule(1);
+    println(`deleted original @media rule stops applying: ${width(".media") !== "5px"}`);
+    done();
+});
+</script>

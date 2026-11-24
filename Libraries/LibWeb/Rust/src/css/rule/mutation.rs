@@ -75,9 +75,26 @@ pub(crate) fn successor(sheet: &NativeStyleSheet, identity: u64, mut published: 
         }
         successor
     }
+    // OPTIMIZATION: Scripts insert most rules at the top level of a sheet. Finding such a rule there first lets the
+    //               walk skip the rules before it instead of descending into each, which makes inserting many rules
+    //               quadratic.
+    let top_level = sheet
+        .rules()
+        .visit_rules(&mut |rule| {
+            if rule.identity() == identity {
+                ControlFlow::Break(())
+            } else {
+                ControlFlow::Continue(())
+            }
+        })
+        .is_break();
     let mut found = false;
     let mut successor = 0;
     let _ = sheet.rules().visit_rules(&mut |rule| {
+        if top_level && !found {
+            found = rule.identity() == identity;
+            return ControlFlow::Continue(());
+        }
         walk(rule, sheet, identity, &mut found, &mut published).map_break(|identity| successor = identity)
     });
     successor
@@ -138,6 +155,7 @@ mod tests {
         let last = rules[3].identity;
         let published = |identity| [inside, next, last].contains(&identity);
         assert_eq!(successor(&sheet, first.identity, published), next);
+        assert_eq!(successor(&sheet, inside, published), next);
         assert_eq!(successor(&sheet, rules[2].identity, published), last);
         assert_eq!(successor(&sheet, last, published), 0);
         assert_eq!(successor(&sheet, 0, published), 0);

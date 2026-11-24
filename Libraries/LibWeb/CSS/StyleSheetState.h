@@ -206,7 +206,11 @@ public:
     void set_parent_css_style_sheet(StyleSheetState*);
 
 private:
-    bool change_affects_only_held_rules(RustRule const&) const;
+    enum class RuleChange {
+        Insertion,
+        Removal,
+    };
+    bool change_affects_only_held_rules(RustRule const&, RuleChange) const;
     StyleSheetState(RustRuleList, GC::Ptr<DOM::Document>, RustMediaList, Optional<::URL::URL> location, Optional<ReferrerPolicy::ReferrerPolicy> fetched_referrer_policy, StyleSheetImport const* import);
 
     void set_rules(RustRuleList);
