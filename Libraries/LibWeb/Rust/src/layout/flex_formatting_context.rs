@@ -3249,7 +3249,7 @@ impl<'pass> FlexFormattingContext<'pass> {
         // largest distance between its baseline and its cross-start margin edge is placed flush against the cross-start
         // edge of the line.
         // https://drafts.csswg.org/css-align-3/#baseline-sharing-group
-        // Items aligned by their first and by their last baselines are in separate baseline-sharing groups. A
+        // Boxes share a baseline-sharing group when the baselines they align by face the same edge of the line, so a
         // last-baseline group aligns at the end edge, which is its fallback alignment.
         // FIXME: Honor a reversed cross axis for the end edge of a last-baseline group.
 
@@ -3258,33 +3258,30 @@ impl<'pass> FlexFormattingContext<'pass> {
             if !self.flex_lines[line_index].has_baseline_aligned_items {
                 continue;
             }
-            // Each participating item, its baseline-sharing group, whether that group aligns at the far (right or
-            // bottom) edge of the line, and the item's baseline from that edge.
-            let participants: Vec<(usize, (bool, bool), bool, CssPixels)> = self.flex_lines[line_index]
+            // Each participating item, whether it aligns at the far (right or bottom) edge of the line, and its
+            // baseline from that edge. Items share a baseline-sharing group when they align at the same edge.
+            let participants: Vec<(usize, bool, CssPixels)> = self.flex_lines[line_index]
                 .items
                 .iter()
                 .filter(|&index| self.item_participates_in_baseline_alignment(index))
                 .map(|index| {
-                    let at_right_edge = self.item_baseline_aligns_at_right_edge(index);
-                    let is_last_baseline = self.item_aligns_by_last_baseline(index);
-                    let at_far_edge = at_right_edge != is_last_baseline;
+                    let at_far_edge =
+                        self.item_baseline_aligns_at_right_edge(index) != self.item_aligns_by_last_baseline(index);
                     (
                         index,
-                        (at_right_edge, is_last_baseline),
                         at_far_edge,
                         self.item_baseline_from_aligned_edge(index, at_far_edge),
                     )
                 })
                 .collect();
-            let largest_baseline = |group: (bool, bool)| {
-                participants
-                    .iter()
-                    .filter(|participant| participant.1 == group)
-                    .fold(CssPixels::default(), |largest, participant| largest.max(participant.3))
-            };
+            let mut largest_baselines: [Option<CssPixels>; 2] = [None, None];
+            for &(_, at_far_edge, baseline) in &participants {
+                let largest = &mut largest_baselines[usize::from(at_far_edge)];
+                *largest = Some(largest.map_or(baseline, |largest| largest.max(baseline)));
+            }
             let line_cross_size = self.flex_lines[line_index].cross_size;
-            for &(index, group, at_far_edge, baseline) in &participants {
-                let max_baseline = largest_baseline(group);
+            for (index, at_far_edge, baseline) in participants {
+                let max_baseline = largest_baselines[usize::from(at_far_edge)].unwrap_or(baseline);
                 if at_far_edge {
                     // The item was placed at the left or top edge of the line.
                     let free_space = line_cross_size - self.flex_items[index].outer_cross_size();
