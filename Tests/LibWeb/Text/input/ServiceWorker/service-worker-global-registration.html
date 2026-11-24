@@ -19,6 +19,11 @@
             report("script");
             self.addEventListener("install", () => report("install"));
             self.addEventListener("activate", () => report("activate"));
+            self.registration.addEventListener("updatefound", () => report("updatefound"));
+            self.serviceWorker.addEventListener("statechange", () => {
+                if (self.serviceWorker.state === "activated")
+                    report("activated");
+            });
         `;
         const javascript = { "Content-Type": "text/javascript", "Cache-Control": "no-store", "Service-Worker-Allowed": "/" };
         const scriptURL = await server.createEcho("GET", `/service-worker-global-registration-${runId}.js`, { status: 200, headers: javascript, body: workerScript });
@@ -28,7 +33,7 @@
         const allReported = new Promise(resolve => {
             channel.onmessage = event => {
                 reports.push(event.data);
-                if (event.data.phase === "activate")
+                if (event.data.phase === "activated")
                     resolve();
             };
         });
