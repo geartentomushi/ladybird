@@ -32,6 +32,7 @@ endpoint MediaClient
     webcodecs_video_frame_decoded(u64 decoder_id, i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap bitmap) =|
     webcodecs_video_decoder_flushed(u64 decoder_id, u64 flush_id) =|
     webcodecs_video_decoder_failed(u64 decoder_id, Media::DecoderError error) =|
+    webcodecs_video_decoder_chunk_dequeued(u64 decoder_id) =|
 
     media_stream_data_requested(u64 stream_id, Optional<u64> offset) =|
 

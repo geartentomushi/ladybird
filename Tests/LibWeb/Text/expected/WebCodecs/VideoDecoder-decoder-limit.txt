@@ -1,0 +1,4 @@
+Some decoders opened: true
+No more than 16 decoders opened: true
+The others failed with: QuotaExceededError
+A decoder opened after closing the others decodes: 16x16

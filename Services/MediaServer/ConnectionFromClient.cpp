@@ -15,6 +15,7 @@
 #include <LibMedia/MediaSourceExtensions/ByteStreamParser.h>
 #include <LibMedia/MediaSupport.h>
 #include <LibMedia/PlaybackManager.h>
+#include <LibMediaClient/WebCodecsLimits.h>
 #include <LibMediaCodecs/CodecParameters.h>
 #include <LibMediaCodecs/DecoderCapabilities.h>
 #include <LibThreading/Thread.h>
@@ -305,7 +306,17 @@ void ConnectionFromClient::create_webcodecs_video_decoder(u64 decoder_id, String
             return;
         weak_this->async_webcodecs_video_decoder_failed(decoder_id, move(error));
     };
+    callbacks.on_chunk_dequeued = [weak_this, decoder_id] {
+        if (!weak_this || !weak_this->is_open())
+            return;
+        weak_this->async_webcodecs_video_decoder_chunk_dequeued(decoder_id);
+    };
 
+    if (m_webcodecs_video_decoders.size() >= MediaClient::max_webcodecs_video_decoders_per_client
+        || WebCodecsVideoDecoder::live_count() >= MediaClient::max_webcodecs_video_decoders_per_process) {
+        async_webcodecs_video_decoder_failed(decoder_id, Media::DecoderError::with_description(Media::DecoderErrorCategory::Memory, "Too many video decoders are open"sv));
+        return;
+    }
     if (!parsed_codec.has_value()) {
         async_webcodecs_video_decoder_failed(decoder_id, Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "The codec string is not supported"sv));
         return;
@@ -328,7 +339,11 @@ void ConnectionFromClient::webcodecs_video_decoder_decode(u64 decoder_id, bool i
     auto decoder = m_webcodecs_video_decoders.get(decoder_id);
     if (!decoder.has_value())
         return;
-    decoder.value()->decode(is_key, timestamp, duration, move(data));
+    if (decoder.value()->decode(is_key, timestamp, duration, move(data)))
+        return;
+    // NB: The client keeps chunks back while the decoder is saturated, so this only happens when it misbehaves.
+    m_webcodecs_video_decoders.take(decoder_id).value()->stop();
+    async_webcodecs_video_decoder_failed(decoder_id, Media::DecoderError::with_description(Media::DecoderErrorCategory::Memory, "Too many chunks are waiting to be decoded"sv));
 }
 
 void ConnectionFromClient::webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id)

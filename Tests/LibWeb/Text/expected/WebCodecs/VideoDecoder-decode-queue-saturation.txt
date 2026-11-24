@@ -1,0 +1,5 @@
+decodeQueueSize after 40 decodes: 24
+After flushing: 40 outputs, decodeQueueSize 0
+decodeQueueSize after reset: 0
+Flush after reset: AbortError
+After reconfiguring: 3 outputs
