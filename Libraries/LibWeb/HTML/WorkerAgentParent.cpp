@@ -61,20 +61,21 @@ static void report_worker_exception(WindowOrWorkerGlobalScopeMixin& window_or_wo
 
 GC::Ref<WorkerAgentParent> WorkerAgentParent::create(URL::URL url, WorkerOptions const& options, bool extended_lifetime,
     GC::Ptr<MessagePort> outside_port, GC::Ref<EnvironmentSettingsObject> outside_settings,
-    GC::Ref<DOM::EventTarget> worker_event_target, AgentType agent_type)
+    GC::Ref<DOM::EventTarget> worker_event_target, AgentType agent_type, Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration)
 {
-    auto agent = GC::Heap::the().allocate<WorkerAgentParent>(move(url), options, extended_lifetime, outside_port, outside_settings, worker_event_target, agent_type);
+    auto agent = GC::Heap::the().allocate<WorkerAgentParent>(move(url), options, extended_lifetime, outside_port, outside_settings, worker_event_target, agent_type, move(service_worker_registration));
     agent->start();
     return agent;
 }
 
 WorkerAgentParent::WorkerAgentParent(URL::URL url, WorkerOptions const& options, bool extended_lifetime, GC::Ptr<MessagePort> outside_port,
     GC::Ref<EnvironmentSettingsObject> outside_settings, GC::Ref<DOM::EventTarget> worker_event_target,
-    AgentType agent_type)
+    AgentType agent_type, Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration)
     : m_worker_options(options)
     , m_extended_lifetime(extended_lifetime)
     , m_agent_type(agent_type)
     , m_url(move(url))
+    , m_service_worker_registration(move(service_worker_registration))
     , m_owner_token(next_owner_token())
     , m_outside_port(outside_port)
     , m_outside_settings(outside_settings)
@@ -129,6 +130,7 @@ void WorkerAgentParent::start()
         .caller_is_secure_context = is_secure_context(*m_outside_settings),
         .maximum_frames_per_second = maximum_frames_per_second,
         .owner_token = m_owner_token,
+        .service_worker_registration = m_service_worker_registration,
     };
 
     worker_agent_parents().set(m_owner_token, *this);

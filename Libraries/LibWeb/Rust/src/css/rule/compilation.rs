@@ -522,9 +522,9 @@ fn visit_compilation(
         if !has_compiled_children(rule) {
             return std::ops::ControlFlow::Continue(());
         }
-        let nested = context.within(rule, source, environment, host, publication, None);
         if rule.rule_type() == NativeRuleType::Import {
             if let Some(imported) = sheet.imported_sheet(rule.identity()) {
+                let nested = context.within(rule, source, environment, host, publication, None);
                 let imported_source = host.import_source(source, rule.identity(), &imported);
                 return imported.rules().visit_rules(&mut |child| {
                     find(
@@ -541,8 +541,13 @@ fn visit_compilation(
             }
             std::ops::ControlFlow::Continue(())
         } else {
+            // NB: Most rules a search passes have no children, so only derive the nested context on reaching one.
+            //     Deriving it for every rule before the target makes inserting many rules quadratic.
+            let mut nested = None;
             rule.visit_children(&mut |child| {
-                find(child, identity, sheet, source, &nested, environment, host, publication)
+                let nested =
+                    nested.get_or_insert_with(|| context.within(rule, source, environment, host, publication, None));
+                find(child, identity, sheet, source, nested, environment, host, publication)
             })
         }
     }

@@ -1,0 +1,5 @@
+clients is the same object: true
+claim() before activation rejects with InvalidStateError
+claim() during install rejects with InvalidStateError
+claim() during activate resolves with undefined
+unregister() resolves with: true
