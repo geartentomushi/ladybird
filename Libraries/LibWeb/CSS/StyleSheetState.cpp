@@ -300,18 +300,36 @@ static bool rule_may_affect_fonts(RustRule const& rule)
 }
 
 // A style rule with only style rules nested in it, so no conditions, layers or other at-rules.
-static bool rule_is_plain_style_rule(RustRule const& rule)
+// Whether the rule holds nothing but style rules, possibly within @container and @supports rules, and @media rules
+// when those are allowed.
+static bool rule_holds_only_conditional_style_rules(RustRule const& rule, bool media_allowed)
 {
-    if (rule.type() != RustRule::Type::Style)
+    switch (rule.type()) {
+    case RustRule::Type::Style:
+    case RustRule::Type::Container:
+    case RustRule::Type::Supports:
+        break;
+    case RustRule::Type::Media:
+        if (!media_allowed)
+            return false;
+        break;
+    default:
         return false;
+    }
     auto const* children = Parser::ValueParserFFI::rust_rule_children(rule.handle());
-    return !children || Parser::ValueParserFFI::rust_rule_list_has_only_style_rules(children);
+    return !children || Parser::ValueParserFFI::rust_rule_list_has_only_conditional_style_rules(children, media_allowed);
 }
 
-bool StyleSheetState::change_affects_only_held_rules(RustRule const& rule) const
+bool StyleSheetState::change_affects_only_held_rules(RustRule const& rule, RuleChange change) const
 {
-    auto style_element_sheet = !constructed() && owner_node() && owner_node()->is_html_style_element();
-    return style_element_sheet && (rule.type() == RustRule::Type::Keyframes || rule_is_plain_style_rule(rule));
+    auto const* owner = owner_node();
+    if (constructed() || !owner || !(owner->is_html_style_element() || owner->is_html_link_element()))
+        return false;
+    if (rule.type() == RustRule::Type::Keyframes)
+        return true;
+    // NB: An arriving @media rule has to have its condition evaluated into the baseline that later media query
+    //     evaluations compare against, which is what invalidate_owners() does.
+    return rule_holds_only_conditional_style_rules(rule, change == RuleChange::Removal);
 }
 
 void StyleSheetState::rule_inserted(RustRule const& rule)
@@ -325,10 +343,11 @@ void StyleSheetState::rule_inserted(RustRule const& rule)
         m_rule_cache = nullptr;
     record_style_rule_inserted(rule, *this);
 
-    // OPTIMIZATION: A style rule or a keyframes rule arriving in a style element's own sheet changes only which
-    //               rules the scope holds, so dropping the rule cache is enough. Anything else can change what
-    //               the sheet as a whole contributes, which is what invalidate_owners() re-reads.
-    if (change_affects_only_held_rules(rule))
+    // OPTIMIZATION: A keyframes rule, or style rules (possibly within conditional group rules), arriving in a style or
+    //               link element's own sheet change only which rules the scope holds, so dropping the rule cache is
+    //               enough. Anything else can change what the sheet as a whole contributes, which is what
+    //               invalidate_owners() re-reads.
+    if (change_affects_only_held_rules(rule, RuleChange::Insertion))
         invalidate_style_cache_for_style_sheet_owners(*this);
     else
         invalidate_owners();
@@ -355,13 +374,12 @@ void StyleSheetState::remove_rule(u32 index)
             m_rule_cache = nullptr;
     }
     record_style_rule_removed(*this, removed_rule, detached_import.ptr());
-    // OPTIMIZATION: As in rule_inserted(), a style or keyframes rule leaving a style element's own sheet changes
-    //               only which rules the scope holds.
-    if (change_affects_only_held_rules(removed_rule)) {
+    // OPTIMIZATION: As in rule_inserted(), such a rule leaving a style or link element's own sheet changes only which
+    //               rules the scope holds.
+    if (change_affects_only_held_rules(removed_rule, RuleChange::Removal)) {
         m_rule_cache = nullptr;
         invalidate_style_cache_for_style_sheet_owners(*this);
-    }
-    else
+    } else
         invalidate_owners();
     if (rule_may_affect_fonts(removed_rule))
         synchronize_fonts_after_rule_change();
