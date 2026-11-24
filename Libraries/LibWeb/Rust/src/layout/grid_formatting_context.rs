@@ -4053,12 +4053,21 @@ impl<'pass> GridFormattingContext<'pass> {
             return self.grid_lanes_item_contributions_to_track_sizing(axis);
         }
         let track_count = self.axis_tracks(axis).len();
+        let baseline_shims = (!axis.is_column()).then(|| self.row_baseline_shims());
         let mut result = Vec::new();
-        for item in self.items.iter().copied() {
+        for (index, item) in self.items.iter().copied().enumerate() {
             if self.grid_item_is_subgridded(item, axis) {
                 result.extend(self.subgrid_item_contributions_to_track_sizing(item, axis));
             } else {
-                result.push(self.item_contribution(item, axis, track_count));
+                let mut contribution = self.item_contribution(item, axis, track_count);
+                if let Some(shim) = baseline_shims.as_ref().and_then(|shims| shims[index]) {
+                    contribution.minimum += shim;
+                    contribution.min_content += shim;
+                    contribution.limited_min_content += shim;
+                    contribution.max_content += shim;
+                    contribution.limited_max_content += shim;
+                }
+                result.push(contribution);
             }
         }
         result
@@ -5686,6 +5695,87 @@ impl<'pass> GridFormattingContext<'pass> {
                 metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2
             } else {
                 metrics.margin_box_top(collapsed) + metrics.content_block_size() + metrics.border_box_bottom(collapsed)
+            }
+        };
+        item.extra_margin_top + distance_from_margin_box_top
+    }
+
+    // https://drafts.csswg.org/css-grid-2/#algo-content
+    // Shim baseline-aligned items so their intrinsic size contributions reflect their baseline alignment. For the
+    // items in each baseline-sharing group, add a “shim” (effectively, additional margin) on the start/end side (for
+    // first/last-baseline alignment) of each item so that, when start/end-aligned together their baselines align as
+    // specified.
+    // Consider these “shims” as part of the items’ intrinsic size contribution for the purpose of track sizing, below.
+    // NB: The shims are by the index of the item in the grid's items, for items that contribute to track sizing.
+    // FIXME: Shim items aligned by their last baselines, and items aligned by their baselines in the Column axis.
+    fn row_baseline_shims(&self) -> Vec<Option<CssPixels>> {
+        let mut baselines = vec![None; self.items.len()];
+        let mut shared_baselines = Vec::<Option<CssPixels>>::new();
+        for (index, item) in self.items.iter().copied().enumerate() {
+            if !self.item_participates_in_row_baseline_alignment(item)
+                || self.item_aligns_by_last_baseline(item)
+                || !self.item_contributes_to_track_sizing(item, Axis::Row)
+            {
+                continue;
+            }
+            let Ok(row) = usize::try_from(item.row) else {
+                continue;
+            };
+            let baseline = self.item_row_baseline_for_track_sizing(item);
+            if shared_baselines.len() <= row {
+                shared_baselines.resize(row + 1, None);
+            }
+            let shared = &mut shared_baselines[row];
+            *shared = Some(shared.map_or(baseline, |shared| shared.max(baseline)));
+            baselines[index] = Some((row, baseline));
+        }
+        baselines
+            .into_iter()
+            .map(|baseline| {
+                let (row, baseline) = baseline?;
+                let shim = shared_baselines[row]? - baseline;
+                (shim > CssPixels::default()).then_some(shim)
+            })
+            .collect()
+    }
+
+    /// The distance from the start of the item's grid area to its alignment baseline, as the item would be laid out at
+    /// the start of its area once the columns are sized.
+    fn item_row_baseline_for_track_sizing(&self, item: GridItem) -> CssPixels {
+        let metrics = self.cells_of(item);
+        let collapsed = metrics.uses_collapsing_borders_model;
+        let (measured_content_block_size, content_baselines) = if self.item_establishes_orthogonal_flow(item) {
+            (self.min_content_size(item, Axis::Row), DerivedBaselines::default())
+        } else {
+            self.sizing().measure_content_block_size_and_baselines(
+                item.box_,
+                self.item_available_space(item).inline_size.to_px_or_zero(),
+                self.intrinsic_contribution_constraints(item, Axis::Row),
+            )
+        };
+        let distance_from_margin_box_top = if content_baselines.first.is_some() {
+            formatting_context::box_baseline_with_content_baselines(
+                &self.run.pass,
+                item.box_,
+                &metrics,
+                formatting_context::BaselineSet::First,
+                content_baselines,
+            )
+        } else {
+            let content_block_size = if metrics.has_definite_block_size {
+                metrics.content_block_size
+            } else {
+                measured_content_block_size
+            };
+            // https://drafts.csswg.org/css-align-3/#synthesize-baseline
+            // NB: As in item_row_baseline(), the central baseline is synthesized halfway between the line-over and
+            //     line-under edges of the border box, and the alphabetic one at its line-under edge.
+            let border_box_bottom =
+                metrics.margin_box_top(collapsed) + content_block_size + metrics.border_box_bottom(collapsed);
+            if formatting_context::dominant_baseline_is_central(self.container_style) {
+                border_box_bottom - (border_box_bottom - metrics.margin_top()) / 2
+            } else {
+                border_box_bottom
             }
         };
         item.extra_margin_top + distance_from_margin_box_top

@@ -3811,6 +3811,17 @@ impl<'pass, 'container> SizingContext<'pass, 'container> {
         )
     }
 
+    /// The automatic content block size and the baselines of the contents a box has when laid out at `inline_size`.
+    pub(crate) fn measure_content_block_size_and_baselines(
+        &self,
+        node: Node,
+        inline_size: CssPixels,
+        constraints: ContainingBlockConstraints,
+    ) -> (CssPixels, formatting_context::DerivedBaselines) {
+        let result = self.measure_block_size_with_normal_layout(node, inline_size, constraints);
+        (result.automatic_content_block_size, result.baselines)
+    }
+
     /// The min-content or max-content block size of a box that establishes an orthogonal flow: its block axis here is
     /// its inline axis in its own frame, so this is its content inline size of `kind` there, at `inline_size` as its
     /// block size.
