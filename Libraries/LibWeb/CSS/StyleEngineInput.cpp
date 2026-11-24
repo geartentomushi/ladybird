@@ -2738,7 +2738,11 @@ static void compile_rules_into(RuleCompilationContext const& context, StyleSheet
         .sheet = context.sheet_handle.value(),
         .before = context.before_rule_identity,
     };
+    // A whole sheet always republishes its layer order; one inserted rule only when its subtree can name a layer.
+    bool may_declare_layer = rule_identity == 0;
     CompilationVisitor visit = [&](RustRule::Type rule_type, StyleSheetState const& source, auto const&, auto const& result) {
+        if (rule_type == RustRule::Type::LayerBlock || rule_type == RustRule::Type::LayerStatement || rule_type == RustRule::Type::Import)
+            may_declare_layer = true;
         if (purpose == Parser::ValueParserFFI::NativeCompilationPurpose::Selectors && result.published)
             context.style_computer->document().bump_style_environment_version();
         if (result.declares_transitions)
@@ -2753,7 +2757,7 @@ static void compile_rules_into(RuleCompilationContext const& context, StyleSheet
         return true;
     };
     visit_compilation(sheet, rule_identity, *context.document, purpose, visit, publication);
-    if (purpose == Parser::ValueParserFFI::NativeCompilationPurpose::Rules)
+    if (purpose == Parser::ValueParserFFI::NativeCompilationPurpose::Rules && may_declare_layer)
         publish_layer_order_for_sheet(sheet, *context.document);
 }
 
