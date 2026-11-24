@@ -1,0 +1,57 @@
+<!doctype html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const server = httpTestServer();
+        const runId = uniqueID();
+        const channelName = `service-worker-post-message-${runId}`;
+        const workerScript = `
+            const channel = new BroadcastChannel("${channelName}");
+            self.addEventListener("message", event => {
+                if (event.ports.length > 0) {
+                    event.ports[0].postMessage(\`port received: \${event.data}\`);
+                    return;
+                }
+                channel.postMessage(\`worker received: \${JSON.stringify(event.data)}\`);
+            });
+        `;
+        const javascript = { "Content-Type": "text/javascript", "Cache-Control": "no-store", "Service-Worker-Allowed": "/" };
+        const scriptURL = await server.createEcho("GET", `/service-worker-post-message-${runId}.js`, { status: 200, headers: javascript, body: workerScript });
+
+        const channel = new BroadcastChannel(channelName);
+        const received = new Promise(resolve => {
+            channel.onmessage = event => resolve(event.data);
+        });
+
+        const registration = await navigator.serviceWorker.register(scriptURL, { scope: "/" });
+        const worker = registration.installing || registration.waiting || registration.active;
+
+        try {
+            worker.postMessage(() => {});
+        } catch (error) {
+            println(`postMessage() with a function throws ${error.name}`);
+        }
+
+        worker.postMessage({ hello: "world" });
+        println(await received);
+
+        const { port1, port2 } = new MessageChannel();
+        const replied = new Promise(resolve => {
+            port1.onmessage = event => resolve(event.data);
+        });
+        worker.postMessage("ping", [port2]);
+        println(await replied);
+
+        const optionsChannel = new MessageChannel();
+        const optionsReplied = new Promise(resolve => {
+            optionsChannel.port1.onmessage = event => resolve(event.data);
+        });
+        worker.postMessage("pong", { transfer: [optionsChannel.port2] });
+        println(await optionsReplied);
+
+        port1.close();
+        optionsChannel.port1.close();
+        channel.close();
+        println(`unregister() resolves with: ${await registration.unregister()}`);
+    });
+</script>

@@ -1,0 +1,5 @@
+postMessage() with a function throws DataCloneError
+worker received: {"hello":"world"}
+port received: ping
+port received: pong
+unregister() resolves with: true
