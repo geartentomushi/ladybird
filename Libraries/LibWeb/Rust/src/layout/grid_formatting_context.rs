@@ -4061,11 +4061,7 @@ impl<'pass> GridFormattingContext<'pass> {
             } else {
                 let mut contribution = self.item_contribution(item, axis, track_count);
                 if let Some(shim) = baseline_shims.as_ref().and_then(|shims| shims[index]) {
-                    contribution.minimum += shim;
-                    contribution.min_content += shim;
-                    contribution.limited_min_content += shim;
-                    contribution.max_content += shim;
-                    contribution.limited_max_content += shim;
+                    contribution.add_baseline_shim(shim);
                 }
                 result.push(contribution);
             }
@@ -6431,6 +6427,15 @@ pub(crate) struct ItemContribution {
 }
 
 impl ItemContribution {
+    /// Adds a baseline shim, which counts as part of each of the item's intrinsic size contributions.
+    fn add_baseline_shim(&mut self, shim: CssPixels) {
+        self.minimum += shim;
+        self.min_content += shim;
+        self.limited_min_content += shim;
+        self.max_content += shim;
+        self.limited_max_content += shim;
+    }
+
     fn participates_in_intrinsic_sizing(&self, tracks: &[Track<'_>], available: AvailableSize) -> bool {
         !self
             .spanned_tracks

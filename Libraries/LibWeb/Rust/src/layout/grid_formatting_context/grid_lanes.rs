@@ -254,12 +254,19 @@ impl GridFormattingContext<'_> {
         //     takes the maximum of the contributions of its items placed at that position. Scroll containers form
         //     their own groups, since track sizing treats their contributions differently.
         let mut groups: Vec<ItemGroup> = Vec::new();
-        for item in self.items.iter().copied() {
+        let baseline_shims = (!axis.is_column()).then(|| self.row_baseline_shims());
+        for (index, item) in self.items.iter().copied().enumerate() {
             if !item.is_auto_placed_in_grid_lanes {
                 if self.grid_item_is_subgridded(item, axis) {
                     result.extend(self.subgrid_item_contributions_to_track_sizing(item, axis));
                 } else {
-                    result.push(self.item_contribution(item, axis, track_count));
+                    let mut contribution = self.item_contribution(item, axis, track_count);
+                    // https://drafts.csswg.org/css-grid-2/#algo-content
+                    // NB: An explicitly placed item has one position, so it is shimmed as in a regular grid.
+                    if let Some(shim) = baseline_shims.as_ref().and_then(|shims| shims[index]) {
+                        contribution.add_baseline_shim(shim);
+                    }
+                    result.push(contribution);
                 }
                 continue;
             }
