@@ -789,7 +789,9 @@ pub(crate) fn box_baseline_with_content_baselines(
     //         scroll container, rather than taking its block-end margin edge, so that a button with overflow: hidden
     //         sits on the line by the text it shows, as pages expect.
     //         https://html.spec.whatwg.org/multipage/rendering.html#button-layout
-    let is_flex_or_grid_item = facts.parent_is_flex_or_grid_container() && !facts.is_absolutely_positioned();
+    let is_flex_or_grid_item = facts.parent_is_flex_or_grid_container()
+        && !facts.is_absolutely_positioned()
+        && !facts.is_fieldset_content_wrapper();
     let derive_baseline_from_content = baseline_set == BaselineSet::First
         || style.baseline_source() != crate::css::css_enums::baseline_source::AUTO
         || is_flex_or_grid_container
