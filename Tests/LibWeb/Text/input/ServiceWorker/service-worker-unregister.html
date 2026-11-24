@@ -27,6 +27,7 @@
         const redundant = waitForState(worker, "redundant");
         println(`unregister() resolves with: ${await registration.unregister()}`);
         await redundant;
+        await new Promise(resolve => setTimeout(resolve, 0));
         println(`worker state: ${worker.state}`);
         println(`active after unregister: ${registration.active}`);
         println(`getRegistration() after unregister: ${await navigator.serviceWorker.getRegistration(scope)}`);
