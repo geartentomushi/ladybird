@@ -5777,9 +5777,9 @@ impl<'pass> GridFormattingContext<'pass> {
         let content_block_size = if metrics.has_definite_block_size {
             metrics.content_block_size
         } else if self.item_facts(item).is_replaced_box() {
-            self.min_content_size(item, Axis::Row)
+            self.clamp_to_block_size_limits(item, self.min_content_size(item, Axis::Row))
         } else {
-            measured_content_block_size
+            self.clamp_to_block_size_limits(item, measured_content_block_size)
         };
         let distance_from_margin_box_top = if let Some(content_baseline) = content_baselines.first {
             if self.item_facts(item).is_scroll_container() && !metrics.has_definite_block_size {
@@ -5813,6 +5813,40 @@ impl<'pass> GridFormattingContext<'pass> {
             }
         };
         item.extra_margin_top + distance_from_margin_box_top
+    }
+
+    /// The content block size of an auto-height `item` whose content is `content_block_size` tall, once its min and max
+    /// block sizes apply.
+    // https://drafts.csswg.org/css-sizing-3/#min-size-properties
+    // NB: Its min size wins over its max size.
+    fn clamp_to_block_size_limits(&self, item: GridItem, content_block_size: CssPixels) -> CssPixels {
+        let cells = self.cells_of(item);
+        let sized = sizing_context::SizedBox::new(item.box_, &cells);
+        let available = self.item_available_space(item);
+        let constraints = self.intrinsic_contribution_constraints(item, Axis::Row);
+        let sizing = self.sizing();
+        let mut size = content_block_size;
+        if !self.grid_item_is_subgridded(item, Axis::Row)
+            && !sizing.should_treat_max_block_size_as_none(item.box_, available.block_size, constraints)
+        {
+            size = size.min(sizing.calculate_inner_size_for_property(
+                sized,
+                Axis::Row.sizing_axis(),
+                SizingProperty::MaxHeight,
+                available,
+                constraints,
+            ));
+        }
+        if self.minimum_size(item, Axis::Row).is_length_percentage() {
+            size = size.max(sizing.calculate_inner_size_for_property(
+                sized,
+                Axis::Row.sizing_axis(),
+                SizingProperty::MinHeight,
+                available,
+                constraints,
+            ));
+        }
+        size
     }
 
     /// The index of the last row the area of `item` spans.
