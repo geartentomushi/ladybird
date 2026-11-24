@@ -62,6 +62,18 @@ bool DedicatedWorkerGlobalScope::is_supported() const
     return false;
 }
 
+bool DedicatedWorkerGlobalScope::allows_high_entropy_user_agent_values() const
+{
+    if (owner_set().is_empty())
+        return false;
+
+    for (auto const& owner : owner_set()) {
+        if (!owner.visit([](auto const& settings) { return settings.allows_high_entropy_user_agent_values; }))
+            return false;
+    }
+    return true;
+}
+
 // https://html.spec.whatwg.org/multipage/imagebitmap-and-animations.html#dom-animationframeprovider-requestanimationframe
 WebIDL::ExceptionOr<WebIDL::UnsignedLong> DedicatedWorkerGlobalScope::request_animation_frame(GC::Ref<WebIDL::CallbackType> callback)
 {

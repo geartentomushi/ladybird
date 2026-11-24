@@ -158,8 +158,11 @@ ServiceWorkerRecord* Registration::newest_worker() const
     // 4. If registration’s waiting worker is not null, set newestWorker to registration’s waiting worker.
     // 5. If registration’s active worker is not null, set newestWorker to registration’s active worker.
     // 6. Return newestWorker.
-    return m_installing_worker ? m_installing_worker : m_waiting_worker ? m_waiting_worker
-                                                                        : m_active_worker;
+    if (m_installing_worker)
+        return m_installing_worker.ptr();
+    if (m_waiting_worker)
+        return m_waiting_worker.ptr();
+    return m_active_worker.ptr();
 }
 
 }

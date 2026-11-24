@@ -6,10 +6,13 @@
 
 #include <AK/RefPtr.h>
 #include <LibGC/Heap.h>
+#include <LibHTTP/Header.h>
 #include <LibIPC/File.h>
 #include <LibJS/Runtime/ConsoleObject.h>
+#include <LibJS/Runtime/Promise.h>
 #include <LibWeb/Bindings/DedicatedWorkerGlobalScope.h>
 #include <LibWeb/Bindings/MessageEvent.h>
+#include <LibWeb/Bindings/ServiceWorkerGlobalScope.h>
 #include <LibWeb/Bindings/SharedWorkerGlobalScope.h>
 #include <LibWeb/Bindings/Wrappable.h>
 #include <LibWeb/Fetch/Fetching/ClientContextSnapshots.h>
@@ -24,6 +27,7 @@
 #include <LibWeb/HTML/Scripting/ClassicScript.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/Scripting/Fetching.h>
+#include <LibWeb/HTML/Scripting/ModuleScript.h>
 #include <LibWeb/HTML/Scripting/RemoteEnvironmentSettings.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
 #include <LibWeb/HTML/Scripting/WorkerEnvironmentSettingsObject.h>
@@ -32,6 +36,8 @@
 #include <LibWeb/HTML/WorkerGlobalScope.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/Loader/ResourceLoader.h>
+#include <LibWeb/ServiceWorker/ServiceWorkerGlobalScope.h>
+#include <LibWeb/WebIDL/Promise.h>
 #include <WebContent/Worker/PageHost.h>
 #include <WebContent/Worker/WorkerHost.h>
 
@@ -45,6 +51,16 @@ WorkerHost::WorkerHost(URL::URL url, Web::HTML::WorkerType type, String name)
 }
 
 WorkerHost::~WorkerHost() = default;
+
+void WorkerHost::run_service_worker_lifecycle_step(Web::HTML::ServiceWorkerLifecycleStep step, GC::Ref<GC::Function<void(bool succeeded)>> on_complete)
+{
+    auto* service_worker_global_scope = as_if<Web::ServiceWorker::ServiceWorkerGlobalScope>(m_worker_global_scope.cell());
+    if (!service_worker_global_scope || service_worker_global_scope->is_closing()) {
+        on_complete->function()(false);
+        return;
+    }
+    service_worker_global_scope->run_lifecycle_step(step, on_complete);
+}
 
 void WorkerHost::terminate()
 {
@@ -99,8 +115,10 @@ static Web::HTML::WorkerGlobalScope::Owner relevant_owner_to_add(Web::HTML::Seri
 }
 
 // https://html.spec.whatwg.org/multipage/workers.html#run-a-worker
-void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject const& outside_settings_snapshot, Web::HTML::RequestCredentials credentials, bool is_shared, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself)
+void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject const& outside_settings_snapshot, Web::HTML::RequestCredentials credentials, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself, Optional<Web::HTML::ServiceWorkerRegistrationSnapshot> service_worker_registration)
 {
+    bool const is_shared = agent_type == Web::HTML::AgentType::SharedWorker;
+    bool const is_service_worker = agent_type == Web::HTML::AgentType::ServiceWorker;
     m_is_shared = is_shared;
 
     // 1. Let is shared be true if worker is a SharedWorker object, and false otherwise.
@@ -117,7 +135,14 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
     auto realm_execution_context = Web::Bindings::create_a_new_javascript_realm(
         JS::VM::the(),
         agent_cluster_cross_origin_isolation_mode,
-        [page, is_shared](JS::Realm& realm) -> GC::Ref<JS::Object> {
+        [page, is_shared, is_service_worker](JS::Realm& realm) -> GC::Ref<JS::Object> {
+            // https://w3c.github.io/ServiceWorker/#run-service-worker-algorithm
+            // For the global object, create a new ServiceWorkerGlobalScope object.
+            if (is_service_worker) {
+                auto worker_global_scope = GC::Heap::the().allocate<Web::ServiceWorker::ServiceWorkerGlobalScope>(page);
+                return Web::Bindings::create_global_object_wrapper(realm, GC::Ref { *worker_global_scope });
+            }
+
             // For the global object, if is shared is true, create a new SharedWorkerGlobalScope object.
             if (is_shared) {
                 auto worker_global_scope = GC::Heap::the().allocate<Web::HTML::SharedWorkerGlobalScope>(page);
@@ -188,13 +213,25 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
         worker_global_scope->set_type(m_type);
     }
 
+    // https://w3c.github.io/ServiceWorker/#run-service-worker-algorithm
+    // Set workerGlobalScope's service worker to serviceWorker.
+    if (is_service_worker && service_worker_registration.has_value())
+        static_cast<Web::ServiceWorker::ServiceWorkerGlobalScope&>(*worker_global_scope).set_up_service_worker(*service_worker_registration);
+
     // 11. Let destination be "sharedworker" if is shared is true, and "worker" otherwise.
     auto destination = is_shared ? Web::Fetch::Infrastructure::Request::Destination::SharedWorker
                                  : Web::Fetch::Infrastructure::Request::Destination::Worker;
+    if (is_service_worker)
+        destination = Web::Fetch::Infrastructure::Request::Destination::ServiceWorker;
 
     // In both cases, let performFetch be the following perform the fetch hook given request, isTopLevel, and processCustomFetchResponse:
-    Web::HTML::PerformTheFetchHook perform_fetch = GC::create_function(inside_settings->heap(), GC::captures(inside_settings, outside_settings, worker_global_scope, is_shared, has_process_to_itself), [](auto& inside_settings, auto& outside_settings, auto& worker_global_scope, auto& is_shared, auto& has_process_to_itself, NonnullRefPtr<Web::Fetch::Infrastructure::Request> request, Web::HTML::TopLevelModule is_top_level, Web::HTML::ProcessCustomFetchResponse process_custom_fetch_response) -> Web::WebIDL::ExceptionOr<void> {
+    Web::HTML::PerformTheFetchHook perform_fetch = GC::create_function(inside_settings->heap(), GC::captures(inside_settings, outside_settings, worker_global_scope, is_shared, is_service_worker, has_process_to_itself), [](auto& inside_settings, auto& outside_settings, auto& worker_global_scope, auto& is_shared, auto& is_service_worker, auto& has_process_to_itself, NonnullRefPtr<Web::Fetch::Infrastructure::Request> request, Web::HTML::TopLevelModule is_top_level, Web::HTML::ProcessCustomFetchResponse process_custom_fetch_response) -> Web::WebIDL::ExceptionOr<void> {
         auto& realm = inside_settings->realm();
+
+        // https://w3c.github.io/ServiceWorker/#update-algorithm (perform the fetch hook, step 1)
+        // NB: The agent fetches the main script again, so it sends the header the Update algorithm sent.
+        if (is_service_worker && is_top_level == Web::HTML::TopLevelModule::Yes)
+            request->header_list()->append(HTTP::Header::isomorphic_encode("Service-Worker"sv, "script"sv));
 
         Web::Fetch::Infrastructure::FetchAlgorithms::Input fetch_algorithms_input { Web::Fetch::Engine::BodyIntent::ConsumeForCallback };
 
@@ -270,7 +307,7 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
 
     // In both cases, let onComplete given script be the following steps:
     RefPtr<WorkerHost> protected_this { *this };
-    auto on_complete = GC::create_function(GC::Heap::the(), GC::captures(protected_this, page, inside_settings, worker_global_scope, move(message_port_data), outside_settings_snapshot, m_url, is_shared), [](auto& protected_this, auto& page, auto& inside_settings, auto& worker_global_scope, auto& message_port_data, auto& outside_settings_snapshot, auto& url, auto& is_shared, GC::Ptr<Web::HTML::Script> script) {
+    auto on_complete = GC::create_function(GC::Heap::the(), GC::captures(protected_this, page, inside_settings, worker_global_scope, move(message_port_data), outside_settings_snapshot, m_url, is_shared, is_service_worker), [](auto& protected_this, auto& page, auto& inside_settings, auto& worker_global_scope, auto& message_port_data, auto& outside_settings_snapshot, auto& url, auto& is_shared, auto& is_service_worker, GC::Ptr<Web::HTML::Script> script) {
         // NB: A worker that was told to close while it fetched its script never runs it.
         if (worker_global_scope->is_closing())
             return;
@@ -329,10 +366,28 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
 
         // 10. If script is a classic script, then run the classic script script.
         //     Otherwise, it is a module script; run the module script script.
-        if (auto* classic_script = as_if<Web::HTML::ClassicScript>(*script))
-            (void)classic_script->run();
-        else
-            (void)as<Web::HTML::ModuleScript>(*script).run();
+        if (auto* classic_script = as_if<Web::HTML::ClassicScript>(*script)) {
+            auto result = classic_script->run();
+
+            // https://w3c.github.io/ServiceWorker/#run-service-worker-algorithm
+            // If evaluationStatus is an abrupt completion, the Run Service Worker algorithm fails, and the service
+            // worker's registration gives up on it.
+            if (is_service_worker && result.is_abrupt()) {
+                as<WebWorker::PageHost>(page->client()).did_fail_loading_worker_script();
+                return;
+            }
+        } else {
+            auto evaluation_promise = as<Web::HTML::ModuleScript>(*script).run();
+
+            // NB: Evaluation of a module without top-level await settles its promise synchronously.
+            // FIXME: Wait for the evaluation promise of a module service worker that uses top-level await.
+            if (is_service_worker && evaluation_promise) {
+                if (auto* promise = as_if<JS::Promise>(*evaluation_promise->promise()); promise && promise->state() == JS::Promise::State::Rejected) {
+                    as<WebWorker::PageHost>(page->client()).did_fail_loading_worker_script();
+                    return;
+                }
+            }
+        }
         protected_this->notify_script_ran();
 
         as<WebWorker::PageHost>(page->client()).did_finish_loading_worker_script(Web::HTML::is_secure_context(*inside_settings));

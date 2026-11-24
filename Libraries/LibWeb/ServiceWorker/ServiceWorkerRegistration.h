@@ -10,6 +10,7 @@
 #include <LibWeb/Bindings/ServiceWorkerRegistration.h>
 #include <LibWeb/DOM/EventTarget.h>
 #include <LibWeb/ServiceWorker/Registration.h>
+#include <LibWeb/WebIDL/Promise.h>
 
 namespace Web::ServiceWorker {
 
@@ -44,6 +45,8 @@ public:
 
     // https://w3c.github.io/ServiceWorker/#dom-serviceworkerregistration-updateviacache
     ServiceWorkerUpdateViaCache update_via_cache() const { return m_registration->update_via_cache(); }
+
+    void unregister(JS::Realm&, GC::Ref<WebIDL::Promise>);
 
     explicit ServiceWorkerRegistration(Registration const&);
     virtual ~ServiceWorkerRegistration() override = default;

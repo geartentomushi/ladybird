@@ -73,7 +73,7 @@ void set_sec_fetch_mode_header(Infrastructure::Request&);
 void set_sec_fetch_site_header(Infrastructure::Request&);
 void set_sec_fetch_user_header(Infrastructure::Request&);
 void append_fetch_metadata_headers_for_request(Infrastructure::Request&);
-void append_user_agent_client_hints_for_request(Infrastructure::Request&);
+void append_user_agent_client_hints_for_request(Infrastructure::Request&, LoaderConfig const&);
 
 WEB_API void set_http_memory_cache_enabled(bool enabled);
 WEB_API bool http_memory_cache_enabled();

@@ -26,16 +26,21 @@ class WorkerAgentParent : public JS::Cell {
 public:
     static GC::Ref<WorkerAgentParent> create(URL::URL, WorkerOptions const&, bool extended_lifetime,
         GC::Ptr<MessagePort> outside_port, GC::Ref<EnvironmentSettingsObject> outside_settings,
-        GC::Ref<DOM::EventTarget> worker_event_target, AgentType);
+        GC::Ref<DOM::EventTarget> worker_event_target, AgentType,
+        Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration = {});
 
     static WEB_API void did_fail_loading_worker_script(WorkerAgentOwnerToken);
     static WEB_API void did_report_worker_exception(WorkerAgentOwnerToken, Utf16String message, Utf16String filename, u32 lineno, u32 colno);
     static WEB_API void did_report_content_security_policy_violation(WorkerAgentOwnerToken, u64 policy_index, String effective_directive, URL::URL resource);
     static WEB_API void did_close_worker(WorkerAgentOwnerToken);
     static WEB_API void did_worker_agent_die(WorkerAgentOwnerToken);
+    static WEB_API void did_finish_service_worker_lifecycle_step(WorkerAgentOwnerToken, u64 request_id, bool succeeded);
     static WEB_API void did_write_rtc_transform_encoded_audio_frame(WorkerAgentOwnerToken, u64 transform_id, ByteBuffer payload, u32 ssrc, u8 payload_type, u32 rtp_timestamp, u16 sequence_number);
 
     void terminate();
+
+    // Fails the step if the service worker's script fails to load or run, or the worker goes away.
+    void run_service_worker_lifecycle_step(ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
 
 protected:
     virtual void visit_edges(Cell::Visitor&) override;
@@ -52,10 +57,11 @@ public:
 private:
     WorkerAgentParent(URL::URL, WorkerOptions const&, bool extended_lifetime, GC::Ptr<MessagePort> outside_port,
         GC::Ref<EnvironmentSettingsObject> outside_settings, GC::Ref<DOM::EventTarget> worker_event_target,
-        AgentType);
+        AgentType, Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration);
 
     void start();
     void forget_agent();
+    void fail_pending_service_worker_lifecycle_steps();
     void give_up_on_parked_end();
     void dispatch_error_event();
     void dispatch_worker_exception(Utf16String message, Utf16String filename, u32 lineno, u32 colno);
@@ -67,6 +73,7 @@ private:
     bool m_extended_lifetime { false };
     AgentType m_agent_type { AgentType::DedicatedWorker };
     URL::URL m_url;
+    Optional<ServiceWorkerRegistrationSnapshot> m_service_worker_registration;
     WorkerAgentId m_agent_id { 0 };
     RefPtr<DedicatedWorkerThreadLink> m_dedicated_worker_thread_link;
     WorkerAgentOwnerToken m_owner_token { 0 };
@@ -78,6 +85,9 @@ private:
     GC::Ref<DOM::EventTarget> m_worker_event_target;
 
     HashMap<u64, TransformFrameWrittenCallback> m_transform_frame_callbacks;
+
+    HashMap<u64, GC::Ref<GC::Function<void(bool succeeded)>>> m_pending_service_worker_lifecycle_steps;
+    u64 m_next_service_worker_lifecycle_step_id { 1 };
 };
 
 }

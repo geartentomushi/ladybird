@@ -1,0 +1,8 @@
+Sec-CH-UA agrees: true
+Sec-CH-UA-Mobile agrees: true
+Sec-CH-UA-Platform agrees: true
+Ladybird is present: true
+Sec-CH-UA agrees: true
+Sec-CH-UA-Mobile agrees: true
+Sec-CH-UA-Platform agrees: true
+Ladybird is present: false

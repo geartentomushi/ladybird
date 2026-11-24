@@ -1,0 +1,44 @@
+Harness status: OK
+
+Found 39 tests
+
+39 Pass
+Pass	idl_test setup
+Pass	idl_test validation
+Pass	Partial interface Navigator: member names are unique
+Pass	Partial interface mixin NavigatorID: member names are unique
+Pass	Navigator includes NavigatorUA: member names are unique
+Pass	WorkerNavigator includes NavigatorUA: member names are unique
+Pass	Navigator includes NavigatorID: member names are unique
+Pass	Navigator includes NavigatorLanguage: member names are unique
+Pass	Navigator includes NavigatorOnLine: member names are unique
+Pass	Navigator includes NavigatorContentUtils: member names are unique
+Pass	Navigator includes NavigatorCookies: member names are unique
+Pass	Navigator includes NavigatorPlugins: member names are unique
+Pass	Navigator includes NavigatorConcurrentHardware: member names are unique
+Pass	WorkerNavigator includes NavigatorID: member names are unique
+Pass	WorkerNavigator includes NavigatorLanguage: member names are unique
+Pass	WorkerNavigator includes NavigatorOnLine: member names are unique
+Pass	WorkerNavigator includes NavigatorConcurrentHardware: member names are unique
+Pass	NavigatorUAData interface: existence and properties of interface object
+Pass	NavigatorUAData interface object length
+Pass	NavigatorUAData interface object name
+Pass	NavigatorUAData interface: existence and properties of interface prototype object
+Pass	NavigatorUAData interface: existence and properties of interface prototype object's "constructor" property
+Pass	NavigatorUAData interface: existence and properties of interface prototype object's @@unscopables property
+Pass	NavigatorUAData interface: attribute brands
+Pass	NavigatorUAData interface: attribute mobile
+Pass	NavigatorUAData interface: attribute platform
+Pass	NavigatorUAData interface: operation getHighEntropyValues(sequence<DOMString>)
+Pass	NavigatorUAData interface: operation toJSON()
+Pass	NavigatorUAData must be primary interface of navigator.userAgentData
+Pass	Stringification of navigator.userAgentData
+Pass	NavigatorUAData interface: navigator.userAgentData must inherit property "brands" with the proper type
+Pass	NavigatorUAData interface: navigator.userAgentData must inherit property "mobile" with the proper type
+Pass	NavigatorUAData interface: navigator.userAgentData must inherit property "platform" with the proper type
+Pass	NavigatorUAData interface: navigator.userAgentData must inherit property "getHighEntropyValues(sequence<DOMString>)" with the proper type
+Pass	NavigatorUAData interface: calling getHighEntropyValues(sequence<DOMString>) on navigator.userAgentData with too few arguments must throw TypeError
+Pass	NavigatorUAData interface: navigator.userAgentData must inherit property "toJSON()" with the proper type
+Pass	NavigatorUAData interface: toJSON operation on navigator.userAgentData
+Pass	Navigator interface: attribute userAgentData
+Pass	Navigator interface: navigator must inherit property "userAgentData" with the proper type

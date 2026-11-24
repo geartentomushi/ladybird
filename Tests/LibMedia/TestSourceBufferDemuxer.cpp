@@ -189,6 +189,30 @@ TEST_CASE(seeking_with_need_codec_configuration_resends_an_unchanged_configurati
     EXPECT_EQ(sample.new_codec_configuration(), initial_configuration.span());
 }
 
+TEST_CASE(seeking_without_a_configuration_change_preserves_alpha_data)
+{
+    Media::Track track { Media::TrackType::Video, 1, Media::Track::Kind::Main, {}, {} };
+    auto demuxer = make_ref_counted<Media::MediaSourceExtensions::SourceBufferDemuxer>(Vector { track });
+    auto const alpha_data = to_array<u8>({ 0, 128, 255 });
+
+    auto frame = coded_frame_at(0, ReadonlyBytes {}, Media::CodecID::VP9);
+    frame.set_has_alpha(true);
+    MUST(frame.set_alpha_data(MUST(FixedArray<u8>::create(alpha_data.span()))));
+    demuxer->add_coded_frame(track, move(frame));
+
+    auto first = MUST(demuxer->get_next_sample_for_track(track));
+    EXPECT(first.new_codec_configuration().has_value());
+    EXPECT(first.has_alpha());
+    EXPECT_EQ(first.alpha_data(), alpha_data.span());
+
+    MUST(demuxer->seek_to_most_recent_keyframe(track, AK::Duration::zero(), Media::DemuxerSeekOptions::None));
+    auto after_seek = MUST(demuxer->get_next_sample_for_track(track));
+    EXPECT_EQ(after_seek.presentation_timestamp(), AK::Duration::zero());
+    EXPECT(!after_seek.new_codec_configuration().has_value());
+    EXPECT(after_seek.has_alpha());
+    EXPECT_EQ(after_seek.alpha_data(), alpha_data.span());
+}
+
 TEST_CASE(evicting_the_first_frame_of_a_run_preserves_its_configuration)
 {
     Media::Track track { Media::TrackType::Video, 1, Media::Track::Kind::Main, {}, {} };

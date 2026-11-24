@@ -1,0 +1,2 @@
+Opaque segment: 255
+Alpha segment after seek: 0

@@ -320,7 +320,7 @@ Web::Page const& ConnectionFromClient::page() const
     return m_page_host->page();
 }
 
-void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type, Web::HTML::RequestCredentials credentials, String name, Web::HTML::TransferDataEncoder implicit_port, Web::HTML::SerializedEnvironmentSettingsObject outside_settings, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself)
+void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type, Web::HTML::RequestCredentials credentials, String name, Web::HTML::TransferDataEncoder implicit_port, Web::HTML::SerializedEnvironmentSettingsObject outside_settings, Web::HTML::AgentType agent_type, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself, Optional<Web::HTML::ServiceWorkerRegistrationSnapshot> service_worker_registration)
 {
     // Shutting down the agent drains the event queue after the agent state is released, and that can deliver a start
     // the client sent before the worker was closed. Then there's no page to run the worker in, and nobody waits for it.
@@ -329,8 +329,7 @@ void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type
 
     m_worker_host = make_ref_counted<WorkerHost>(move(url), type, move(name));
 
-    bool const is_shared = agent_type == Web::HTML::AgentType::SharedWorker;
-    VERIFY(is_shared || agent_type == Web::HTML::AgentType::DedicatedWorker);
+    VERIFY(first_is_one_of(agent_type, Web::HTML::AgentType::DedicatedWorker, Web::HTML::AgentType::SharedWorker, Web::HTML::AgentType::ServiceWorker));
 
     // FIXME: Add an assertion that the agent_type passed here is the same that was passed to initialize_agent()
 
@@ -340,9 +339,13 @@ void ConnectionFromClient::start_worker(URL::URL url, Web::HTML::WorkerType type
         auto pending = move(connection->m_pending_transform_inits);
         for (auto& entry : pending)
             connection->run_transform_init(entry.key, move(entry.value));
+        auto pending_steps = move(connection->m_pending_service_worker_lifecycle_steps);
+        auto pending_step_ids = move(connection->m_pending_service_worker_lifecycle_step_ids);
+        for (size_t i = 0; i < pending_steps.size(); ++i)
+            connection->run_service_worker_lifecycle_step(pending_steps[i], pending_step_ids[i]);
     }));
 
-    m_worker_host->run(page(), move(implicit_port), outside_settings, credentials, is_shared, move(origin), move(environment_id), has_process_to_itself);
+    m_worker_host->run(page(), move(implicit_port), outside_settings, credentials, agent_type, move(origin), move(environment_id), has_process_to_itself, move(service_worker_registration));
 }
 
 void ConnectionFromClient::connect_shared_worker(Web::HTML::TransferDataEncoder message_port, Web::HTML::SerializedEnvironmentSettingsObject outside_settings)
@@ -365,6 +368,21 @@ void ConnectionFromClient::handle_file_return(i32 error, Optional<IPC::File> fil
 void ConnectionFromClient::broadcast_channel_message(Web::HTML::BroadcastChannelMessage message)
 {
     Web::HTML::deliver_broadcast_channel_message_locally(move(message));
+}
+
+void ConnectionFromClient::run_service_worker_lifecycle_step(Web::HTML::ServiceWorkerLifecycleStep step, u64 request_id)
+{
+    if (!m_worker_host || !m_worker_host->script_has_run()) {
+        // The service worker's event listeners are only added once its script has run.
+        m_pending_service_worker_lifecycle_steps.append(step);
+        m_pending_service_worker_lifecycle_step_ids.append(request_id);
+        return;
+    }
+
+    m_worker_host->run_service_worker_lifecycle_step(step, GC::create_function(GC::Heap::the(), GC::captures(m_dedicated_worker_thread_link, request_id), [](auto& link, auto& request_id, bool succeeded) {
+        if (link)
+            link->report_service_worker_lifecycle_step_result_to_owner(request_id, succeeded);
+    }));
 }
 
 void ConnectionFromClient::rtc_transform_init(u64 transform_id, Web::HTML::SerializedTransferRecord options_record)

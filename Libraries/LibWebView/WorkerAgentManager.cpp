@@ -218,7 +218,7 @@ void WorkerAgentManager::register_dedicated_worker(WebWorkerClient& owner_client
 // NB: A worker that is not taken up here loses its connection before it starts, and its owner fires an error at it.
 void WorkerAgentManager::register_dedicated_worker(DedicatedWorkerOwner const& owner, CanonicalEnvironmentSettingsObject const& outside_settings, Web::HTML::WorkerAgentStartRequest request, IPC::TransportHandle worker_transport)
 {
-    if (request.agent_type != Web::HTML::AgentType::DedicatedWorker)
+    if (!first_is_one_of(request.agent_type, Web::HTML::AgentType::DedicatedWorker, Web::HTML::AgentType::ServiceWorker))
         return;
     request.outside_settings.origin = outside_settings.origin();
 
@@ -315,7 +315,7 @@ void WorkerAgentManager::start_worker(WebWorkerClient& client, Web::HTML::Worker
     if (auto session = client.session())
         client.keep_script_blob_url_until_script_loads(BlobURLHandle::for_url(session->blob_url_store.ptr(), request.url));
 
-    client.async_start_worker(request.url, request.type, request.credentials, request.name, move(request.outside_port), request.outside_settings, request.agent_type, move(inside_origin), move(environment_id), has_process_to_itself);
+    client.async_start_worker(request.url, request.type, request.credentials, request.name, move(request.outside_port), request.outside_settings, request.agent_type, move(inside_origin), move(environment_id), has_process_to_itself, move(request.service_worker_registration));
 }
 
 // Sites decide what runs together in a process, as for the documents of CanonicalNavigable::process_to_host(). The worker's

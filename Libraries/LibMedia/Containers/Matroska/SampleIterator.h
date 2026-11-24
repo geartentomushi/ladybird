@@ -42,6 +42,7 @@ public:
 
     DecoderErrorOr<Block> next_block();
     DecoderErrorOr<Frames> get_frames(Block);
+    DecoderErrorOr<FixedArray<u8>> read_alpha_data(Block::DataRange);
     Optional<AK::Duration> const& last_timestamp() const { return m_last_timestamp; }
     MediaStreamCursor& cursor() { return m_stream_cursor; }
     size_t position() const { return m_position; }

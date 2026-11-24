@@ -70,11 +70,13 @@ ALLOWED_REALM_MENTIONS = {
     ),
     "FileAPI": (2, 9, "Blob glue still creates streams and buffers in selected realms"),
     "HTML": (
-        63,
-        170,
+        65,
+        178,
         "HTML algorithms still contain structured serialization, including canvas, navigation transfer/reconstruction, worker/worklet, and event realm use, and cross-origin Window/Location property functions are created in the current realm; window postMessage glue supplies principal realms and routes remote messages; "
         "the C++ glue of the Rust structured serialization creates platform objects and SharedArrayBuffers in a given realm; "
-        "the C++ glue of the Rust Storage, StorageEvent and MessageEvent creates them in a given realm",
+        "the C++ glue of the Rust Storage, StorageEvent and MessageEvent creates them in a given realm; "
+        "NavigatorUAData uses its relevant global's realm for allocation and permissions policy, and the promise's realm "
+        "to materialize and resolve getHighEntropyValues() results",
     ),
     "IndexedDB": (
         4,
@@ -101,9 +103,11 @@ ALLOWED_REALM_MENTIONS = {
     ),
     "SVG": (2, 8, "SVG length objects still store/use realms for detached/reflected JS/CSS materialization"),
     "ServiceWorker": (
-        6,
-        41,
-        "service worker jobs, caches, and container promises still materialize results in selected realms",
+        10,
+        48,
+        "service worker jobs, caches, and container promises still materialize results in selected realms, and "
+        "ExtendableEvent waits for waitUntil() promises in the service worker's realm; "
+        "ServiceWorkerRegistration schedules unregister() on the VM of the binding-provided promise's realm",
     ),
     "StorageAPI": (2, 3, "the C++ glue of the Rust StorageManager creates one in a realm"),
     "Streams": (7, 17, "the C++ facade of the Rust streams creates streams and promises in caller-selected realms"),

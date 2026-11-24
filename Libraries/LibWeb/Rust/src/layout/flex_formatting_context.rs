@@ -2302,6 +2302,18 @@ impl<'pass> FlexFormattingContext<'pass> {
 
     /// The alignment along the cross axis of a box styled `style`.
     fn cross_alignment_of(&self, style: StyleValues<'_>) -> SelfAlignment {
+        let mut alignment = self.resolved_cross_alignment_of(style);
+        // NB: Last baseline computes to its fallback alignment, safe self-end, but a flex item participates in
+        //     last-baseline alignment instead.
+        if self.aligns_by_last_baseline(style) {
+            alignment.position = SelfPosition::Baseline;
+            alignment.safety = OverflowSafety::Default;
+        }
+        alignment
+    }
+
+    /// The computed alignment along the cross axis of a box styled `style`, resolved against the cross axis.
+    fn resolved_cross_alignment_of(&self, style: StyleValues<'_>) -> SelfAlignment {
         // AD-HOC: The items of a legacy webkit box align as its -webkit-box-align says, whatever their align-self and
         //         its safety are, and the box's align-items doesn't apply, matching other engines.
         let (keyword, safety) = if self.is_legacy_webkit_box() {
@@ -2996,7 +3008,14 @@ impl<'pass> FlexFormattingContext<'pass> {
             let half_line = self.flex_lines[line_index].cross_size / 2;
             for item_position in 0..self.flex_lines[line_index].items.len() {
                 let index = self.flex_lines[line_index].items.at(item_position);
-                let alignment = self.flex_items[index].alignment_facts.alignment;
+                // NB: An item that cannot participate in last-baseline alignment uses its fallback alignment.
+                let alignment = if self.item_aligns_by_last_baseline(index)
+                    && !self.item_participates_in_baseline_alignment(index)
+                {
+                    self.resolved_cross_alignment_of(self.flex_item_details[index].inputs.style)
+                } else {
+                    self.flex_items[index].alignment_facts.alignment
+                };
                 let item = &self.flex_items[index];
                 // The offsets are from the center of the line, toward the physical right or bottom.
                 let at_physical_start = -half_line + item.margins.cross_before + item.borders_and_padding.cross_before;
@@ -3143,6 +3162,31 @@ impl<'pass> FlexFormattingContext<'pass> {
             && (!self.item_baseline_is_synthesized(index) || !self.run.pass.frame.is_transposed())
     }
 
+    /// Whether a child with this style that is baseline-aligned in the cross axis aligns by its last baseline.
+    /// https://drafts.csswg.org/css-align-3/#valdef-align-self-last-baseline
+    fn aligns_by_last_baseline(&self, style: StyleValues<'_>) -> bool {
+        // NB: The items of a legacy webkit box align as its -webkit-box-align says, which has no last baseline.
+        if self.is_legacy_webkit_box() {
+            false
+        } else if style.align_self() == align_self::AUTO {
+            self.container.style.align_items_is_last_baseline()
+        } else {
+            style.align_self_is_last_baseline()
+        }
+    }
+
+    fn item_aligns_by_last_baseline(&self, index: usize) -> bool {
+        self.aligns_by_last_baseline(self.flex_item_details[index].inputs.style)
+    }
+
+    fn item_baseline_set(&self, index: usize) -> formatting_context::BaselineSet {
+        if self.item_aligns_by_last_baseline(index) {
+            formatting_context::BaselineSet::Last
+        } else {
+            formatting_context::BaselineSet::First
+        }
+    }
+
     /// Whether the item is placed flush against the right edge of the line, aligned with the other items there by the
     /// distance from their right margin edges to their baselines, rather than against the left or top edge.
     /// https://drafts.csswg.org/css-align-3/#baseline-sharing-group
@@ -3162,9 +3206,9 @@ impl<'pass> FlexFormattingContext<'pass> {
     }
 
     /// The distance from the item's margin edge at the side of the line it's aligned at to its baseline.
-    fn item_baseline_from_aligned_edge(&self, index: usize, aligns_at_right_edge: bool) -> CssPixels {
+    fn item_baseline_from_aligned_edge(&self, index: usize, aligns_at_far_edge: bool) -> CssPixels {
         let baseline = self.item_box_baseline(index);
-        if aligns_at_right_edge {
+        if aligns_at_far_edge {
             self.flex_items[index].outer_cross_size() - baseline
         } else {
             baseline
@@ -3179,7 +3223,13 @@ impl<'pass> FlexFormattingContext<'pass> {
             // its baselines.
             let collapsed = metrics.uses_collapsing_borders_model();
             let margin_box_left = metrics.margin_left() + metrics.border_box_left(collapsed);
-            return match extras.orthogonal_flow_baselines.and_then(|baselines| baselines.first) {
+            let baseline_set = self.item_baseline_set(index);
+            return match extras
+                .orthogonal_flow_baselines
+                .and_then(|baselines| match baseline_set {
+                    formatting_context::BaselineSet::First => baselines.first,
+                    formatting_context::BaselineSet::Last => baselines.last,
+                }) {
                 Some(baseline) => margin_box_left + baseline,
                 // https://drafts.csswg.org/css-align-3/#synthesize-baseline
                 // The alphabetic baseline is synthesized from the line-under edge of the border box: its left edge
@@ -3200,7 +3250,7 @@ impl<'pass> FlexFormattingContext<'pass> {
             &self.run.pass,
             self.flex_items[index].box_,
             metrics,
-            formatting_context::BaselineSet::First,
+            self.item_baseline_set(index),
             extras.content_baselines,
         )
     }
@@ -3210,40 +3260,44 @@ impl<'pass> FlexFormattingContext<'pass> {
         // all participating flex items on the line are aligned such that their baselines align, and the item with the
         // largest distance between its baseline and its cross-start margin edge is placed flush against the cross-start
         // edge of the line.
+        // https://drafts.csswg.org/css-align-3/#baseline-sharing-group
+        // Boxes share a baseline-sharing group when the baselines they align by face the same edge of the line, so a
+        // last-baseline group aligns at the end edge, which is its fallback alignment.
+        // FIXME: Honor a reversed cross axis for the end edge of a last-baseline group.
 
         // NB: This runs after layout_inside() so that line boxes are available for baseline computation.
         for line_index in 0..self.flex_lines.len() {
             if !self.flex_lines[line_index].has_baseline_aligned_items {
                 continue;
             }
-            // Each participating item, whether it aligns at the right edge, and its baseline from that edge.
+            // Each participating item, whether it aligns at the far (right or bottom) edge of the line, and its
+            // baseline from that edge. Items share a baseline-sharing group when they align at the same edge.
             let participants: Vec<(usize, bool, CssPixels)> = self.flex_lines[line_index]
                 .items
                 .iter()
                 .filter(|&index| self.item_participates_in_baseline_alignment(index))
                 .map(|index| {
-                    let at_right_edge = self.item_baseline_aligns_at_right_edge(index);
+                    let at_far_edge =
+                        self.item_baseline_aligns_at_right_edge(index) != self.item_aligns_by_last_baseline(index);
                     (
                         index,
-                        at_right_edge,
-                        self.item_baseline_from_aligned_edge(index, at_right_edge),
+                        at_far_edge,
+                        self.item_baseline_from_aligned_edge(index, at_far_edge),
                     )
                 })
                 .collect();
-            let largest_baseline = |at_right_edge: bool| {
-                participants
-                    .iter()
-                    .filter(|participant| participant.1 == at_right_edge)
-                    .fold(CssPixels::default(), |largest, participant| largest.max(participant.2))
-            };
-            let max_baseline = largest_baseline(false);
-            let max_baseline_at_right_edge = largest_baseline(true);
+            let mut largest_baselines: [Option<CssPixels>; 2] = [None, None];
+            for &(_, at_far_edge, baseline) in &participants {
+                let largest = &mut largest_baselines[usize::from(at_far_edge)];
+                *largest = Some(largest.map_or(baseline, |largest| largest.max(baseline)));
+            }
             let line_cross_size = self.flex_lines[line_index].cross_size;
-            for (index, at_right_edge, baseline) in participants {
-                if at_right_edge {
-                    // The item was placed at the left edge of the line.
+            for (index, at_far_edge, baseline) in participants {
+                let max_baseline = largest_baselines[usize::from(at_far_edge)].unwrap_or(baseline);
+                if at_far_edge {
+                    // The item was placed at the left or top edge of the line.
                     let free_space = line_cross_size - self.flex_items[index].outer_cross_size();
-                    self.flex_items[index].cross_offset += free_space - (max_baseline_at_right_edge - baseline);
+                    self.flex_items[index].cross_offset += free_space - (max_baseline - baseline);
                 } else {
                     self.flex_items[index].cross_offset += max_baseline - baseline;
                 }
@@ -3556,14 +3610,7 @@ impl<'pass> FlexFormattingContext<'pass> {
         // of a flex container are the content edges of the flex container.
 
         let style = self.style(node);
-        // NB: The items of a legacy webkit box align as its -webkit-box-align says, which has no last baseline.
-        let is_last_baseline = if self.is_legacy_webkit_box() {
-            false
-        } else if style.align_self() == align_self::AUTO {
-            self.container.style.align_items_is_last_baseline()
-        } else {
-            style.align_self_is_last_baseline()
-        };
+        let is_last_baseline = self.aligns_by_last_baseline(style);
         let alignment = self.cross_alignment_of(style);
         // INTEROP: Chrome and Firefox use the container's start/end edges for baseline fallbacks of abspos flex
         //          children, rather than the self-start/self-end edges specified by CSS Align.
@@ -4612,15 +4659,12 @@ impl<'pass> FlexFormattingContext<'pass> {
         purpose: formatting_context::BaselinePurpose,
     ) -> Option<CssPixels> {
         let items = &self.flex_lines.get(line_index)?.items;
-        // 1. If any of the flex items on the flex container's first line participate in baseline alignment, the flex
-        //    container's main-axis baseline is the baseline of those flex items.
-        let participating = (baseline_set == formatting_context::BaselineSet::First)
-            .then(|| {
-                items
-                    .iter()
-                    .find(|&index| self.item_participates_in_baseline_alignment(index))
-            })
-            .flatten();
+        // 1. If any of the flex items on the flex container's startmost/endmost flex line participate in first/last
+        //    baseline alignment, the flex container's first/last main-axis baseline set is generated from the shared
+        //    alignment baseline of those flex items.
+        let participating = items.iter().find(|&index| {
+            self.item_participates_in_baseline_alignment(index) && self.item_baseline_set(index) == baseline_set
+        });
         // 2. Otherwise, the flex container's first (last) main-axis baseline set is generated from the alignment
         //    baseline of the startmost (endmost) flex item. If that item has no alignment baseline, then one is first
         //    synthesized from its border edges.

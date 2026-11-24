@@ -792,7 +792,7 @@ void StyleComputer::apply_settled_animation_plan(Layout::BegunRead const& read, 
 // https://drafts.csswg.org/css-transitions-2/#defining-before-change-style
 // Sampling the installed record can keep the epoch's before-change style, and the record held by then is the
 // after-change one, so a record that owes the transition step keeps the record it moved away from first.
-void StyleComputer::compose_installed_engine_record(Layout::BegunRead const& read, DOM::AbstractElement abstract_element, InstalledStyle const& before_change_style) const
+void StyleComputer::compose_installed_engine_record(Layout::BegunRead const& read, DOM::AbstractElement abstract_element, InstalledStyle const& before_change_style, bool before_transition_decision) const
 {
     apply_settled_animation_plan(read, abstract_element);
     if (before_change_style && document().is_in_style_stabilization_epoch())
@@ -806,6 +806,7 @@ void StyleComputer::compose_installed_engine_record(Layout::BegunRead const& rea
         return;
     Animations::AnimationUpdateContext::ElementData element_data { style, reconstruct_computed_properties_for_animation(style) };
     element_data.base_is_current = true;
+    element_data.before_transition_decision = before_transition_decision;
     Animations::AnimationUpdateContext context;
     context.elements.set(abstract_element, move(element_data));
     context.publish();

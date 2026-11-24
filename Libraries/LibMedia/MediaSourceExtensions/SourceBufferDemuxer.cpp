@@ -210,7 +210,7 @@ void SourceBufferDemuxer::recalculate_run_bounds(FrameRun& run)
 
 static size_t buffered_byte_count(Media::CodedFrame const& frame)
 {
-    auto byte_count = SourceBufferDemuxer::buffered_bytes_per_frame + frame.data().size();
+    auto byte_count = SourceBufferDemuxer::buffered_bytes_per_frame + frame.data().size() + frame.alpha_data().size();
     if (auto configuration = frame.new_codec_configuration(); configuration.has_value())
         byte_count += configuration.value().size();
     return byte_count;
@@ -316,6 +316,7 @@ void SourceBufferDemuxer::add_coded_frame(Media::Track const& track, Media::Code
 // Delivery is in decode order, so a reordered frame's presentation can end after that of a later delivered frame.
 void SourceBufferDemuxer::note_delivered_frame(TrackData& data, Media::CodedFrame const& frame)
 {
+    data.last_delivered_frame_has_alpha = frame.has_alpha();
     auto end = frame.presentation_timestamp() + frame.duration();
     if (!data.highest_delivered_presentation_end.has_value() || end > data.highest_delivered_presentation_end.value())
         data.highest_delivered_presentation_end = end;
@@ -936,25 +937,21 @@ Media::DecoderErrorOr<Media::CodedFrame> SourceBufferDemuxer::get_next_sample_fo
     if (data.cursor.continuity == CursorContinuity::Jumped) {
         data.cursor.continuity = CursorContinuity::Continuous;
         auto configuration = codec_configuration_at_position(data, data.cursor.run, data.cursor.frame);
-        auto configuration_is_new = configuration.has_value() && (!data.last_delivered_codec_configuration.has_value() || *configuration != data.last_delivered_codec_configuration->span());
+        auto configuration_is_new = configuration.has_value()
+            && (!data.last_delivered_codec_configuration.has_value()
+                || *configuration != data.last_delivered_codec_configuration->span()
+                || stored_frame.has_alpha() != data.last_delivered_frame_has_alpha);
         if (configuration_is_new)
             data.last_delivered_codec_configuration = MUST(FixedArray<u8>::create(*configuration));
 
         // The first frame of a run always includes a codec configuration, but we only want to emit it if it differs
         // from the config at the end of the last run.
         if (configuration_is_new || stored_frame.new_codec_configuration().has_value()) {
-            Optional<FixedArray<u8>> new_codec_configuration;
+            auto frame = stored_frame;
             if (configuration_is_new)
-                new_codec_configuration = MUST(data.last_delivered_codec_configuration->clone());
-            Media::CodedFrame frame {
-                stored_frame.codec_id(),
-                stored_frame.presentation_timestamp(),
-                stored_frame.decode_timestamp(),
-                stored_frame.duration(),
-                stored_frame.flags(),
-                MUST(FixedArray<u8>::create(stored_frame.data())),
-                move(new_codec_configuration),
-            };
+                frame.set_new_codec_configuration(MUST(data.last_delivered_codec_configuration->clone()));
+            else
+                frame.clear_new_codec_configuration();
             data.cursor.presentation_timestamp = frame.presentation_timestamp();
             note_delivered_frame(data, frame);
             data.cursor.frame++;

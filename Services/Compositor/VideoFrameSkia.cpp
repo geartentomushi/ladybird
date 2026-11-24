@@ -425,7 +425,7 @@ sk_sp<SkImage> sk_image_from_video_frame(Media::VideoFrame const& frame, RefPtr<
 
     auto color_space = color_space_of(frame);
 
-    if (!image && gr_context && yuv_data.has_value()) {
+    if (!image && gr_context && yuv_data.has_value() && !frame.has_alpha()) {
         image = SkImages::TextureFromYUVAPixmaps(
             gr_context,
             make_yuva_pixmaps(*yuv_data),

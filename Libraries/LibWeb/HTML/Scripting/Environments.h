@@ -151,6 +151,9 @@ public:
     // https://w3c.github.io/ServiceWorker/#get-the-service-worker-object
     GC::Ref<ServiceWorker::ServiceWorker> get_service_worker_object(ServiceWorker::ServiceWorkerRecord*);
 
+    GC::Ptr<ServiceWorker::ServiceWorkerRegistration> existing_service_worker_registration_object(ServiceWorker::Registration const&) const;
+    GC::Ptr<ServiceWorker::ServiceWorker> existing_service_worker_object(ServiceWorker::ServiceWorkerRecord&) const;
+
     [[nodiscard]] bool discarded() const { return m_discarded; }
     void set_discarded(bool b) { m_discarded = b; }
 

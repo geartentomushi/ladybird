@@ -518,6 +518,7 @@ set(SOURCES
     HTML/NavigatorConcurrentHardware.cpp
     HTML/NavigatorDeviceMemory.cpp
     HTML/NavigatorID.cpp
+    HTML/NavigatorUAData.cpp
     HTML/Numbers.cpp
     HTML/OffscreenCanvas.cpp
     HTML/OffscreenCanvasRenderingContext2D.cpp
@@ -724,6 +725,7 @@ set(SOURCES
     ServiceWorker/Cache.cpp
     ServiceWorker/CacheStorage.cpp
     ServiceWorker/EventNames.cpp
+    ServiceWorker/ExtendableEvent.cpp
     ServiceWorker/Job.cpp
     ServiceWorker/NameToCacheMap.cpp
     ServiceWorker/Registration.cpp

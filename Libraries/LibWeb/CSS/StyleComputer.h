@@ -156,7 +156,7 @@ public:
     void apply_settled_animation_plan(Layout::BegunRead const& read, DOM::AbstractElement&) const;
     // Starts the CSS animations of an element or pseudo-element and composes its animations over the record the style
     // engine settled for it, once the host has installed it.
-    void compose_installed_engine_record(Layout::BegunRead const& read, DOM::AbstractElement, InstalledStyle const& before_change_style) const;
+    void compose_installed_engine_record(Layout::BegunRead const& read, DOM::AbstractElement, InstalledStyle const& before_change_style, bool before_transition_decision = false) const;
     [[nodiscard]] bool has_animations_to_compose(DOM::AbstractElement) const;
     void stop_publishing_animated_custom_properties(DOM::AbstractElement) const;
 

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html class="test-wait">
+<style>
+    #target::before {
+        content: "before";
+        opacity: 1;
+        transition: opacity 100s linear;
+    }
+    #target.fade::before { opacity: 0 }
+    #target.cancel::before { transition: none }
+</style>
+<div id="target"></div>
+<script>
+    const target = document.getElementById("target");
+    function flushStyle() {
+        target.getBoundingClientRect();
+        return getComputedStyle(target, "::before").opacity;
+    }
+    flushStyle();
+    target.classList.add("fade");
+    flushStyle();
+    const transition = target.getAnimations().find(animation => animation.transitionProperty === "opacity");
+    target.addEventListener("transitioncancel", event => {
+        if (transition && event.pseudoElement === "::before" && event.propertyName === "opacity")
+            document.documentElement.classList.remove("test-wait");
+    });
+    requestAnimationFrame(() => {
+        target.classList.add("cancel");
+        flushStyle();
+    });
+</script>

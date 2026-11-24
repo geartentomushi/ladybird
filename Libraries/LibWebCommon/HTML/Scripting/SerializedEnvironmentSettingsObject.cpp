@@ -18,6 +18,7 @@ ErrorOr<void> encode(Encoder& encoder, Web::HTML::SerializedWindow const& window
     TRY(encoder.encode(window.associated_document.site_for_cookies));
     TRY(encoder.encode(window.associated_document.relevant_settings_object_is_secure_context));
     TRY(encoder.encode(window.associated_document.relevant_settings_object_policy_container));
+    TRY(encoder.encode(window.associated_document.allows_high_entropy_user_agent_values));
     TRY(encoder.encode(window.navigable_is_top_level));
 
     return {};
@@ -32,6 +33,7 @@ ErrorOr<Web::HTML::SerializedWindow> decode(Decoder& decoder)
             .site_for_cookies = TRY(decoder.decode<URL::Origin>()),
             .relevant_settings_object_is_secure_context = TRY(decoder.decode<bool>()),
             .relevant_settings_object_policy_container = TRY(decoder.decode<Web::HTML::SerializedPolicyContainer>()),
+            .allows_high_entropy_user_agent_values = TRY(decoder.decode<bool>()),
         },
         .navigable_is_top_level = TRY(decoder.decode<bool>()),
     };
@@ -44,6 +46,7 @@ ErrorOr<void> encode(Encoder& encoder, Web::HTML::SerializedWorkerGlobalScope co
     TRY(encoder.encode(worker_global_scope.relevant_settings_object_is_secure_context));
     TRY(encoder.encode(worker_global_scope.relevant_settings_object_policy_container));
     TRY(encoder.encode(worker_global_scope.is_supported_animation_frame_provider));
+    TRY(encoder.encode(worker_global_scope.allows_high_entropy_user_agent_values));
     return {};
 }
 
@@ -55,6 +58,7 @@ ErrorOr<Web::HTML::SerializedWorkerGlobalScope> decode(Decoder& decoder)
         .relevant_settings_object_is_secure_context = TRY(decoder.decode<bool>()),
         .relevant_settings_object_policy_container = TRY(decoder.decode<Web::HTML::SerializedPolicyContainer>()),
         .is_supported_animation_frame_provider = TRY(decoder.decode<bool>()),
+        .allows_high_entropy_user_agent_values = TRY(decoder.decode<bool>()),
     };
 }
 

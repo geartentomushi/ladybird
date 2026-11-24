@@ -1,0 +1,11 @@
+// https://w3c.github.io/ServiceWorker/#extendableevent-interface
+[Exposed=ServiceWorker]
+interface ExtendableEvent : Event {
+    constructor(DOMString type, optional ExtendableEventInit eventInitDict = {});
+    undefined waitUntil(Promise<any> f);
+};
+
+// https://w3c.github.io/ServiceWorker/#dictdef-extendableeventinit
+dictionary ExtendableEventInit : EventInit {
+    // Defined for the forward compatibility across the derived events
+};

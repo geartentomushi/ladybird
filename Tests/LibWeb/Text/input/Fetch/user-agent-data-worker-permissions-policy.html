@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const scriptSource = `
+            navigator.userAgentData.getHighEntropyValues(["architecture", "bitness"]).then(result => postMessage(result));
+        `;
+        const workerScript = URL.createObjectURL(new Blob([scriptSource], { type: "text/javascript" }));
+        const nestedWorkerScript = URL.createObjectURL(new Blob([`
+            const url = URL.createObjectURL(new Blob([${JSON.stringify(scriptSource)}], { type: "text/javascript" }));
+            const worker = new Worker(url);
+            worker.onmessage = ({ data }) => postMessage(data);
+            worker.onerror = ({ message }) => { throw new Error(message); };
+        `], { type: "text/javascript" }));
+        try {
+            for (const allow of [false, true]) {
+                const frame = document.createElement("iframe");
+                frame.allow = `ch-ua-high-entropy-values ${allow ? "*" : "'none'"}`;
+                frame.srcdoc = "<!DOCTYPE html>";
+                const loaded = new Promise(resolve => frame.onload = resolve);
+                document.body.append(frame);
+                await loaded;
+                try {
+                    for (const [prefix, script] of [["", workerScript], ["Nested worker, ", nestedWorkerScript]]) {
+                        const worker = new frame.contentWindow.Worker(script);
+                        try {
+                            const hints = await new Promise((resolve, reject) => {
+                                worker.onmessage = event => resolve(event.data);
+                                worker.onerror = reject;
+                            });
+                            println(`${prefix}${allow ? "Allowed" : "Denied"}: ${Object.keys(hints).sort().join(", ")}`);
+                        } finally {
+                            worker.terminate();
+                        }
+                    }
+                } finally {
+                    frame.remove();
+                }
+            }
+        } finally {
+            URL.revokeObjectURL(nestedWorkerScript);
+            URL.revokeObjectURL(workerScript);
+        }
+    });
+</script>

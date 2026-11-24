@@ -16,7 +16,9 @@ On macOS, use `--webdriver Build/release/bin/Ladybird.app/Contents/MacOS/WebDriv
 instead. The `Ladybird` executable is in the same bundle directory.
 
 The default targets are the first 100 browsable domains from Tranco list
-[8PW6V][tranco], dated 2026-11-22, in original rank order. The filter uses
+[8PW6V][tranco], dated 2026-11-22, in original rank order. Pass `--list top-500`
+to `run`, `gate` or `ci` for the first 500 browsable domains of the same snapshot;
+its baseline is `baseline-top-500.json`. The filter uses
 `curl` (not Ladybird) to fetch each HTTPS homepage with TLS verification and up
 to two retries for transfer failures. It follows redirects and keeps only final
 2xx responses with a `text/html` content type. Regenerate the list with:
@@ -24,11 +26,22 @@ to two retries for transfer failures. It follows redirects and keeps only final
 ```sh
 curl --fail --location https://tranco-list.eu/download/8PW6V/1000000 -o /tmp/tranco-8PW6V.csv
 python3 Meta/SiteSmoke/filter-tranco.py /tmp/tranco-8PW6V.csv --output Meta/SiteSmoke/tranco-top-100.csv
+python3 Meta/SiteSmoke/filter-tranco.py /tmp/tranco-8PW6V.csv --count 500 \
+    --output Meta/SiteSmoke/tranco-top-500.csv
 ```
+
+Each list records the probe results of the day it was generated, and probes of
+live sites drift: the top-500 list was probed on 2026-11-24, when amazon.com
+failed the probe and adobe.com passed, the reverse of the top-100 list's probe.
+Compare runs only against the baseline of the same list.
+
+The lists are filtered independently, so a site that failed one probe can be in
+one list and not the other.
 
 Live DNS, TLS, and HTTP responses can change; use the committed list for
 comparisons. After regenerating the list, rerun the smoke test from the source
-build on the new list, replace `baseline.json` with that run's `results.json`,
+build on the new list, replace that list's baseline (`baseline.json` or
+`baseline-top-500.json`) with that run's `results.json`,
 and commit the list and baseline together. The gate rejects a baseline whose
 targets do not match the pinned list.
 
@@ -88,6 +101,31 @@ network latency and server behavior vary. Inspect screenshots and repeat a run
 before attributing changes to the engine. Commit only the baseline JSON, not the
 screenshots or logs.
 
+## Compare with Chrome
+
+To find sites that render differently in Ladybird, capture the same list with
+headless Chrome through a matching ChromeDriver, such as the
+[Chrome for Testing][cft] builds, then list the differences:
+
+```sh
+python3 Meta/SiteSmoke/site-smoke.py run --list top-500 \
+    --chromedriver /path/to/chromedriver --chrome /path/to/chrome \
+    --revision chrome --output "$HOME/chrome-site-smoke"
+python3 Meta/SiteSmoke/site-smoke.py reference \
+    "$HOME/chrome-site-smoke/results.json" "$HOME/ladybird-site-smoke/results.json"
+```
+
+Chrome runs headless with a fresh profile, the same viewport and settings, and a
+regular desktop Chrome user agent instead of `HeadlessChrome`. Each run records
+the document's scroll width and height. `reference` only considers sites Chrome
+loaded successfully, and lists Ladybird load failures, empty bodies, large
+body element count drops, document widths or heights that differ by more than
+2×, and at least five more console errors than Chrome. These are leads for
+review, not regressions: server responses, ads, consent prompts and bot checks
+differ between browsers and runs, so inspect both screenshots before filing an
+engine bug. It exits 0 after listing the differences, and 2 when the runs use
+different viewports or targets.
+
 ## Gate a batch of fixes
 
 On Linux, use the same build prerequisites as `Meta/ladybird.py`, then run:
@@ -101,7 +139,8 @@ and Ref and the configured LibJS CTest suite, then runs the pinned list with the
 baseline's settings. It writes `gate-summary.json` and stage logs in the output
 directory. Use `--baseline` to compare with a different complete Tranco baseline,
 or `--cc`, `--cxx`, `--build-jobs`, and `--test-jobs` to control the build and
-test environment. It runs standalone, not as a CI workflow.
+test environment. It runs standalone, not as a CI workflow. Pass `--list top-500`
+to gate on the larger list against `baseline-top-500.json`.
 
 On Linux, use a system FFmpeg with H.264/AAC support and a libavcodec major
 supported by Ladybird (currently 60–63). The bundled decoders alone do not
@@ -138,3 +177,4 @@ incomplete output, or failure to set up any site exit nonzero. The full
 directory; use a new output filename or an empty details directory for each run.
 
 [tranco]: https://tranco-list.eu/list/8PW6V
+[cft]: https://googlechromelabs.github.io/chrome-for-testing/

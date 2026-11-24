@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const server = httpTestServer();
+
+        async function compareHints(path) {
+            const url = await server.createEcho("GET", path, {
+                status: 200,
+                headers: {
+                    "Access-Control-Allow-Origin": "*",
+                    "Content-Type": "application/json",
+                },
+                reflect_headers_in_body: true,
+            });
+            const headers = await (await fetch(url)).json();
+            const { brands, mobile, platform } = navigator.userAgentData;
+            println(`Sec-CH-UA agrees: ${headers["Sec-CH-UA"][0] === brands.map(({ brand, version }) => `"${brand}";v="${version}"`).join(", ")}`);
+            println(`Sec-CH-UA-Mobile agrees: ${headers["Sec-CH-UA-Mobile"][0] === (mobile ? "?1" : "?0")}`);
+            println(`Sec-CH-UA-Platform agrees: ${headers["Sec-CH-UA-Platform"][0] === `"${platform}"`}`);
+            println(`Ladybird is present: ${brands.some(({ brand }) => brand === "Ladybird")}`);
+        }
+
+        try {
+            await compareHints("/ua-data-default");
+            internals.setSiteCompatibilityData(JSON.stringify([{
+                sites: [`${location.protocol}//${location.hostname}`],
+                user_agent: ["hide_Ladybird"],
+            }]));
+            await compareHints("/ua-data-overridden");
+        } catch (error) {
+            println(`FAIL: ${error}`);
+        } finally {
+            internals.setSiteCompatibilityData("[]");
+        }
+    });
+</script>

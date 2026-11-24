@@ -61,20 +61,21 @@ static void report_worker_exception(WindowOrWorkerGlobalScopeMixin& window_or_wo
 
 GC::Ref<WorkerAgentParent> WorkerAgentParent::create(URL::URL url, WorkerOptions const& options, bool extended_lifetime,
     GC::Ptr<MessagePort> outside_port, GC::Ref<EnvironmentSettingsObject> outside_settings,
-    GC::Ref<DOM::EventTarget> worker_event_target, AgentType agent_type)
+    GC::Ref<DOM::EventTarget> worker_event_target, AgentType agent_type, Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration)
 {
-    auto agent = GC::Heap::the().allocate<WorkerAgentParent>(move(url), options, extended_lifetime, outside_port, outside_settings, worker_event_target, agent_type);
+    auto agent = GC::Heap::the().allocate<WorkerAgentParent>(move(url), options, extended_lifetime, outside_port, outside_settings, worker_event_target, agent_type, move(service_worker_registration));
     agent->start();
     return agent;
 }
 
 WorkerAgentParent::WorkerAgentParent(URL::URL url, WorkerOptions const& options, bool extended_lifetime, GC::Ptr<MessagePort> outside_port,
     GC::Ref<EnvironmentSettingsObject> outside_settings, GC::Ref<DOM::EventTarget> worker_event_target,
-    AgentType agent_type)
+    AgentType agent_type, Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration)
     : m_worker_options(options)
     , m_extended_lifetime(extended_lifetime)
     , m_agent_type(agent_type)
     , m_url(move(url))
+    , m_service_worker_registration(move(service_worker_registration))
     , m_owner_token(next_owner_token())
     , m_outside_port(outside_port)
     , m_outside_settings(outside_settings)
@@ -92,7 +93,7 @@ void WorkerAgentParent::start()
 
     // NB: A dedicated worker always runs in the process of its owner, and the browser process picks that of a shared one.
     auto [data_holder, parked_end_token] = MUST(m_message_port->transfer_to_worker(realm,
-        m_agent_type == AgentType::DedicatedWorker ? MessagePort::WorkerMayBeInOtherProcess::No : MessagePort::WorkerMayBeInOtherProcess::Yes));
+        first_is_one_of(m_agent_type, AgentType::DedicatedWorker, AgentType::ServiceWorker) ? MessagePort::WorkerMayBeInOtherProcess::No : MessagePort::WorkerMayBeInOtherProcess::Yes));
     m_parked_end_token = parked_end_token;
 
     // FIXME: Specification says this supposed to happen in step 11 of onComplete handler defined in https://html.spec.whatwg.org/multipage/workers.html#run-a-worker
@@ -129,12 +130,15 @@ void WorkerAgentParent::start()
         .caller_is_secure_context = is_secure_context(*m_outside_settings),
         .maximum_frames_per_second = maximum_frames_per_second,
         .owner_token = m_owner_token,
+        .service_worker_registration = m_service_worker_registration,
     };
 
     worker_agent_parents().set(m_owner_token, *this);
     auto& page_client = Bindings::principal_host_defined_page(realm).client();
 
-    if (m_agent_type == AgentType::DedicatedWorker) {
+    // NB: A service worker runs on a thread of the process that registered it, like a dedicated worker.
+    // FIXME: Service workers should be run by the user agent, independently of the client that registered them.
+    if (first_is_one_of(m_agent_type, AgentType::DedicatedWorker, AgentType::ServiceWorker)) {
         m_dedicated_worker_thread_link = page_client.start_dedicated_worker(move(request));
         if (!m_dedicated_worker_thread_link) {
             dispatch_error_event();
@@ -207,6 +211,35 @@ void WorkerAgentParent::did_worker_agent_die(WorkerAgentOwnerToken owner_token)
     agent_parent->forget_agent();
 }
 
+void WorkerAgentParent::did_finish_service_worker_lifecycle_step(WorkerAgentOwnerToken owner_token, u64 request_id, bool succeeded)
+{
+    auto parent = worker_agent_parents().find(owner_token);
+    if (parent == worker_agent_parents().end())
+        return;
+    auto on_complete = parent->value->m_pending_service_worker_lifecycle_steps.take(request_id);
+    if (on_complete.has_value())
+        on_complete.value()->function()(succeeded);
+}
+
+void WorkerAgentParent::run_service_worker_lifecycle_step(ServiceWorkerLifecycleStep step, GC::Ref<GC::Function<void(bool succeeded)>> on_complete)
+{
+    VERIFY(m_agent_type == AgentType::ServiceWorker);
+    if (!m_dedicated_worker_thread_link) {
+        on_complete->function()(false);
+        return;
+    }
+    auto request_id = m_next_service_worker_lifecycle_step_id++;
+    m_pending_service_worker_lifecycle_steps.set(request_id, on_complete);
+    m_dedicated_worker_thread_link->run_service_worker_lifecycle_step(step, request_id);
+}
+
+void WorkerAgentParent::fail_pending_service_worker_lifecycle_steps()
+{
+    auto pending_steps = move(m_pending_service_worker_lifecycle_steps);
+    for (auto& entry : pending_steps)
+        entry.value->function()(false);
+}
+
 void WorkerAgentParent::terminate()
 {
     if (auto dedicated_worker_thread_link = m_dedicated_worker_thread_link) {
@@ -230,6 +263,7 @@ void WorkerAgentParent::forget_agent()
     give_up_on_parked_end();
     worker_agent_parents().remove(m_owner_token);
     m_outside_settings->remove_owned_worker_agent(*this);
+    fail_pending_service_worker_lifecycle_steps();
 }
 
 void WorkerAgentParent::dispatch_error_event()
@@ -310,6 +344,8 @@ void WorkerAgentParent::visit_edges(Cell::Visitor& visitor)
     visitor.visit(m_outside_port);
     visitor.visit(m_outside_settings);
     visitor.visit(m_worker_event_target);
+    for (auto& entry : m_pending_service_worker_lifecycle_steps)
+        visitor.visit(entry.value);
 }
 
 void WorkerAgentParent::rtc_transform_init(u64 transform_id, SerializedTransferRecord options_record)

@@ -160,6 +160,15 @@ DecoderErrorOr<SampleIterator::Frames> SampleIterator::get_frames(Block block)
     return frames;
 }
 
+DecoderErrorOr<FixedArray<u8>> SampleIterator::read_alpha_data(Block::DataRange range)
+{
+    if (range.size > NumericLimits<int>::max())
+        return DecoderError::corrupted("Matroska alpha data is too large"sv);
+    Streamer streamer { m_stream_cursor };
+    TRY(streamer.seek_to_position(range.position));
+    return streamer.read_raw_octets(range.size);
+}
+
 DecoderErrorOr<void> SampleIterator::seek_to_cue_point(TrackCuePoint const& cue_point, CuePointTarget target)
 {
     // This is a private function. The position getter can return optional, but the caller should already know that this track has a position.

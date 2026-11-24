@@ -41,11 +41,14 @@ public:
 
 private:
     DecoderErrorOr<void> copy_pending_frame_into(Gfx::YUVData&);
+    DecoderErrorOr<void> decode_alpha_plane(ReadonlyBytes, u64 key, DecodeIntent);
 
     FFmpegFunctions const& m_functions;
     AVCodecContext* m_codec_context;
     AVPacket* m_packet;
     AVFrame* m_frame;
+    AVCodecContext* m_alpha_codec_context { nullptr };
+    AVFrame* m_alpha_frame { nullptr };
     NonnullRefPtr<VideoFramePool> m_frame_pool;
     Optional<VideoFramesAwaitingOutput::Frame> m_pending_frame;
     VideoFramesAwaitingOutput m_frames_awaiting_output;

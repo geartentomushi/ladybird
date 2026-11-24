@@ -1,0 +1,64 @@
+<!doctype html>
+<html class="test-wait">
+<style>
+    body { height: 400vh; margin: 0 }
+    .site-header {
+        font-size: 24px;
+        opacity: 1;
+        visibility: visible;
+        transition: all cubic-bezier(.4, 0, .2, 1) .4s;
+    }
+    .site-header.header-fixed {
+        opacity: 0 !important;
+        visibility: hidden !important;
+        transform: translate3d(0, -15px, 0);
+    }
+    .site-header.header-fixed.showed {
+        opacity: 1 !important;
+        visibility: visible !important;
+        transform: translate3d(0, 0, 0);
+        transition: .5s cubic-bezier(.4, 0, .2, 1) .4s;
+    }
+    .site-header.header-fixed.no-transition { transition: none }
+    .site-header.mobile-header { font-size: 18px }
+    .site-header.mobile-header .main-nav { font-size: 17px; transition: all .4s }
+    .site-header:not(.mobile-header) .main-nav { font-size: 15px; transition: all .4s }
+    .site-header.scrolled {
+        opacity: 0;
+        visibility: hidden;
+    }
+    .site-header.no-transition { transition: none !important }
+    .site-header::before {
+        content: "";
+        display: block;
+        animation: pulse 1ms infinite;
+    }
+    @keyframes pulse {
+        from { opacity: 0.5 }
+        to { opacity: 1 }
+    }
+</style>
+<header id="header" class="site-header">
+    <div class="header-wrap">
+        <div class="main-nav">Koncepthem</div>
+    </div>
+</header>
+<script>
+    let pass = 0;
+    function stabilize() {
+        header.classList.toggle("header-fixed", pass % 2);
+        header.classList.toggle("showed", pass % 3 === 0);
+        header.classList.toggle("no-transition", pass % 5 === 0);
+        header.classList.toggle("mobile-header", pass % 4 === 0);
+        header.classList.toggle("scrolled", pass % 7 === 0);
+        header.getClientRects();
+        header.querySelector(".main-nav").getClientRects();
+        scrollTo(0, pass % 2 ? 100 : 0);
+        if (++pass < 80) {
+            requestAnimationFrame(stabilize);
+            return;
+        }
+        document.documentElement.classList.remove("test-wait");
+    }
+    requestAnimationFrame(stabilize);
+</script>

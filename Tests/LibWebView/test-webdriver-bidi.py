@@ -1759,7 +1759,10 @@ def check_network_scoped_headers(bidi, context, server):
             "network.setExtraHeaders",
             {
                 "contexts": [target],
-                "headers": [{"name": "X-Scoped-Secret", "value": {"type": "string", "value": value}}],
+                "headers": [
+                    {"name": "X-Scoped-Secret", "value": {"type": "string", "value": value}},
+                    {"name": "User-Agent", "value": {"type": "string", "value": value}},
+                ],
             },
         )
 
@@ -1771,6 +1774,9 @@ def check_network_scoped_headers(bidi, context, server):
         )
         values = [value for key, value in records[-1]["headers"] if key.lower() == "x-scoped-secret"]
         assert values == [expected], records
+        headers = {key.lower(): value for key, value in records[-1]["headers"]}
+        assert headers["user-agent"] == expected, records
+        assert not {"sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"}.intersection(headers), records
 
     try:
         set_headers(context, "first-tab")

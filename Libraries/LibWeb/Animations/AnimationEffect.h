@@ -39,6 +39,7 @@ struct AnimationUpdateContext {
         // Whether the record the update samples over was computed by this style update, so that the base
         // adjustments the sampled values feed into were made over the values the element holds now.
         bool base_is_current { false };
+        bool before_transition_decision { false };
     };
 
     AnimationUpdateContext();
