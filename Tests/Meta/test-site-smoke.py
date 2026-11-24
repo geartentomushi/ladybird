@@ -103,6 +103,11 @@ class SiteSmokeTests(unittest.TestCase):
         )
         with self.assertRaises(ValueError):
             smoke.reference_differences(chrome, ladybird | {"settings": {"viewport": {"width": 1, "height": 1}}})
+        with self.assertRaises(ValueError):
+            smoke.reference_differences(chrome, ladybird | {"sites": ladybird["sites"][:1]})
+        run = {"schema_version": 1, "settings": settings, "sites": []}
+        with self.assertRaises(ValueError):
+            smoke.compare(run | {"browser": "chrome"}, run | {"browser": "ladybird"})
 
     def test_chrome_reference_uses_a_private_profile_and_regular_user_agent(self):
         version = subprocess.CompletedProcess([], 0, "Google Chrome for Testing 156.0.8078.47\n", "")

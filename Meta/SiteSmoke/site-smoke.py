@@ -437,6 +437,8 @@ def is_large_body_drop(before, after):
 def compare(baseline, current):
     if any(baseline[field] != current[field] for field in ("schema_version", "settings")):
         raise ValueError("Baseline and current run use different schema versions or capture settings")
+    if "chrome" in (baseline.get("browser"), current.get("browser")):
+        raise ValueError("Compare Chrome reference runs with `reference`, not as a baseline or candidate")
     old_sites = {row["url"]: row for row in baseline["sites"]}
     changes = []
     for site in current["sites"]:
