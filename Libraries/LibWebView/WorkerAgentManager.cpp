@@ -315,7 +315,7 @@ void WorkerAgentManager::start_worker(WebWorkerClient& client, Web::HTML::Worker
     if (auto session = client.session())
         client.keep_script_blob_url_until_script_loads(BlobURLHandle::for_url(session->blob_url_store.ptr(), request.url));
 
-    client.async_start_worker(request.url, request.type, request.credentials, request.name, move(request.outside_port), request.outside_settings, request.agent_type, move(inside_origin), move(environment_id), has_process_to_itself);
+    client.async_start_worker(request.url, request.type, request.credentials, request.name, move(request.outside_port), request.outside_settings, request.agent_type, move(inside_origin), move(environment_id), has_process_to_itself, move(request.service_worker_registration));
 }
 
 // Sites decide what runs together in a process, as for the documents of CanonicalNavigable::process_to_host(). The worker's

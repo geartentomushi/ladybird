@@ -8,6 +8,7 @@
 
 #include <AK/Types.h>
 #include <LibURL/URL.h>
+#include <LibWeb/Bindings/ServiceWorker.h>
 #include <LibWeb/Bindings/ServiceWorkerRegistration.h>
 #include <LibWeb/Bindings/Worker.h>
 #include <LibWeb/Forward.h>
@@ -15,6 +16,8 @@
 
 namespace Web::ServiceWorker {
 
+class Registration;
+struct ServiceWorkerRecord;
 struct Job;
 using JobQueue = GC::RootVector<GC::Ref<Job>>;
 
@@ -79,5 +82,20 @@ void schedule_job(JS::VM&, GC::Ref<Job>);
 
 // The queues of an agent hold roots, which have to go before its heap does.
 void forget_job_queues_of_this_agent();
+
+enum class RegistrationWorkerSlot : u8 {
+    Installing,
+    Waiting,
+    Active,
+};
+
+// https://w3c.github.io/ServiceWorker/#update-registration-state-algorithm
+void update_registration_state(HTML::EventLoop&, Registration&, RegistrationWorkerSlot, RefPtr<ServiceWorkerRecord>);
+
+// https://w3c.github.io/ServiceWorker/#update-state-algorithm
+void update_worker_state(HTML::EventLoop&, ServiceWorkerRecord&, ServiceWorkerState);
+
+// https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 8 and 9)
+void fire_update_found(HTML::EventLoop&, Registration&);
 
 }
