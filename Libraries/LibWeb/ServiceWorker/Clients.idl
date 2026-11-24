@@ -1,7 +1,7 @@
 // https://w3c.github.io/ServiceWorker/#clients-interface
 [Exposed=ServiceWorker]
 interface Clients {
-    // The objects returned will be new instances every time
+    // The objects returned will be new instances every time.
     [FIXME, NewObject] Promise<(Client or undefined)> get(DOMString id);
     [FIXME, NewObject] Promise<FrozenArray<Client>> matchAll(optional ClientQueryOptions options = {});
     [FIXME, NewObject] Promise<WindowClient?> openWindow(USVString url);
