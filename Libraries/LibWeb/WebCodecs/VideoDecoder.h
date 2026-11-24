@@ -100,6 +100,7 @@ private:
     RefPtr<MediaClient::Client> m_media_client;
     Optional<u64> m_codec_id;
     u64 m_codec_generation { 0 };
+    u64 m_reset_generation { 0 };
 };
 
 }

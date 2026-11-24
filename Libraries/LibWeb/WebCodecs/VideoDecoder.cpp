@@ -220,8 +220,9 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     auto description = copy_of_description(config);
     auto media_client = MediaClient::Client::acquire();
     if (!is_recognized_video_codec_string(codec) || description.is_error() || media_client.is_error()) {
-        queue_a_codec_task(GC::captures(*this, m_codec_generation), [](VideoDecoder& self, u64& codec_generation) {
-            if (codec_generation != self.m_codec_generation || self.m_state == CodecState::Closed)
+        // NB: A later configure() does not cancel this, but a reset does, as it removes the control message.
+        queue_a_codec_task(GC::captures(*this, m_reset_generation), [](VideoDecoder& self, u64& reset_generation) {
+            if (reset_generation != self.m_reset_generation || self.m_state == CodecState::Closed)
                 return;
             HTML::TemporaryExecutionContext context(HTML::relevant_realm(self.relevant_global_object()), HTML::TemporaryExecutionContext::CallbacksEnabled::Yes);
             self.close_video_decoder(WebIDL::NotSupportedError::create("The VideoDecoderConfig is not supported"_utf16));
@@ -471,6 +472,7 @@ void VideoDecoder::reset_video_decoder(GC::Ref<WebIDL::DOMException> exception)
 
     // 2. Set [[state]] to "unconfigured".
     m_state = CodecState::Unconfigured;
+    ++m_reset_generation;
 
     // 3. Signal [[codec implementation]] to cease producing output for the previous configuration.
     release_codec();
