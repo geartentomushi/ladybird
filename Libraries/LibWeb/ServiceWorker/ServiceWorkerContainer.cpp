@@ -392,6 +392,22 @@ void ServiceWorkerContainer::start_ready_promise_steps(GC::Ref<WebIDL::Promise> 
     }));
 }
 
+// https://w3c.github.io/ServiceWorker/#activation-algorithm
+void ServiceWorkerContainer::resolve_ready_promises_after_activation()
+{
+    // NB: The ready promise steps look up the matching registration and resolve the promise once it has an active
+    //     worker, which covers the clients whose creation URL matches the activated registration.
+    prune_service_worker_container_ready_promise_caches();
+    for (auto& entry : service_worker_container_ready_promise_caches()) {
+        GC::Ptr container = entry.container.ptr();
+        if (!container)
+            continue;
+        entry.ready_promises.for_each([&](WebIDL::Promise& ready_promise) {
+            container->start_ready_promise_steps(ready_promise);
+        });
+    }
+}
+
 #undef __ENUMERATE
 #define __ENUMERATE(attribute_name, event_name)                                    \
     void ServiceWorkerContainer::set_##attribute_name(WebIDL::CallbackType* value) \
