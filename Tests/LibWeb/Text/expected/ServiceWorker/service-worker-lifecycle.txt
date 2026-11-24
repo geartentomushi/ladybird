@@ -1,0 +1,22 @@
+empty: resolved with a ServiceWorkerRegistration: true
+empty: installing worker's script URL matches: true
+empty: states: installing -> installed -> activating -> activated
+empty: active worker: true, installing: null, waiting: null
+empty: getRegistration() finds it: true
+extended: resolved with a ServiceWorkerRegistration: true
+extended: installing worker's script URL matches: true
+extended: states: installing -> installed -> activating -> activated
+extended: active worker: true, installing: null, waiting: null
+extended: getRegistration() finds it: true
+skip-waiting: resolved with a ServiceWorkerRegistration: true
+skip-waiting: installing worker's script URL matches: true
+skip-waiting: states: installing -> installed -> activating -> activated
+skip-waiting: active worker: true, installing: null, waiting: null
+skip-waiting: getRegistration() finds it: true
+failed-install: resolved with a ServiceWorkerRegistration: true
+failed-install: installing worker's script URL matches: true
+failed-install: states: installing -> redundant
+failed-install: active worker: false, installing: [object ServiceWorker], waiting: null
+failed-install: getRegistration() finds it: false
+throwing-script: rejected with TypeError
+throwing-script: getRegistration() after: undefined

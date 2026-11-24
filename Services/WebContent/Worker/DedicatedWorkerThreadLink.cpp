@@ -119,6 +119,20 @@ void DedicatedWorkerThreadLink::report_death_to_owner()
     });
 }
 
+void DedicatedWorkerThreadLink::report_service_worker_lifecycle_step_result_to_owner(u64 request_id, bool succeeded)
+{
+    post_to_owner([owner_token = m_owner_token, request_id, succeeded] {
+        Web::HTML::WorkerAgentParent::did_finish_service_worker_lifecycle_step(owner_token, request_id, succeeded);
+    });
+}
+
+void DedicatedWorkerThreadLink::run_service_worker_lifecycle_step(Web::HTML::ServiceWorkerLifecycleStep step, u64 request_id)
+{
+    post_to_worker([step, request_id](ConnectionFromClient& connection) {
+        connection.run_service_worker_lifecycle_step(step, request_id);
+    });
+}
+
 void DedicatedWorkerThreadLink::rtc_transform_init(u64 transform_id, Web::HTML::SerializedTransferRecord options_record)
 {
     post_to_worker([transform_id, options_record = move(options_record)](ConnectionFromClient& connection) mutable {

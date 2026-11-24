@@ -1049,8 +1049,10 @@ namespace Web::ServiceWorker {
 
 class Cache;
 class CacheStorage;
+class ExtendableEvent;
 class ServiceWorker;
 class ServiceWorkerContainer;
+class ServiceWorkerGlobalScope;
 class ServiceWorkerRegistration;
 
 using ServiceWorkerState = Bindings::ServiceWorkerState;

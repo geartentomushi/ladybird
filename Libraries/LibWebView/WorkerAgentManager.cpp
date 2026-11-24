@@ -218,7 +218,7 @@ void WorkerAgentManager::register_dedicated_worker(WebWorkerClient& owner_client
 // NB: A worker that is not taken up here loses its connection before it starts, and its owner fires an error at it.
 void WorkerAgentManager::register_dedicated_worker(DedicatedWorkerOwner const& owner, CanonicalEnvironmentSettingsObject const& outside_settings, Web::HTML::WorkerAgentStartRequest request, IPC::TransportHandle worker_transport)
 {
-    if (request.agent_type != Web::HTML::AgentType::DedicatedWorker)
+    if (!first_is_one_of(request.agent_type, Web::HTML::AgentType::DedicatedWorker, Web::HTML::AgentType::ServiceWorker))
         return;
     request.outside_settings.origin = outside_settings.origin();
 

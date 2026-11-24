@@ -10,12 +10,13 @@
 
 namespace Web::ServiceWorker::EventNames {
 
-#define ENUMERATE_SERVICE_WORKER_EVENTS        \
-    __ENUMERATE_SERVICE_WORKER_EVENT(activate) \
-    __ENUMERATE_SERVICE_WORKER_EVENT(fetch)    \
-    __ENUMERATE_SERVICE_WORKER_EVENT(install)  \
-    __ENUMERATE_SERVICE_WORKER_EVENT(message)  \
-    __ENUMERATE_SERVICE_WORKER_EVENT(messageerror)
+#define ENUMERATE_SERVICE_WORKER_EVENTS            \
+    __ENUMERATE_SERVICE_WORKER_EVENT(activate)     \
+    __ENUMERATE_SERVICE_WORKER_EVENT(fetch)        \
+    __ENUMERATE_SERVICE_WORKER_EVENT(install)      \
+    __ENUMERATE_SERVICE_WORKER_EVENT(message)      \
+    __ENUMERATE_SERVICE_WORKER_EVENT(messageerror) \
+    __ENUMERATE_SERVICE_WORKER_EVENT(updatefound)
 
 #define __ENUMERATE_SERVICE_WORKER_EVENT(name) extern Utf16FlyString const& name;
 ENUMERATE_SERVICE_WORKER_EVENTS

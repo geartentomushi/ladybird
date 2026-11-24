@@ -60,6 +60,8 @@ public:
     // Asks the Browser to connect this worker to the ImageDecoder of its process.
     ErrorOr<NonnullOwnPtr<IPC::Transport>> request_image_decoder_transport();
 
+    void run_service_worker_lifecycle_step(Web::HTML::ServiceWorkerLifecycleStep, u64 request_id);
+
     void rtc_transform_init(u64 transform_id, Web::HTML::SerializedTransferRecord options_record);
     void rtc_transform_teardown(u64 transform_id);
     void rtc_transform_encoded_audio_frame(u64 transform_id, ByteBuffer payload, u32 ssrc, u8 payload_type, u32 rtp_timestamp, u16 sequence_number);
@@ -100,6 +102,8 @@ private:
     RefPtr<DedicatedWorkerThreadLink> m_dedicated_worker_thread_link;
     HashMap<u64, GC::Root<Web::WebRTC::RTCRtpScriptTransformer>> m_transformers;
     HashMap<u64, Web::HTML::SerializedTransferRecord> m_pending_transform_inits;
+    Vector<Web::HTML::ServiceWorkerLifecycleStep> m_pending_service_worker_lifecycle_steps;
+    Vector<u64> m_pending_service_worker_lifecycle_step_ids;
 
     void run_transform_init(u64 transform_id, Web::HTML::SerializedTransferRecord options_record);
     void begin_closing();
