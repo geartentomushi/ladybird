@@ -145,12 +145,17 @@ void ServiceWorkerContainer::register_(JS::Realm& realm, TrustedTypes::TrustedSc
 
     // 2. Set scriptURL to the result of invoking Get Trusted Type compliant string with TrustedScriptURL,
     //    this's relevant global object, scriptURL, "ServiceWorkerContainer register", and "script".
-    auto const compliant_script_url = MUST(TrustedTypes::get_trusted_type_compliant_string(
+    auto maybe_compliant_script_url = TrustedTypes::get_trusted_type_compliant_string(
         TrustedTypes::TrustedTypeName::TrustedScriptURL,
         m_service_worker_client->global_object(),
         script_url,
         TrustedTypes::InjectionSink::ServiceWorkerContainer_register,
-        TrustedTypes::Script.view()));
+        TrustedTypes::Script.view());
+    if (maybe_compliant_script_url.is_exception()) {
+        WebIDL::reject_promise_with_exception(realm, promise, maybe_compliant_script_url.release_error());
+        return;
+    }
+    auto const compliant_script_url = maybe_compliant_script_url.release_value();
 
     // 3 Let client be this's service worker client.
     auto client = m_service_worker_client;

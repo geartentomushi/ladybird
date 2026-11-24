@@ -1,0 +1,1 @@
+register() with a string rejects with TypeError
