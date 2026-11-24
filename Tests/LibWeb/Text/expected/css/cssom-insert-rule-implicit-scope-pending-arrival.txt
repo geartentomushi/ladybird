@@ -1,0 +1,4 @@
+inserted implicit @scope rule applies inside its root: 11px
+inserted implicit @scope rule does not apply outside its root: true
+inserted plain rule applies: 3px 5px
+rule inserted inside an implicit @scope rule applies: 13px 4px

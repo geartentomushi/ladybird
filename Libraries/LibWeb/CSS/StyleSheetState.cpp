@@ -340,7 +340,7 @@ void StyleSheetState::rule_inserted(RustRule const& rule)
         recalculate_rule_caches();
     else
         m_rule_cache = nullptr;
-    record_style_rule_inserted(rule, *this);
+    record_style_rule_inserted(rule, *this, RuleInsertionDepth::TopLevel);
 
     // OPTIMIZATION: A keyframes rule, or style rules (possibly within conditional group rules), arriving in a style or
     //               link element's own sheet change only which rules the scope holds, so dropping the rule cache is
