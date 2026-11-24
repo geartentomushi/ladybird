@@ -144,6 +144,8 @@ static bool is_valid_video_decoder_config(VideoDecoderConfig const& config)
 //     accept them. H.264 strings are also checked for a known profile and level.
 static bool is_recognized_video_codec_string(StringView codec)
 {
+    if (codec != codec.trim_whitespace())
+        return false;
     if (codec == "vp8"sv)
         return true;
     if (codec.starts_with("vp09."sv) || codec.starts_with("av01."sv) || codec.starts_with("hev1."sv) || codec.starts_with("hvc1."sv))
