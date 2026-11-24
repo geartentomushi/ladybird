@@ -210,6 +210,10 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     //        is not dropped.
     release_codec();
 
+    // NB: The replaced codec drops its pending outputs, so the flushes waiting on it are complete.
+    for (auto const& pending_flush : m_pending_flush_promises)
+        codec_flushed(m_codec_generation, pending_flush.flush_id);
+
     auto codec = config.codec.to_utf8();
     auto description = copy_of_description(config);
     auto media_client = MediaClient::Client::acquire();
