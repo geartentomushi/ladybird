@@ -503,15 +503,19 @@ static void install(GC::Ref<Job> job, GC::Ref<UpdateAlgorithmState> state)
         // 13. If installFailed is true, then:
         if (!install_succeeded) {
             // 1. Run the Update Worker State algorithm passing registration's installing worker and "redundant" as the arguments.
-            update_worker_state(event_loop, worker, ServiceWorkerState::Redundant);
+            if (worker->state != ServiceWorkerState::Redundant)
+                update_worker_state(event_loop, worker, ServiceWorkerState::Redundant);
             terminate_service_worker(worker);
 
             // 2. Run the Update Registration State algorithm passing registration, "installing" and null as the arguments.
             update_registration_state(event_loop, registration, RegistrationWorkerSlot::Installing, nullptr);
 
             // 3. If newestWorker is null, then remove registration map[(registration's storage key, serialized registration's scope url)].
-            if (!state->newest_worker())
-                Registration::remove(registration.storage_key(), registration.scope_url());
+            // NB: Unless an unregister job already removed it.
+            if (!state->newest_worker()) {
+                if (auto current = Registration::get(registration.storage_key(), registration.scope_url()); current.has_value() && &current.value() == &registration)
+                    Registration::remove(registration.storage_key(), registration.scope_url());
+            }
 
             // 4. Invoke Finish Job with job and abort these steps.
             finish_job(vm, job);
@@ -901,15 +905,108 @@ static void update(JS::VM& vm, GC::Ref<Job> job)
     }
 }
 
+// https://w3c.github.io/ServiceWorker/#clear-registration-algorithm
+static void clear_registration(HTML::EventLoop& event_loop, Registration& registration)
+{
+    // 1. Run the following steps atomically.
+    // 2. If registration's installing worker is not null, then:
+    if (RefPtr installing_worker = registration.installing_worker()) {
+        // 1. Terminate registration's installing worker.
+        terminate_service_worker(*installing_worker);
+
+        // 2. Run the Update Worker State algorithm passing registration's installing worker and "redundant" as the arguments.
+        update_worker_state(event_loop, *installing_worker, ServiceWorkerState::Redundant);
+
+        // 3. Run the Update Registration State algorithm passing registration, "installing" and null as the arguments.
+        update_registration_state(event_loop, registration, RegistrationWorkerSlot::Installing, nullptr);
+    }
+
+    // 3. If registration's waiting worker is not null, then:
+    if (RefPtr waiting_worker = registration.waiting_worker()) {
+        // 1. Terminate registration's waiting worker.
+        terminate_service_worker(*waiting_worker);
+
+        // 2. Run the Update Worker State algorithm passing registration's waiting worker and "redundant" as the arguments.
+        update_worker_state(event_loop, *waiting_worker, ServiceWorkerState::Redundant);
+
+        // 3. Run the Update Registration State algorithm passing registration, "waiting" and null as the arguments.
+        update_registration_state(event_loop, registration, RegistrationWorkerSlot::Waiting, nullptr);
+    }
+
+    // 4. If registration's active worker is not null, then:
+    if (RefPtr active_worker = registration.active_worker()) {
+        // 1. Terminate registration's active worker.
+        terminate_service_worker(*active_worker);
+
+        // 2. Run the Update Worker State algorithm passing registration's active worker and "redundant" as the arguments.
+        update_worker_state(event_loop, *active_worker, ServiceWorkerState::Redundant);
+
+        // 3. Run the Update Registration State algorithm passing registration, "active" and null as the arguments.
+        update_registration_state(event_loop, registration, RegistrationWorkerSlot::Active, nullptr);
+    }
+}
+
+// https://w3c.github.io/ServiceWorker/#try-clear-registration-algorithm
+static void try_clear_registration(HTML::EventLoop& event_loop, Registration& registration)
+{
+    // 1. Invoke Clear Registration with registration if no service worker client is using registration and all of the
+    //    following conditions are true:
+    //    - registration's installing worker is null or the result of running Service Worker Has No Pending Events
+    //      with registration's installing worker is true.
+    //    - registration's waiting worker is null or the result of running Service Worker Has No Pending Events with
+    //      registration's waiting worker is true.
+    //    - registration's active worker is null or the result of running Service Worker Has No Pending Events with
+    //      registration's active worker is true.
+    // NB: No service worker client is using any registration, since clients are not controlled yet. Unregister jobs
+    //     wait in the job queue until the registration's install has finished.
+    // FIXME: Check for pending events once workers handle functional events.
+    clear_registration(event_loop, registration);
+}
+
+// https://w3c.github.io/ServiceWorker/#unregister-algorithm
 static void unregister(JS::VM& vm, GC::Ref<Job> job)
 {
-    // If there's no client, there won't be any promises to resolve
-    if (job->client) {
-        auto& realm = job->client->realm();
-        auto context = HTML::TemporaryExecutionContext(realm, HTML::TemporaryExecutionContext::CallbacksEnabled::Yes);
-        WebIDL::reject_promise(*job->job_promise, vm.throw_completion<JS::InternalError>(JS::ErrorType::NotImplemented, "Service Worker unregistration"_utf16).value());
+    // NB: Without a client there is no promise to settle and no event loop to update.
+    if (!job->client) {
         finish_job(vm, job);
+        return;
     }
+
+    // 1. If the origin of job's scope url is not job's client's origin, then:
+    if (!job->scope_url.origin().is_same_origin(job->client->origin())) {
+        // 1. Invoke Reject Job Promise with job and "SecurityError" DOMException.
+        reject_job_promise<WebIDL::SecurityError>(job, "Service Worker unregistration has a cross-origin scope"_utf16);
+
+        // 2. Invoke Finish Job with job and abort these steps.
+        finish_job(vm, job);
+        return;
+    }
+
+    // 2. Let registration be the result of running Get Registration given job's storage key and job's scope url.
+    auto maybe_registration = Registration::get(job->storage_key, job->scope_url);
+
+    // 3. If registration is null, then:
+    if (!maybe_registration.has_value()) {
+        // 1. Invoke Resolve Job Promise with job and false.
+        resolve_job_promise(job, {}, JS::Value(false));
+
+        // 2. Invoke Finish Job with job and abort these steps.
+        finish_job(vm, job);
+        return;
+    }
+    NonnullRefPtr registration = maybe_registration.value();
+
+    // 4. Remove registration map[(registration's storage key, job's scope url)].
+    Registration::remove(registration->storage_key(), job->scope_url);
+
+    // 5. Invoke Resolve Job Promise with job and true.
+    resolve_job_promise(job, {}, JS::Value(true));
+
+    // 6. Invoke Try Clear Registration with registration.
+    try_clear_registration(job->client->responsible_event_loop(), registration);
+
+    // 7. Invoke Finish Job with job.
+    finish_job(vm, job);
 }
 
 // https://w3c.github.io/ServiceWorker/#run-job-algorithm
