@@ -688,6 +688,72 @@ def resolve_webdriver(path):
     return path
 
 
+def linked_ladybird_libraries(executable, environment):
+    result = subprocess.run(
+        ["ldd", executable], check=False, env=environment, capture_output=True, text=True, timeout=30
+    )
+    if result.returncode or "=> not found" in result.stdout:
+        raise ValueError(f"Cannot resolve libraries for {executable}: {(result.stderr or result.stdout).strip()}")
+    libraries = {}
+    for line in result.stdout.splitlines():
+        match = re.fullmatch(r"\s*(liblagom-\S+\.so(?:\.\S+)?)\s+=>\s+(.+?)\s+\(0x[0-9a-fA-F]+\)", line)
+        if match:
+            libraries[match[1]] = Path(match[2]).resolve(strict=True)
+    if not libraries:
+        raise ValueError(f"No Ladybird shared libraries found for {executable}")
+    return libraries
+
+
+def build_library_paths(driver):
+    driver = resolve_webdriver(driver)
+    environment = os.environ | {"LC_ALL": "C"}
+    # LibWebView's helper-process environment does not forward dynamic-loader overrides.
+    helper_environment = {name: value for name, value in environment.items() if not name.startswith("LD_")}
+    libexec = driver.parent.parent / "libexec"
+    for name in ("Ladybird", "WebContent"):
+        for directory in (libexec, driver.parent):
+            executable = directory / name
+            if executable.is_file() and os.access(executable, os.X_OK):
+                break
+        else:
+            raise ValueError(f"Cannot find {name} alongside {driver} or in {libexec}")
+        libraries = linked_ladybird_libraries(
+            executable.resolve(), helper_environment if name == "WebContent" else environment
+        )
+        if name == "WebContent" and not any(re.fullmatch(r"liblagom-web\.so(?:\.\S+)?", lib) for lib in libraries):
+            raise ValueError(f"No LibWeb dependency found for {executable}")
+        yield from libraries.items()
+    yield from linked_ladybird_libraries(driver, environment).items()
+
+
+def validate_build_pair(baseline, candidate):
+    if sys.platform != "linux":
+        raise ValueError("Shared-library checks for paired builds currently support Linux only")
+
+    def libraries_by_identity(driver):
+        libraries = {}
+        for name, path in build_library_paths(driver):
+            info = path.stat()
+            libraries[(info.st_dev, info.st_ino)] = (name, path)
+        return libraries
+
+    guidance = "See Meta/SiteSmoke/README.md#prepare-a-standalone-linux-baseline."
+    try:
+        before, after = libraries_by_identity(baseline), libraries_by_identity(candidate)
+    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        raise ValueError(
+            f"Cannot verify separate Ladybird builds: {error}. Use built WebDriver binaries, not wrappers. {guidance}"
+        ) from error
+    for identity, (name, path) in before.items():
+        if identity in after:
+            candidate_path = after[identity][1]
+            raise ValueError(
+                f"Contaminated SiteSmoke baseline: both builds resolve {name} to the same file "
+                f"(baseline: {path}; candidate: {candidate_path}). "
+                f"A copied build can retain an absolute RUNPATH; WebContent does not inherit LD_LIBRARY_PATH. {guidance}"
+            )
+
+
 def targets(urls, site_list=DEFAULT_SITE_LIST):
     if urls:
         return "custom", list(enumerate(urls, start=1))
@@ -808,7 +874,7 @@ def write_json_atomically(output, data):
         Path(name).unlink(missing_ok=True)
 
 
-def run_ci(ladybird, output, site_list=DEFAULT_SITE_LIST):
+def run_ci(ladybird, output, site_list=DEFAULT_SITE_LIST, baseline_webdriver=None):
     if not ladybird.is_absolute() or not output.is_absolute():
         raise ValueError("--ladybird and --output must be absolute paths")
     if not ladybird.is_file() or not os.access(ladybird, os.X_OK):
@@ -819,6 +885,8 @@ def run_ci(ladybird, output, site_list=DEFAULT_SITE_LIST):
     browser = driver.with_name("Ladybird")
     if not browser.is_file() or not ladybird.samefile(browser):
         raise ValueError(f"--ladybird must identify the adjacent browser WebDriver launches: {browser}")
+    if baseline_webdriver is not None:
+        validate_build_pair(baseline_webdriver, driver)
     if not output.is_symlink() and output.is_dir():
         raise ValueError(f"--output must be a JSON file, not a directory: {output}")
     details = prepare_output(output.with_name(output.name + ".details"))
@@ -890,6 +958,13 @@ def run_gate(args, output, baseline):
     )
     if stage("build", command)["exit_status"]:
         return finish()
+    if args.baseline_webdriver is not None:
+        try:
+            validate_build_pair(args.baseline_webdriver, build / "bin/WebDriver")
+        except ValueError as error:
+            print(error, file=sys.stderr)
+            report["stages"]["build-pair"] = {"exit_status": 1, "error": str(error)}
+            return finish()
 
     read_test_results = runpy.run_path(str(ROOT / "Meta/test-results.py"))["read_results"]
     for mode in ("Text", "Layout", "Ref"):
@@ -1014,6 +1089,9 @@ def main():
     gate.add_argument("--console-error-increase", type=int, default=5, help="Per-site increase that fails the gate")
     ci = commands.add_parser("ci", help="Run without building and emit the compact CI results")
     ci.add_argument("--ladybird", type=Path, required=True, help="Absolute path to Ladybird, next to WebDriver")
+    ci.add_argument(
+        "--baseline-webdriver", type=Path, help="Verify independent libraries from this baseline build (Linux)"
+    )
     ci.add_argument("--output", type=Path, required=True, help="Absolute path to the compact results JSON")
     ci.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
     reference = commands.add_parser("reference", help="List differences from a reference browser run")
@@ -1040,7 +1118,7 @@ def main():
         return 0
     if args.command == "ci":
         try:
-            return run_ci(args.ladybird, args.output, args.list)
+            return run_ci(args.ladybird, args.output, args.list, args.baseline_webdriver)
         except (OSError, ValueError) as error:
             ci.error(str(error))
     if args.command == "compare":
@@ -1052,6 +1130,8 @@ def main():
             baseline = json.loads(args.baseline.read_text())
             changes = compare(baseline, current) + gate_evidence_findings(baseline, current, 5)
             if args.webdriver is not None:
+                if sys.platform == "linux":
+                    validate_build_pair(args.baseline_webdriver, args.webdriver)
                 confirm_findings(
                     changes,
                     current,
@@ -1081,6 +1161,9 @@ def main():
         try:
             if args.baseline_webdriver is not None:
                 args.baseline_webdriver = resolve_webdriver(args.baseline_webdriver)
+                candidate = ROOT / "Build/release/bin/WebDriver"
+                if candidate.exists():
+                    validate_build_pair(args.baseline_webdriver, candidate)
             if args.baseline is None:
                 name = "baseline.json" if args.list == DEFAULT_SITE_LIST else f"baseline-{args.list}.json"
                 args.baseline = HERE / name

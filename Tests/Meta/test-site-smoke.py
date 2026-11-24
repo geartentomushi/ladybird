@@ -591,6 +591,71 @@ class SiteSmokeTests(unittest.TestCase):
             self.assertIn("test-js", commands[0])
             self.assertEqual(commands[-2][0], "ctest")
 
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
+    def test_build_pair_checks_helper_libraries_without_loader_overrides(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            drivers = {}
+            libraries = {}
+            soname = "liblagom-web.so.0"
+            for name in ("before", "after"):
+                build = root / name
+                for directory, executables in (("bin", ("WebDriver", "Ladybird")), ("libexec", ("WebContent",))):
+                    (build / directory).mkdir(parents=True)
+                    for executable in executables:
+                        (build / directory / executable).touch(mode=0o755)
+                drivers[name] = build / "bin/WebDriver"
+                libraries[name] = build / soname
+                libraries[name].touch()
+
+            def resolve(command, *, env, **_):
+                tool, executable = command
+                self.assertEqual(tool, "ldd")
+                build = executable.parents[1].name
+                if executable.name == "WebContent":
+                    self.assertNotIn("LD_LIBRARY_PATH", env)
+                    self.assertNotIn("LD_PRELOAD", env)
+                    if build == "before":
+                        build = helper_build
+                else:
+                    self.assertEqual(env["LD_LIBRARY_PATH"], "/example")
+                line = f"\t{soname} => {libraries[build]} (0x1234)\n"
+                return subprocess.CompletedProcess(command, 0, stdout=line, stderr="")
+
+            with (
+                patch.dict(os.environ, {"LD_LIBRARY_PATH": "/example", "LD_PRELOAD": "/example/library.so"}),
+                patch.object(smoke.subprocess, "run", side_effect=resolve),
+            ):
+                helper_build = "after"
+                with self.assertRaisesRegex(ValueError, "Contaminated SiteSmoke baseline:.*absolute RUNPATH"):
+                    smoke.validate_build_pair(drivers["before"], drivers["after"])
+                helper_build = "before"
+                smoke.validate_build_pair(drivers["before"], drivers["after"])
+                libraries["before"].unlink()
+                os.link(libraries["after"], libraries["before"])
+                with self.assertRaisesRegex(ValueError, "both builds resolve liblagom-web.so.0 to the same file"):
+                    smoke.validate_build_pair(drivers["before"], drivers["after"])
+
+    def test_gate_stops_after_build_when_build_pair_is_contaminated(self):
+        args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, baseline_webdriver=Path("baseline/WebDriver"))
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            build = Mock(return_value=0)
+            validate = Mock(side_effect=ValueError("Contaminated SiteSmoke baseline"))
+            with (
+                patch.object(smoke.subprocess, "check_output", return_value="candidate\n"),
+                patch.dict(smoke.run_gate.__globals__, {"run_stage": build, "validate_build_pair": validate}),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()) as errors,
+            ):
+                self.assertEqual(smoke.run_gate(args, output, {"revision": "baseline"}), 1)
+            build.assert_called_once()
+            validate.assert_called_once_with(args.baseline_webdriver, smoke.ROOT / "Build/release/bin/WebDriver")
+            self.assertIn("Contaminated SiteSmoke baseline", errors.getvalue())
+            report = json.loads((output / "gate-summary.json").read_text())
+            self.assertFalse(report["passed"])
+            self.assertEqual(report["stages"]["build-pair"]["exit_status"], 1)
+
     def test_gate_counts_evidence_loss_on_unchanged_failed_loads(self):
         before = site("lost", "load-error")
         missing = dict(before, screenshot=None, body_element_count=None)

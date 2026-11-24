@@ -126,6 +126,60 @@ differ between browsers and runs, so inspect both screenshots before filing an
 engine bug. It exits 0 after listing the differences, and 2 when the runs use
 different viewports or targets.
 
+## Prepare a standalone Linux baseline
+
+Build the baseline revision in a separate checkout and leave its build in
+place, or make a relocatable copy **before** rebuilding the original checkout.
+A plain copy of `Build/release` is not enough: absolute RUNPATH entries can
+load the candidate's libraries from the original build directory. A wrapper
+that sets `LD_LIBRARY_PATH` is not a fix; WebContent does not inherit it.
+
+For a standard x86-64 Release build, the following Bash commands copy the
+runtime files to a new directory and rewrite the RUNPATH of the copied ELF
+executables and Ladybird libraries. Install `patchelf` and use the build's
+vcpkg triplet if it differs from the example.
+
+```bash
+set -e
+build="$PWD/Build/release"
+baseline="$HOME/ladybird-baseline"
+mkdir "$baseline"
+cp -a "$build"/{bin,lib,libexec,share} "$baseline/"
+cp -a "$build/vcpkg_installed/x64-linux-dynamic/lib" "$baseline/dependency-lib"
+for dir in bin libexec lib; do
+    if [ "$dir" = lib ]; then
+        rpath='$ORIGIN:$ORIGIN/../dependency-lib'
+    else
+        rpath='$ORIGIN/../lib:$ORIGIN/../dependency-lib'
+    fi
+    while IFS= read -r -d '' file; do
+        if readelf -d "$file" 2>/dev/null | grep -qE '\((RPATH|RUNPATH)\)'; then
+            patchelf --set-rpath "$rpath" "$file"
+        fi
+    done < <(find "$baseline/$dir" -type f -print0)
+done
+
+env -u LD_LIBRARY_PATH -u LD_PRELOAD -u LD_AUDIT ldd "$baseline/libexec/WebContent"
+```
+
+Verify there are no `not found` entries and every `liblagom-*.so` entry
+(especially `liblagom-web.so`) resolves inside the baseline's `lib`. Check
+`bin/WebDriver` and `bin/Ladybird` too. Capture fresh results with the baseline
+WebDriver and use its results and executable together:
+
+```sh
+python3 Meta/SiteSmoke/site-smoke.py run --webdriver "$baseline/bin/WebDriver" \
+    --revision "$(git rev-parse HEAD)" --output "$HOME/site-smoke-before"
+# From the candidate checkout:
+python3 Meta/SiteSmoke/site-smoke.py gate --baseline "$HOME/site-smoke-before/results.json" \
+    --baseline-webdriver "$baseline/bin/WebDriver" --output "$HOME/site-smoke-after"
+```
+
+On Linux, paired checks require actual WebDriver executables (not wrapper
+scripts) and `ldd`. They refuse pairs that load any of the same Ladybird
+library files, including through symlinks or hard links. A comparison of
+results alone cannot validate the builds that produced them.
+
 ## Gate a batch of fixes
 
 On Linux, use the same build prerequisites as `Meta/ladybird.py`, then run:
@@ -168,6 +222,10 @@ needs Python 3.9+, the pinned `websockets` package, and outbound access to the
 live sites. Four sites run concurrently, with a 25-second navigation deadline
 and two-second settle time per site. Allow several minutes; widespread
 timeouts take longer.
+If the capture will be used in a before/after comparison on Linux, pass
+`--baseline-webdriver "$baseline/bin/WebDriver"` to check for shared Ladybird
+libraries before capture. This does not run the baseline or change the output
+format.
 
 The output is `{"results":{"https://example.com/":"PASS"}}`. A successful load
 is `PASS`; a timeout, crash, or load error is `FAIL`; an isolated setup error
