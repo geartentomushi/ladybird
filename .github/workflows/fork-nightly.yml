@@ -280,6 +280,33 @@ jobs:
           name: sites
           path: reports/sites
 
+      - name: Diff nightly WPT revisions
+        if: needs.wpt.result == 'success' && steps.baseline.outputs.run-id != ''
+        continue-on-error: true
+        shell: bash
+        env:
+          WPT_REVISION: ${{ needs.build.outputs.wpt-revision }}
+        run: |
+          if [[ ! -f baseline/regressions.json ]]; then
+            exit 0
+          fi
+          baseline_revision=$(jq -r '.revisions.wpt // empty' baseline/regressions.json)
+          if [[ -z "$baseline_revision" || "$baseline_revision" == "$WPT_REVISION" ]]; then
+            exit 0
+          fi
+          if [[ ! "$baseline_revision" =~ ^[0-9a-f]{40}$ || ! "$WPT_REVISION" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "::error::Cannot diff invalid WPT revisions"
+            exit 1
+          fi
+          repo="$RUNNER_TEMP/wpt-revisions"
+          git init --bare "$repo"
+          git -C "$repo" remote add origin https://github.com/web-platform-tests/wpt.git
+          git -C "$repo" fetch --depth=1 --filter=blob:none --no-tags origin \
+            "$baseline_revision:refs/nightly/baseline" "$WPT_REVISION:refs/nightly/current"
+          git -C "$repo" diff --no-renames --name-only -z refs/nightly/baseline refs/nightly/current \
+            > "$RUNNER_TEMP/wpt-changed-files.tmp"
+          mv "$RUNNER_TEMP/wpt-changed-files.tmp" "$RUNNER_TEMP/wpt-changed-files"
+
       - name: Compare nightly reports
         env:
           WPT_RESULT: ${{ needs.wpt.result }}
@@ -293,6 +320,7 @@ jobs:
           python3 Meta/test-nightly-regressions.py
           python3 Meta/nightly_regressions.py --baseline baseline --reports reports --output summary \
             --site-baseline Meta/SiteSmoke/baseline.json \
+            --wpt-changed-files "$RUNNER_TEMP/wpt-changed-files" \
             --wpt "$WPT_RESULT" --test262 "$TEST262_RESULT" --sites "$SITES_RESULT" --baseline-run "$BASELINE_RUN" \
             --browser-revision "$BROWSER_REVISION" --wpt-revision "$WPT_REVISION" --test262-revision "$TEST262_REVISION"
 

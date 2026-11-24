@@ -10,9 +10,11 @@ import re
 
 from pathlib import Path
 from typing import Optional
+from urllib.parse import unquote
 
 PASS_STATUSES = {"wpt": {"OK", "PASS"}, "test262": {"PASSED"}, "sites": {"PASS"}}
 SKIP_STATUSES = {"NOTRUN", "SKIP", "SKIPPED"}
+WPT_TEST_CHANGE_LABEL = "upstream test changed"
 SITE_BASELINE_STATUSES = {
     "success": "PASS",
     "timeout": "FAIL",
@@ -69,6 +71,27 @@ def markdown_code_span(text: str) -> str:
     return f"{fence} {text} {fence}"
 
 
+def wpt_test_changed(test: str, changed_files: set[str]) -> bool:
+    test_id = json.loads(test)[1]
+    path = unquote(re.split(r"[?#]", test_id, maxsplit=1)[0]).lstrip("/")
+    if path in changed_files:
+        return True
+
+    if any_variant := re.fullmatch(r"(.+)\.any(?:\.[^/]+)?\.html", path):
+        stem = any_variant[1]
+        if f"{stem}.any.js" in changed_files:
+            return True
+        if stem.endswith(".https") and f"{stem[:-6]}.any.js" in changed_files:
+            return True
+    elif path.endswith((".window.html", ".worker.html")) and f"{path[:-5]}.js" in changed_files:
+        return True
+
+    stem, _, extension = path.rpartition(".")
+    return extension in {"html", "htm", "xhtml", "svg"} and any(
+        f"{stem}{suffix}.{extension}" in changed_files for suffix in ("-ref", "-notref")
+    )
+
+
 def summarize(
     baseline: Path,
     reports: Path,
@@ -77,6 +100,7 @@ def summarize(
     results: dict[str, str],
     revisions: dict[str, str],
     site_baseline: Optional[Path] = None,
+    wpt_changed_files: Optional[set[str]] = None,
 ) -> tuple[str, int, int, int]:
     output.mkdir(parents=True, exist_ok=True)
     previous_label = f"nightly run {run_id}" if run_id else "none (first retained run)"
@@ -147,12 +171,19 @@ def summarize(
         if new and previous_revision and current_revision and previous_revision != current_revision:
             detail["suite_revision_change"] = {"before": previous_revision, "after": current_revision}
             label += f" — test suite changed (rev {html.escape(previous_revision)}→{html.escape(current_revision)})"
+            if suite == "wpt" and wpt_changed_files:
+                for entry in new:
+                    if wpt_test_changed(entry["test"], wpt_changed_files):
+                        entry["label"] = WPT_TEST_CHANGE_LABEL
         lines.extend([f"{len(current):,} results; **{len(new):,} {label}**.", ""])
-        for entry in new[:25]:
+        displayed = new[:25] + [entry for entry in new[25:] if "label" in entry]
+        for entry in displayed:
+            annotation = f" — {entry['label']}" if "label" in entry else ""
             lines.append(
-                f"- {markdown_code_span(entry['test'])}: {html.escape(entry['before'])} → {html.escape(entry['after'])}"
+                f"- {markdown_code_span(entry['test'])}: "
+                f"{html.escape(entry['before'])} → {html.escape(entry['after'])}{annotation}"
             )
-        if len(new) > 25:
+        if len(new) > len(displayed):
             lines.append("- See regressions.json for the complete list.")
         lines.append("")
 
@@ -181,6 +212,7 @@ def main() -> int:
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--baseline-run", default="")
     parser.add_argument("--site-baseline", type=Path)
+    parser.add_argument("--wpt-changed-files", type=Path)
     for suite in PASS_STATUSES:
         parser.add_argument(f"--{suite}", required=True)
     for name in ("browser", "wpt", "test262"):
@@ -195,6 +227,11 @@ def main() -> int:
         {suite: getattr(args, suite) for suite in PASS_STATUSES},
         {name: getattr(args, f"{name}_revision") for name in ("browser", "wpt", "test262")},
         args.site_baseline,
+        (
+            set(os.fsdecode(args.wpt_changed_files.read_bytes()).split("\0")) - {""}
+            if args.wpt_changed_files and args.wpt_changed_files.is_file()
+            else None
+        ),
     )
     if summary_path := os.environ.get("GITHUB_STEP_SUMMARY"):
         with open(summary_path, "a", encoding="utf-8") as stream:
