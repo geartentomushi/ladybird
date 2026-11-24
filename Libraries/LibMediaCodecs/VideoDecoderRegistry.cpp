@@ -33,7 +33,7 @@ Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const& code
     return {};
 }
 
-VideoDecoderSelection select_video_decoder(ParsedCodec const& codec, VideoDecoderSelection after)
+VideoDecoderSelection select_video_decoder(ParsedCodec const& codec, VideoDecoderSelection after, bool requires_alpha)
 {
     if (track_type_from_codec_id(codec.codec_id()) != TrackType::Video)
         return {};
@@ -41,7 +41,7 @@ VideoDecoderSelection select_video_decoder(ParsedCodec const& codec, VideoDecode
     auto const& registrations = installed_video_decoders();
     auto registration_count = static_cast<i32>(registrations.size());
     for (auto index = after.registration_index() + 1; index < registration_count; index++) {
-        if (registrations[index].capabilities(codec).has_value())
+        if ((!requires_alpha || registrations[index].supports_alpha) && registrations[index].capabilities(codec).has_value())
             return VideoDecoderSelection { index };
     }
     return {};

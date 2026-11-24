@@ -35,7 +35,7 @@ public:
         u8 bit_depth,
         Subsampling subsampling,
         ColorMetadata color_metadata,
-        NonnullRefPtr<VideoFrameStorage>);
+        NonnullRefPtr<VideoFrameStorage>, bool has_alpha = false);
     ~VideoFrame();
 
     // Tells this frame apart from every other frame in this process, including ones whose storage it shares.
@@ -53,6 +53,7 @@ public:
     u32 height() const { return size().height(); }
 
     u8 bit_depth() const { return m_bit_depth; }
+    bool has_alpha() const { return m_has_alpha; }
     Subsampling subsampling() const { return m_subsampling; }
     ColorMetadata const& color_metadata() const { return m_color_metadata; }
     CodingIndependentCodePoints const& cicp() const { return m_color_metadata.cicp; }
@@ -77,6 +78,7 @@ private:
     AK::Duration m_duration;
     Gfx::Size<u32> m_size;
     u8 m_bit_depth;
+    bool m_has_alpha { false };
     Subsampling m_subsampling;
     ColorMetadata m_color_metadata;
     NonnullRefPtr<VideoFrameStorage> m_storage;

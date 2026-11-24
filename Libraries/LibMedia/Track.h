@@ -29,6 +29,7 @@ public:
         u64 pixel_width { 0 };
         u64 pixel_height { 0 };
         ColorMetadata color_metadata;
+        bool has_alpha { false };
     };
 
     struct AudioData {

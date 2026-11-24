@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/ScopeGuard.h>
 #include <LibCore/System.h>
 #include <LibGfx/YUVData.h>
 #include <LibMediaCodecs/CodedFrame.h>
@@ -95,12 +96,81 @@ FFmpegVideoDecoder::~FFmpegVideoDecoder()
     m_functions.av_packet_free(&m_packet);
     m_functions.av_frame_free(&m_frame);
     m_functions.avcodec_free_context(&m_codec_context);
+    m_functions.av_frame_free(&m_alpha_frame);
+    m_functions.avcodec_free_context(&m_alpha_codec_context);
 }
 
 DecoderErrorOr<void> FFmpegVideoDecoder::receive_coded_data(CodedFrame const& coded_frame, DecodeIntent intent)
 {
     auto key = TRY(m_frames_awaiting_output.add(coded_frame, intent));
-    return send_coded_frame(m_functions, *m_codec_context, *m_packet, coded_frame, key);
+    TRY(send_coded_frame(m_functions, *m_codec_context, *m_packet, coded_frame, key));
+    if (!coded_frame.alpha_data().is_empty())
+        TRY(decode_alpha_plane(coded_frame.alpha_data(), key, intent));
+    return {};
+}
+
+DecoderErrorOr<void> FFmpegVideoDecoder::decode_alpha_plane(ReadonlyBytes data, u64 key, DecodeIntent intent)
+{
+    if (data.size() >= NumericLimits<int>::max())
+        return DecoderError::corrupted("VP9 alpha packet is too large"sv);
+
+    if (!m_alpha_codec_context) {
+        auto* context = m_functions.avcodec_alloc_context3(m_codec_context->codec);
+        auto* frame = m_functions.av_frame_alloc();
+        ArmedScopeGuard free_resources { [&] {
+            m_functions.avcodec_free_context(&context);
+            m_functions.av_frame_free(&frame);
+        } };
+        if (!context || !frame)
+            return DecoderError::with_description(DecoderErrorCategory::Memory, "Failed to allocate a VP9 alpha decoder"sv);
+
+        // Matroska stores alpha as a separate VP9 bitstream, with its samples paired by block.
+        context->thread_count = 1;
+        context->max_pixels = MAX_VIDEO_FRAME_AREA;
+        if (m_functions.avcodec_open2(context, m_codec_context->codec, nullptr) < 0)
+            return DecoderError::with_description(DecoderErrorCategory::Invalid, "Failed to open the VP9 alpha decoder"sv);
+        free_resources.disarm();
+        m_alpha_codec_context = context;
+        m_alpha_frame = frame;
+    }
+
+    auto* packet = m_functions.av_packet_alloc();
+    ScopeGuard free_packet { [&] { m_functions.av_packet_free(&packet); } };
+    if (!packet || m_functions.av_new_packet(packet, static_cast<int>(data.size())) < 0)
+        return DecoderError::with_description(DecoderErrorCategory::Memory, "Failed to allocate a VP9 alpha packet"sv);
+    data.copy_to({ packet->data, data.size() });
+    packet->pts = static_cast<i64>(key);
+    auto result = m_functions.avcodec_send_packet(m_alpha_codec_context, packet);
+    if (result < 0)
+        return DecoderError::corrupted("Failed to submit a VP9 alpha packet"sv);
+
+    result = m_functions.avcodec_receive_frame(m_alpha_codec_context, m_alpha_frame);
+    if (result == AVERROR(EAGAIN))
+        return {};
+    if (result < 0)
+        return DecoderError::corrupted("Failed to decode the VP9 alpha plane"sv);
+
+    ScopeGuard unref_frame { [&] { m_functions.av_frame_unref(m_alpha_frame); } };
+    if (intent == DecodeIntent::Reference)
+        return {};
+
+    auto const& alpha = *m_alpha_frame;
+    if (alpha.pts != packet->pts || !alpha.data[0] || alpha.width < 1 || alpha.height < 1 || alpha.linesize[0] < alpha.width
+        || video_frame_exceeds_limits(alpha.width, alpha.height))
+        return DecoderError::corrupted("Invalid decoded VP9 alpha plane"sv);
+    switch (alpha.format) {
+    case AV_PIX_FMT_YUV420P:
+    case AV_PIX_FMT_YUV422P:
+    case AV_PIX_FMT_YUV444P:
+    case AV_PIX_FMT_YUVJ420P:
+    case AV_PIX_FMT_YUVJ422P:
+    case AV_PIX_FMT_YUVJ444P:
+        break;
+    default:
+        return DecoderError::with_description(DecoderErrorCategory::Invalid, "Unsupported VP9 alpha pixel format"sv);
+    }
+
+    return m_frames_awaiting_output.store_alpha_plane(key, { alpha.width, alpha.height }, alpha.data[0], static_cast<size_t>(alpha.linesize[0]));
 }
 
 void FFmpegVideoDecoder::signal_end_of_stream()
@@ -189,7 +259,10 @@ DecoderErrorOr<NonnullRefPtr<VideoFrame>> FFmpegVideoDecoder::take_next_output(C
     }();
 
     Gfx::IntSize size { m_frame->width, m_frame->height };
-    auto layout_result = frame_plane_layout(size, *bit_depth, subsampling);
+    auto const& alpha_plane = m_pending_frame->alpha_plane;
+    if (alpha_plane.has_value() && alpha_plane->size != size)
+        return DecoderError::corrupted("VP9 alpha plane does not match the color frame size"sv);
+    auto layout_result = frame_plane_layout(size, *bit_depth, subsampling, alpha_plane.has_value());
     if (layout_result.is_error())
         return DecoderError::format(DecoderErrorCategory::Invalid, "Failed to compute video frame plane layout: {}", layout_result.release_error());
     auto layout = layout_result.release_value();
@@ -203,8 +276,10 @@ DecoderErrorOr<NonnullRefPtr<VideoFrame>> FFmpegVideoDecoder::take_next_output(C
         acquired_slot->bytes.slice(layout.u_offset, layout.u_size),
         acquired_slot->bytes.slice(layout.v_offset, layout.v_size)));
     TRY(copy_pending_frame_into(yuv_data));
+    if (alpha_plane.has_value())
+        alpha_plane->data.bytes().copy_to(acquired_slot->bytes.slice(layout.alpha_offset, layout.alpha_size));
 
-    auto frame = DECODER_TRY_ALLOC(try_make_ref_counted<VideoFrame>(m_pending_frame->timestamp, m_pending_frame->duration, size.to_type<u32>(), *bit_depth, subsampling, move(color_metadata), acquired_slot->storage));
+    auto frame = DECODER_TRY_ALLOC(try_make_ref_counted<VideoFrame>(m_pending_frame->timestamp, m_pending_frame->duration, size.to_type<u32>(), *bit_depth, subsampling, move(color_metadata), acquired_slot->storage, alpha_plane.has_value()));
     m_pending_frame.clear();
     return frame;
 }
@@ -248,6 +323,8 @@ DecoderErrorOr<void> FFmpegVideoDecoder::copy_pending_frame_into(Gfx::YUVData& y
 void FFmpegVideoDecoder::flush()
 {
     m_functions.avcodec_flush_buffers(m_codec_context);
+    if (m_alpha_codec_context)
+        m_functions.avcodec_flush_buffers(m_alpha_codec_context);
     m_pending_frame.clear();
     m_frames_awaiting_output.flush();
 }

@@ -766,7 +766,7 @@ DecoderErrorOr<NonnullRefPtr<VideoFrame>> RemoteVideoDecoder::take_next_output(C
     color_metadata.adopt_specified_values(frame->color_metadata());
     return DECODER_TRY_ALLOC(try_make_ref_counted<VideoFrame>(
         frame->timestamp(), frame->duration(), frame->size(),
-        frame->bit_depth(), frame->subsampling(), move(color_metadata), frame->storage()));
+        frame->bit_depth(), frame->subsampling(), move(color_metadata), frame->storage(), frame->has_alpha()));
 }
 
 void RemoteVideoDecoder::flush()

@@ -136,6 +136,7 @@ public:
         u64 pixel_height { 0 };
 
         ColorFormat color_format;
+        bool has_alpha { false };
     };
 
     struct AudioTrack {
@@ -360,6 +361,7 @@ inline Track track_from_track_entry(TrackEntry const& track_entry, bool is_first
                 .pixel_width = video_track->pixel_width,
                 .pixel_height = video_track->pixel_height,
                 .color_metadata = color_metadata,
+                .has_alpha = video_track->has_alpha,
             });
         }
     }
@@ -369,6 +371,11 @@ inline Track track_from_track_entry(TrackEntry const& track_entry, bool is_first
 
 class Block {
 public:
+    struct DataRange {
+        size_t position;
+        size_t size;
+    };
+
     enum Lacing : u8 {
         None = 0b00,
         XIPH = 0b01,
@@ -393,6 +400,8 @@ public:
     // The brightest light in the scene in cd/m², from HDR10+ carried alongside the block.
     Optional<float> maximum_scene_luminance() const { return m_maximum_scene_luminance; }
     void set_maximum_scene_luminance(Optional<float> luminance) { m_maximum_scene_luminance = luminance; }
+    Optional<DataRange> alpha_data() const { return m_alpha_data; }
+    void set_alpha_data(Optional<DataRange> data) { m_alpha_data = data; }
     size_t data_position() const { return m_data_position; }
     size_t data_size() const { return m_data_size; }
     void set_data(size_t position, size_t size)
@@ -410,6 +419,7 @@ private:
     Lacing m_lacing { None };
     bool m_discardable { true };
     Optional<float> m_maximum_scene_luminance;
+    Optional<DataRange> m_alpha_data;
     size_t m_data_position { 0 };
     size_t m_data_size { 0 };
 };

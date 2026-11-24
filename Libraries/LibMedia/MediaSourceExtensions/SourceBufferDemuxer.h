@@ -145,6 +145,7 @@ private:
 
         Optional<size_t> run_ending_with_last_appended_frame;
         Optional<FixedArray<u8>> last_delivered_codec_configuration;
+        bool last_delivered_frame_has_alpha { false };
         Optional<FixedArray<u8>> last_appended_codec_configuration;
         Optional<FixedArray<u8>> codec_configuration_of_dropped_frame;
 

@@ -16,7 +16,7 @@
 
 namespace Media {
 
-ErrorOr<FramePlaneLayout> frame_plane_layout(Gfx::IntSize size, u8 bit_depth, Subsampling subsampling)
+ErrorOr<FramePlaneLayout> frame_plane_layout(Gfx::IntSize size, u8 bit_depth, Subsampling subsampling, bool has_alpha)
 {
     constexpr size_t PLANE_ALIGNMENT = 64;
 
@@ -30,6 +30,14 @@ ErrorOr<FramePlaneLayout> frame_plane_layout(Gfx::IntSize size, u8 bit_depth, Su
     checked_total_byte_count += plane_sizes.v;
     if (checked_total_byte_count.has_overflow())
         return Error::from_string_literal("Video frame plane layout overflows");
+    auto alpha_offset = has_alpha ? align_up_to(checked_total_byte_count.value(), PLANE_ALIGNMENT) : 0;
+    auto alpha_size = has_alpha ? static_cast<size_t>(size.width()) * size.height() : 0;
+    if (has_alpha) {
+        checked_total_byte_count = alpha_offset;
+        checked_total_byte_count += alpha_size;
+        if (checked_total_byte_count.has_overflow())
+            return Error::from_string_literal("Video frame alpha plane layout overflows");
+    }
 
     return FramePlaneLayout {
         .y_size = plane_sizes.y,
@@ -37,6 +45,8 @@ ErrorOr<FramePlaneLayout> frame_plane_layout(Gfx::IntSize size, u8 bit_depth, Su
         .u_size = plane_sizes.u,
         .v_offset = v_offset,
         .v_size = plane_sizes.v,
+        .alpha_offset = alpha_offset,
+        .alpha_size = alpha_size,
         .total_byte_count = checked_total_byte_count.value(),
     };
 }
@@ -63,6 +73,7 @@ VideoFrameMetadata VideoFrameMetadata::for_frame(VideoFrame const& frame)
         .bit_depth = frame.bit_depth(),
         .subsampling = frame.subsampling(),
         .color_metadata = frame.color_metadata(),
+        .has_alpha = frame.has_alpha(),
     };
 }
 
@@ -80,6 +91,7 @@ ErrorOr<void> encode(Encoder& encoder, Media::VideoFrameMetadata const& metadata
     TRY(encoder.encode(metadata.subsampling.x()));
     TRY(encoder.encode(metadata.subsampling.y()));
     TRY(encoder.encode(metadata.color_metadata));
+    TRY(encoder.encode(metadata.has_alpha));
     return {};
 }
 
@@ -96,6 +108,7 @@ ErrorOr<Media::VideoFrameMetadata> decode(Decoder& decoder)
         TRY(decoder.decode<bool>()),
     };
     metadata.color_metadata = TRY(decoder.decode<Media::ColorMetadata>());
+    metadata.has_alpha = TRY(decoder.decode<bool>());
     if (!metadata.is_valid())
         return Error::from_string_literal("Video frame metadata describes a frame that could not have been decoded");
     return metadata;

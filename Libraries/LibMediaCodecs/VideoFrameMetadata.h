@@ -28,6 +28,7 @@ struct MEDIACODECS_API VideoFrameMetadata {
     u8 bit_depth { 0 };
     Subsampling subsampling;
     ColorMetadata color_metadata;
+    bool has_alpha { false };
 };
 
 // How a frame's planes lay out within a pool slot's bytes, aligned for cache- and
@@ -39,10 +40,12 @@ struct FramePlaneLayout {
     size_t u_size { 0 };
     size_t v_offset { 0 };
     size_t v_size { 0 };
+    size_t alpha_offset { 0 };
+    size_t alpha_size { 0 };
     size_t total_byte_count { 0 };
 };
 
-MEDIACODECS_API ErrorOr<FramePlaneLayout> frame_plane_layout(Gfx::IntSize, u8 bit_depth, Subsampling);
+MEDIACODECS_API ErrorOr<FramePlaneLayout> frame_plane_layout(Gfx::IntSize, u8 bit_depth, Subsampling, bool has_alpha = false);
 
 }
 

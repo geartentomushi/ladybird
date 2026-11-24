@@ -190,6 +190,13 @@ DecoderErrorOr<CodedFrame> MatroskaDemuxer::get_next_sample_for_track(Track cons
 
     auto track_entry = TRY(m_reader.track_for_track_number(track.identifier()));
     auto codec_id = codec_id_from_matroska_track_entry(track_entry);
+    auto has_alpha = track.type() == TrackType::Video && codec_id == CodecID::VP9 && track.video_data().has_alpha;
+    FixedArray<u8> alpha_data;
+    if (status.frames.size() == 1 && has_alpha) {
+        if (auto range = status.block->alpha_data(); range.has_value())
+            alpha_data = TRY(status.iterator.read_alpha_data(*range));
+    }
+
     Optional<FixedArray<u8>> codec_configuration;
     if (status.needs_codec_configuration) {
         status.needs_codec_configuration = false;
@@ -201,6 +208,8 @@ DecoderErrorOr<CodedFrame> MatroskaDemuxer::get_next_sample_for_track(Track cons
     auto flags = status.block->only_keyframes() ? FrameFlags::Keyframe : FrameFlags::None;
 
     CodedFrame frame { codec_id, timestamp, timestamp, duration, flags, move(status.frames[status.frame_index++]), move(codec_configuration) };
+    frame.set_has_alpha(has_alpha);
+    DECODER_TRY_ALLOC(frame.set_alpha_data(move(alpha_data)));
     frame.set_maximum_scene_luminance(status.block->maximum_scene_luminance());
     return frame;
 }

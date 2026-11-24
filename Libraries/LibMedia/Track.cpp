@@ -25,6 +25,7 @@ ErrorOr<void> encode(Encoder& encoder, Media::Track const& track)
         TRY(encoder.encode(video_data.pixel_width));
         TRY(encoder.encode(video_data.pixel_height));
         TRY(encoder.encode(video_data.color_metadata));
+        TRY(encoder.encode(video_data.has_alpha));
         break;
     }
     case Media::TrackType::Audio: {
@@ -63,6 +64,7 @@ ErrorOr<Media::Track> decode(Decoder& decoder)
         video_data.pixel_width = TRY(decoder.decode<u64>());
         video_data.pixel_height = TRY(decoder.decode<u64>());
         video_data.color_metadata = TRY(decoder.decode<Media::ColorMetadata>());
+        video_data.has_alpha = TRY(decoder.decode<bool>());
         track.set_video_data(video_data);
         break;
     }
