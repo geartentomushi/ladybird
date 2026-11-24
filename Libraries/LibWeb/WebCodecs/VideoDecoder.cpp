@@ -356,8 +356,10 @@ WebIDL::ExceptionOr<void> VideoDecoder::close()
 }
 
 // https://w3c.github.io/webcodecs/#clone-config
-static WebIDL::ExceptionOr<JS::Value> clone_configuration(JS::Realm& realm, VideoDecoderConfig const& config)
+static WebIDL::ExceptionOr<JS::Value> clone_configuration(JS::VM& vm, VideoDecoderConfig const& config)
 {
+    auto& realm = *vm.current_realm();
+
     // 1. Let clone be a new empty instance of config's dictionary type.
     // 2. For each dictionary member m in config:
     //    1. If m is a BufferSource, let clone.m be a copy of config.m.
@@ -387,7 +389,7 @@ WebIDL::ExceptionOr<GC::Ref<WebIDL::Promise>> VideoDecoder::is_config_supported(
     auto promise = WebIDL::create_promise(realm);
 
     // NB: The configuration is cloned now, as the buffers it refers to may change before the check completes.
-    auto cloned_config = GC::make_root(TRY(clone_configuration(realm, config)).as_object());
+    auto cloned_config = GC::make_root(TRY(clone_configuration(vm, config)).as_object());
 
     // 3. Let checkSupportQueue be the result of starting a new parallel queue.
     // 4. Enqueue the following steps to checkSupportQueue:
