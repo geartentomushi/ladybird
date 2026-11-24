@@ -215,7 +215,7 @@ void DecodedVideoProducer::ThreadData::dispatch_wake_later()
 
 VideoDecoderSelection DecodedVideoProducer::ThreadData::select_decoder_for_frame(CodedFrame const& frame, VideoDecoderSelection after) const
 {
-    return select_video_decoder(parsed_codec_for_coded_frame(frame, m_track.parsed_codec()), after, frame.codec_id() == CodecID::VP9 && m_track.video_data().has_alpha);
+    return select_video_decoder(parsed_codec_for_coded_frame(frame, m_track.parsed_codec()), after, frame.has_alpha());
 }
 
 void DecodedVideoProducer::ThreadData::replace_decoder_once_drained(CodedFrame const& frame, DecodeIntent intent)

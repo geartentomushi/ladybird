@@ -280,11 +280,14 @@ Media::DecoderErrorOr<ParseMediaSegmentResult> WebMByteStreamParser::parse_media
                     return Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "Block lacing is not supported"sv);
                 auto frame_data = TRY(streamer.read_raw_octets(data_size));
                 auto codec_id = codec_id_for_track(block.track_number());
+                auto track = m_track_entries.get(block.track_number());
+                auto has_alpha = codec_id == Media::CodecID::VP9 && track.has_value()
+                    && (*track)->track_type() == TrackEntry::TrackType::Video
+                    && (*track)->video_track().map([](auto const& video) { return video.has_alpha; }).value_or(false);
                 FixedArray<u8> alpha_data;
-                if (codec_id == Media::CodecID::VP9) {
-                    auto track = m_track_entries.get(block.track_number());
+                if (has_alpha) {
                     auto range = block.alpha_data();
-                    if (range.has_value() && track.has_value() && (*track)->video_track().map([](auto const& video) { return video.has_alpha; }).value_or(false)) {
+                    if (range.has_value()) {
                         TRY(cursor.seek(range->position, AK::SeekMode::SetPosition));
                         alpha_data = TRY(streamer.read_raw_octets(range->size));
                     }
@@ -305,6 +308,7 @@ Media::DecoderErrorOr<ParseMediaSegmentResult> WebMByteStreamParser::parse_media
                     block.only_keyframes() ? Media::FrameFlags::Keyframe : Media::FrameFlags::None,
                     move(frame_data),
                     move(codec_configuration));
+                coded_frame.set_has_alpha(has_alpha);
                 DECODER_TRY_ALLOC(coded_frame.set_alpha_data(move(alpha_data)));
                 coded_frame.set_maximum_scene_luminance(block.maximum_scene_luminance());
                 result.coded_frames.append({

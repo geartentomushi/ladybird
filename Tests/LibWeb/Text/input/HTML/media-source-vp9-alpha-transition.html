@@ -1,0 +1,43 @@
+<!doctype html>
+<script src="../include.js"></script>
+<video muted></video>
+<script>
+    asyncTest(async done => {
+        const video = document.querySelector("video");
+        const mediaSource = new MediaSource();
+        const waitFor = (target, event) => new Promise(resolve => target.addEventListener(event, resolve, { once: true }));
+        const opened = waitFor(mediaSource, "sourceopen");
+        video.src = URL.createObjectURL(mediaSource);
+        await opened;
+        const sourceBuffer = mediaSource.addSourceBuffer('video/webm; codecs="vp9"');
+
+        async function append(name) {
+            const response = await fetch(httpTestServer().getStaticURL(`Assets/${name}`));
+            const data = await response.arrayBuffer();
+            const updated = waitFor(sourceBuffer, "updateend");
+            sourceBuffer.appendBuffer(data);
+            await updated;
+        }
+
+        const context = document.createElement("canvas").getContext("2d");
+        function leftAlpha() {
+            context.clearRect(0, 0, 32, 32);
+            context.drawImage(video, 0, 0);
+            return context.getImageData(8, 16, 1, 1).data[3];
+        }
+
+        const loaded = waitFor(video, "loadeddata");
+        await append("vp9-opaque-32x32.webm");
+        await loaded;
+        println(`Opaque segment: ${leftAlpha()}`);
+
+        sourceBuffer.timestampOffset = 2;
+        await append("vp9-alpha-32x32.webm");
+        mediaSource.endOfStream();
+        const seeked = waitFor(video, "seeked");
+        video.currentTime = 2.25;
+        await seeked;
+        println(`Alpha segment after seek: ${leftAlpha()}`);
+        done();
+    });
+</script>
