@@ -32,9 +32,11 @@ WebIDL::ExceptionOr<GC::Ref<EncodedVideoChunk>> EncodedVideoChunk::construct_imp
         // 1. If [[Detached]] internal slot is true, then throw a DataCloneError DOMException.
         if (transferable->is_detached())
             return WebIDL::DataCloneError::create("The transfer list contains a detached ArrayBuffer"_utf16);
+    }
 
-        // NB: DetachArrayBuffer in step 4 throws a TypeError for a buffer with a detach key, such as a
-        //     WebAssembly.Memory buffer. Throw it here, before any buffer in the list has been detached.
+    // NB: DetachArrayBuffer in step 4 throws a TypeError for a buffer with a detach key, such as a WebAssembly.Memory
+    //     buffer. Throw it here, before any buffer in the list has been detached.
+    for (auto const& transferable : init.transfer) {
         if (!transferable->detach_key().is_undefined())
             return WebIDL::SimpleException { WebIDL::SimpleExceptionType::TypeError, "The transfer list contains an ArrayBuffer that cannot be detached"_utf16 };
     }
