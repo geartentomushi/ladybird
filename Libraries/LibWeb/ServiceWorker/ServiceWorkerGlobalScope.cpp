@@ -25,12 +25,6 @@ ServiceWorkerGlobalScope::ServiceWorkerGlobalScope(GC::Ref<Web::Page> page)
 {
 }
 
-void ServiceWorkerGlobalScope::finalize()
-{
-    Base::finalize();
-    WindowOrWorkerGlobalScopeMixin::finalize();
-}
-
 void ServiceWorkerGlobalScope::visit_edges(Cell::Visitor& visitor)
 {
     Base::visit_edges(visitor);

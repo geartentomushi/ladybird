@@ -46,7 +46,6 @@ protected:
 
 private:
     virtual void initialize_web_interfaces_impl() override;
-    virtual void finalize() override;
     virtual void visit_edges(Cell::Visitor&) override;
 
     GC::Ptr<CookieStore::CookieStore> m_cookie_store;
