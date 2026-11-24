@@ -253,7 +253,7 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
     // NB: A decoder the page dropped without closing keeps its codec until it is collected, so collect those before
     //     MediaServer would reject this one for having too many open. This happens at most once per event loop
     //     iteration, as a page that keeps its decoders would otherwise make each configure() scan the whole heap.
-    static bool collected_for_this_iteration = false;
+    static thread_local bool collected_for_this_iteration = false;
     if (!collected_for_this_iteration && m_media_client->webcodecs_video_decoder_count() >= MediaClient::max_webcodecs_video_decoders_per_client) {
         collected_for_this_iteration = true;
         Core::deferred_invoke([] { collected_for_this_iteration = false; });
