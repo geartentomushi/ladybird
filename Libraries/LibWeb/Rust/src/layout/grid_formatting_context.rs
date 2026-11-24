@@ -3619,7 +3619,16 @@ impl<'pass> GridFormattingContext<'pass> {
         })
     }
 
-    fn item_contribution(&self, item: GridItem, axis: Axis, combined_track_count: usize) -> ItemContribution {
+    /// The contributions of `item`, with `baseline_shim` added to them before they are limited by fixed tracks.
+    /// https://drafts.csswg.org/css-grid-2/#algo-content
+    /// Consider these “shims” as part of the items’ intrinsic size contribution for the purpose of track sizing.
+    fn shimmed_item_contribution(
+        &self,
+        item: GridItem,
+        axis: Axis,
+        combined_track_count: usize,
+        baseline_shim: CssPixels,
+    ) -> ItemContribution {
         let spanned_tracks = Self::spanned_interleaved_range(item, axis, combined_track_count);
         if !self.item_contributes_to_track_sizing(item, axis) {
             return ItemContribution {
@@ -3640,8 +3649,23 @@ impl<'pass> GridFormattingContext<'pass> {
             *min_content.get_or_init(|| self.min_content_contribution_with(item, axis, preferred_behaves_as_auto));
         let max_content =
             *max_content.get_or_init(|| self.max_content_contribution_with(item, axis, preferred_behaves_as_auto));
+        let min_content = min_content + baseline_shim;
+        let max_content = max_content + baseline_shim;
         let fixed_track_limit = std::cell::OnceCell::new();
         let grid_container_maximum_size = std::cell::OnceCell::new();
+        // NB: The shim grows the minimum contribution only as far as a fixed track limits the item's content.
+        let minimum = if baseline_shim > CssPixels::default() {
+            minimum.max(self.limited_content_contribution(
+                minimum + baseline_shim,
+                CssPixels::default(),
+                &fixed_track_limit,
+                &grid_container_maximum_size,
+                item,
+                axis,
+            ))
+        } else {
+            minimum
+        };
         let limited_min = self.limited_content_contribution(
             min_content,
             minimum,
@@ -4053,12 +4077,17 @@ impl<'pass> GridFormattingContext<'pass> {
             return self.grid_lanes_item_contributions_to_track_sizing(axis);
         }
         let track_count = self.axis_tracks(axis).len();
+        let baseline_shims = (!axis.is_column()).then(|| self.row_baseline_shims());
         let mut result = Vec::new();
-        for item in self.items.iter().copied() {
+        for (index, item) in self.items.iter().copied().enumerate() {
             if self.grid_item_is_subgridded(item, axis) {
                 result.extend(self.subgrid_item_contributions_to_track_sizing(item, axis));
             } else {
-                result.push(self.item_contribution(item, axis, track_count));
+                let shim = baseline_shims
+                    .as_ref()
+                    .and_then(|shims| shims[index])
+                    .unwrap_or_default();
+                result.push(self.shimmed_item_contribution(item, axis, track_count, shim));
             }
         }
         result
@@ -5689,6 +5718,152 @@ impl<'pass> GridFormattingContext<'pass> {
             }
         };
         item.extra_margin_top + distance_from_margin_box_top
+    }
+
+    // https://drafts.csswg.org/css-grid-2/#algo-content
+    // Shim baseline-aligned items so their intrinsic size contributions reflect their baseline alignment. For the
+    // items in each baseline-sharing group, add a “shim” (effectively, additional margin) on the start/end side (for
+    // first/last-baseline alignment) of each item so that, when start/end-aligned together their baselines align as
+    // specified.
+    // Consider these “shims” as part of the items’ intrinsic size contribution for the purpose of track sizing, below.
+    // NB: The shims are by the index of the item in the grid's items, for items that contribute to track sizing.
+    // FIXME: Shim items aligned by their last baselines, and items aligned by their baselines in the Column axis.
+    fn row_baseline_shims(&self) -> Vec<Option<CssPixels>> {
+        let mut baselines = vec![None; self.items.len()];
+        let mut shared_baselines = Vec::<Option<CssPixels>>::new();
+        let row_of_aligned_item = |item: GridItem| {
+            if !self.item_participates_in_row_baseline_alignment(item) || self.item_aligns_by_last_baseline(item) {
+                return None;
+            }
+            usize::try_from(item.row).ok()
+        };
+        // NB: Only rows with an item that contributes to track sizing get shims, so the baselines in other rows are not
+        //     measured.
+        let rows_with_shims: std::collections::HashSet<usize> = self
+            .items
+            .iter()
+            .copied()
+            .filter_map(|item| {
+                let row = row_of_aligned_item(item)?;
+                self.item_contributes_to_track_sizing(item, Axis::Row).then_some(row)
+            })
+            .collect();
+        for (index, item) in self.items.iter().copied().enumerate() {
+            let Some(row) = row_of_aligned_item(item) else {
+                continue;
+            };
+            if !rows_with_shims.contains(&row) {
+                continue;
+            }
+            let baseline = self.item_row_baseline_for_track_sizing(item);
+            if shared_baselines.len() <= row {
+                shared_baselines.resize(row + 1, None);
+            }
+            let shared = &mut shared_baselines[row];
+            *shared = Some(shared.map_or(baseline, |shared| shared.max(baseline)));
+            // NB: An item that does not contribute to track sizing still shares its row's baseline.
+            if self.item_contributes_to_track_sizing(item, Axis::Row) {
+                baselines[index] = Some((row, baseline));
+            }
+        }
+        baselines
+            .into_iter()
+            .map(|baseline| {
+                let (row, baseline) = baseline?;
+                let shim = shared_baselines[row]? - baseline;
+                (shim > CssPixels::default()).then_some(shim)
+            })
+            .collect()
+    }
+
+    /// The distance from the start of the item's grid area to its alignment baseline, as the item would be laid out at
+    /// the start of its area once the columns are sized.
+    fn item_row_baseline_for_track_sizing(&self, item: GridItem) -> CssPixels {
+        let metrics = self.cells_of(item);
+        let collapsed = metrics.uses_collapsing_borders_model;
+        let (measured_content_block_size, content_baselines) = if self.item_establishes_orthogonal_flow(item) {
+            (self.min_content_size(item, Axis::Row), DerivedBaselines::default())
+        } else {
+            self.sizing().measure_content_block_size_and_baselines(
+                item.box_,
+                self.item_available_space(item).inline_size.to_px_or_zero(),
+                self.intrinsic_contribution_constraints(item, Axis::Row),
+            )
+        };
+        // NB: A replaced box has no content to measure, so its natural block size is its content size.
+        let content_block_size = if metrics.has_definite_block_size {
+            metrics.content_block_size
+        } else if self.item_facts(item).is_replaced_box() {
+            self.clamp_to_block_size_limits(item, self.min_content_size(item, Axis::Row))
+        } else {
+            self.clamp_to_block_size_limits(item, measured_content_block_size)
+        };
+        let distance_from_margin_box_top = if let Some(content_baseline) = content_baselines.first {
+            if self.item_facts(item).is_scroll_container() && !metrics.has_definite_block_size {
+                // https://drafts.csswg.org/css-align-3/#baseline-export
+                // NB: Its content box is not sized yet, so its baseline is clamped to the border box it is measured at.
+                let border_box_top = metrics.margin_top();
+                let border_box_bottom =
+                    metrics.margin_box_top(collapsed) + content_block_size + metrics.border_box_bottom(collapsed);
+                (metrics.margin_box_top(collapsed) + content_baseline)
+                    .max(border_box_top)
+                    .min(border_box_bottom)
+            } else {
+                formatting_context::box_baseline_with_content_baselines(
+                    &self.run.pass,
+                    item.box_,
+                    &metrics,
+                    formatting_context::BaselineSet::First,
+                    content_baselines,
+                )
+            }
+        } else {
+            // https://drafts.csswg.org/css-align-3/#synthesize-baseline
+            // NB: As in item_row_baseline(), the central baseline is synthesized halfway between the line-over and
+            //     line-under edges of the border box, and the alphabetic one at its line-under edge.
+            let border_box_bottom =
+                metrics.margin_box_top(collapsed) + content_block_size + metrics.border_box_bottom(collapsed);
+            if formatting_context::dominant_baseline_is_central(self.container_style) {
+                border_box_bottom - (border_box_bottom - metrics.margin_top()) / 2
+            } else {
+                border_box_bottom
+            }
+        };
+        item.extra_margin_top + distance_from_margin_box_top
+    }
+
+    /// The content block size of an auto-height `item` whose content is `content_block_size` tall, once its min and max
+    /// block sizes apply.
+    // https://drafts.csswg.org/css-sizing-3/#min-size-properties
+    // NB: Its min size wins over its max size.
+    fn clamp_to_block_size_limits(&self, item: GridItem, content_block_size: CssPixels) -> CssPixels {
+        let cells = self.cells_of(item);
+        let sized = sizing_context::SizedBox::new(item.box_, &cells);
+        let available = self.item_available_space(item);
+        let constraints = self.intrinsic_contribution_constraints(item, Axis::Row);
+        let sizing = self.sizing();
+        let mut size = content_block_size;
+        if !self.grid_item_is_subgridded(item, Axis::Row)
+            && !sizing.should_treat_max_block_size_as_none(item.box_, available.block_size, constraints)
+        {
+            size = size.min(sizing.calculate_inner_size_for_property(
+                sized,
+                Axis::Row.sizing_axis(),
+                SizingProperty::MaxHeight,
+                available,
+                constraints,
+            ));
+        }
+        if !self.minimum_size(item, Axis::Row).is_auto() {
+            size = size.max(sizing.calculate_inner_size_for_property(
+                sized,
+                Axis::Row.sizing_axis(),
+                SizingProperty::MinHeight,
+                available,
+                constraints,
+            ));
+        }
+        size
     }
 
     /// The index of the last row the area of `item` spans.
