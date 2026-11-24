@@ -38,6 +38,23 @@
         await waitForState(newRegistration.installing, "activated");
         println(`new registration unregister() resolves with: ${await newRegistration.unregister()}`);
 
+        const extendedURL = await server.createEcho("GET", `/service-worker-unregister-${runId}/extended.js`, { status: 200, headers: javascript, body: `
+            addEventListener("activate", event => event.waitUntil(new Promise(resolve => setTimeout(resolve, 100))));
+        ` });
+        const extendedScope = server.echoURL(`/service-worker-unregister-${runId}/extended/`);
+        const extendedRegistration = await navigator.serviceWorker.register(extendedURL, { scope: extendedScope });
+        const extendedWorker = extendedRegistration.installing;
+        const extendedStates = [extendedWorker.state];
+        const extendedRedundant = new Promise(resolve => extendedWorker.addEventListener("statechange", () => {
+            extendedStates.push(extendedWorker.state);
+            if (extendedWorker.state === "redundant")
+                resolve();
+        }));
+        await waitForState(extendedWorker, "activating");
+        println(`unregister() during activation resolves with: ${await extendedRegistration.unregister()}`);
+        await extendedRedundant;
+        println(`worker unregistered during activation: ${extendedStates.join(" -> ")}`);
+
         try {
             await registration.unregister.call({});
         } catch (error) {

@@ -394,6 +394,7 @@ static void run_service_worker(HTML::EnvironmentSettingsObject& client, ServiceW
 }
 
 static void try_activate(GC::Ref<UpdateAlgorithmState>);
+static void try_clear_registration(HTML::EventLoop&, Registration&);
 
 // https://w3c.github.io/ServiceWorker/#activation-algorithm
 static void activate(GC::Ref<UpdateAlgorithmState> state)
@@ -433,10 +434,21 @@ static void activate(GC::Ref<UpdateAlgorithmState> state)
         update_worker_state(event_loop, *waiting_worker, ServiceWorkerState::Activated);
         return;
     }
+    waiting_worker->has_pending_events = true;
     waiting_worker->agent->run_service_worker_lifecycle_step(HTML::ServiceWorkerLifecycleStep::Activate, GC::create_function(GC::Heap::the(), GC::captures(state), [](auto& state, bool) {
+        auto& registration = state->registration();
+
         // 12. Run the Update Worker State algorithm passing registration's active worker and "activated" as the arguments.
-        if (auto* active_worker = state->registration().active_worker(); active_worker && active_worker->state == ServiceWorkerState::Activating)
+        if (auto* active_worker = registration.active_worker(); active_worker && active_worker->state == ServiceWorkerState::Activating) {
+            active_worker->has_pending_events = false;
             update_worker_state(state->event_loop(), *active_worker, ServiceWorkerState::Activated);
+        }
+
+        // NB: An unregister job that ran during activation left clearing the registration to the end of the activate event.
+        if (auto current = Registration::get(registration.storage_key(), registration.scope_url()); !current.has_value() || &current.value() != &registration) {
+            try_clear_registration(state->event_loop(), registration);
+            return;
+        }
 
         // NB: A replacement that finished installing while this worker was activating waits for it in Try Activate.
         try_activate(state);
@@ -955,8 +967,13 @@ static void try_clear_registration(HTML::EventLoop& event_loop, Registration& re
     //    - registration's active worker is null or the result of running Service Worker Has No Pending Events with
     //      registration's active worker is true.
     // NB: No service worker client is using any registration, since clients are not controlled yet. Unregister jobs
-    //     wait in the job queue until the registration's install has finished.
-    // FIXME: Check for pending events once workers handle functional events.
+    //     wait in the job queue until the registration's install has finished, so only an activate event can be
+    //     pending here.
+    // FIXME: Also count functional events once workers handle them.
+    for (auto* worker : { registration.installing_worker(), registration.waiting_worker(), registration.active_worker() }) {
+        if (worker && worker->has_pending_events)
+            return;
+    }
     clear_registration(event_loop, registration);
 }
 
