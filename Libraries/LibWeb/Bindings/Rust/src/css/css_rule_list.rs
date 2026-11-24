@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::rc::Rc;
 
 use libjs_rust::api::{DeferGc, GcRefCell, MarkedVec, Trace, Visitor, Vm};
-use libweb_rust::NativeRuleList;
+use libweb_rust::{NativeRuleList, NativeRuleType};
 
 use super::css_rule::AnyCSSRule;
 use super::exports::rule_from_abi;
@@ -183,7 +183,13 @@ impl CSSRuleList {
             old_object.set_parent_rule(vm, None);
         }
 
-        self.notify_change();
+        // NB: Only these can precede @import and @namespace rules, which are what the sheet caches by position.
+        if matches!(
+            old_rule.cssom_type(),
+            NativeRuleType::Import | NativeRuleType::Namespace | NativeRuleType::LayerStatement
+        ) {
+            self.notify_change();
+        }
     }
 
     // https://drafts.csswg.org/cssom/#dom-cssrulelist-item
