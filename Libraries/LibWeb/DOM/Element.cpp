@@ -1882,8 +1882,9 @@ CSS::RequiredInvalidationAfterStyleChange Element::compose_style_pseudo_element_
         // The transition step of a pseudo-element runs where its record is installed, against the record it moved
         // away from.
         auto const& before_change = before_change_styles[i];
-        style_computer.compose_installed_engine_record(read, { *this, pseudo_element }, before_change);
-        if ((transition_steps & bit) && before_change)
+        bool const owes_transition_step = (transition_steps & bit) && before_change;
+        style_computer.compose_installed_engine_record(read, { *this, pseudo_element }, before_change, owes_transition_step);
+        if (owes_transition_step)
             invalidation |= style_computer.run_transition_step_for_installed_record(read, { *this, pseudo_element }, before_change);
         // https://drafts.csswg.org/css-animations-2/#owning-element-section
         // If the display property of an element is set to none and its display value would compute to none when

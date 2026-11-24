@@ -220,13 +220,14 @@ void StyleEngineFFI::web_css_begin_style_update_pass(StyleReactionApplication* a
 
 // The host samples an element's animations over the record the engine computed once it is installed, as an animation
 // update samples them over the record an element holds, and publishes what they compose.
-static void sample_animations_for_installed_record(DOM::AbstractElement abstract_element)
+static void sample_animations_for_installed_record(DOM::AbstractElement abstract_element, bool before_transition_decision = false)
 {
     auto const& style = abstract_element.installed_style();
     if (!style)
         return;
     Animations::AnimationUpdateContext::ElementData element_data { style, abstract_element.document().style_computer().reconstruct_computed_properties_for_animation(style) };
     element_data.base_is_current = true;
+    element_data.before_transition_decision = before_transition_decision;
     Animations::AnimationUpdateContext context;
     context.elements.set(abstract_element, move(element_data));
     context.publish();
@@ -394,7 +395,7 @@ void StyleEngineFFI::web_css_install_styles(StyleReactionApplication* applicatio
                 style_computer.record_transition_stabilization_baseline(abstract_element, old_style);
             StyleEngineFFI::style_engine_begin_composition_settling(style_computer.style_engine().host(), &read, element->style_node_id().value());
             if (style_computer.has_animations_to_compose(abstract_element))
-                sample_animations_for_installed_record(abstract_element);
+                sample_animations_for_installed_record(abstract_element, owes_a_transition_step && before_change);
             else
                 style_computer.stop_publishing_animated_custom_properties(abstract_element);
             if (owes_a_transition_step && before_change) {
