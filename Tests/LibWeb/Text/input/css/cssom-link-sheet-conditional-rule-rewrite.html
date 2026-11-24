@@ -2,7 +2,7 @@
 <link id="link" rel="stylesheet" href="data:text/css,.base { height: 3px; } @media (min-width: 1px) { .media { width: 5px; } } @media (max-width: 1px) { .unmatched { width: 9px; } }">
 <div class="base media"></div>
 <div class="unmatched"></div>
-<div id="container" style="container: q / inline-size; width: 200px"><div class="rewritten"></div></div>
+<div id="container" style="container: q / inline-size; width: 200px"><div class="rewritten"></div><div class="nested-inside"></div></div>
 <div class="outside-container rewritten"></div>
 <div class="supported"></div>
 <div class="nested"></div>
@@ -40,7 +40,8 @@ asyncTest(async done => {
     sheet.insertRule("@supports (display: grid) { .supported { width: 11px; } }", sheet.cssRules.length);
     println(`inserted @supports rule applies: ${width(".supported")}`);
 
-    sheet.insertRule("@container q (min-width: 1px) { @media (min-width: 1px) { .nested { width: 1px; } } }", sheet.cssRules.length);
+    sheet.insertRule("@container q (min-width: 1px) { @media (min-width: 1px) { .nested-inside { width: 17px; } } }", sheet.cssRules.length);
+    println(`inserted @media rule nested in an @container rule applies: ${width(".nested-inside")}`);
     sheet.insertRule("@media (min-width: 1px) { .nested { width: 13px; } }", sheet.cssRules.length);
     println(`inserted @media rule applies: ${width(".nested")}`);
 
