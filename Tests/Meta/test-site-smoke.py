@@ -591,6 +591,182 @@ class SiteSmokeTests(unittest.TestCase):
             self.assertIn("test-js", commands[0])
             self.assertEqual(commands[-2][0], "ctest")
 
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
+    def test_build_pair_checks_helper_libraries_without_loader_overrides(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            drivers = {}
+            libraries = {}
+            soname = "liblagom-web.so.0"
+            for name in ("before", "after"):
+                build = root / name
+                for directory, executables in (
+                    ("bin", ("WebDriver", "Ladybird")),
+                    ("libexec", ("WebContent", "Hub", "ImageDecoder")),
+                ):
+                    (build / directory).mkdir(parents=True)
+                    for executable in executables:
+                        (build / directory / executable).touch(mode=0o755)
+                drivers[name] = build / "bin/WebDriver"
+                libraries[name] = build / soname
+                libraries[name].touch()
+
+            def resolve(command, *, env, **_):
+                tool, executable = command
+                self.assertEqual(tool, "ldd")
+                build = executable.parents[1].name
+                if executable.name in ("WebContent", "ImageDecoder"):
+                    self.assertNotIn("LD_LIBRARY_PATH", env)
+                    self.assertNotIn("LD_PRELOAD", env)
+                else:
+                    self.assertEqual(env["LD_LIBRARY_PATH"], "/example")
+                if build == "before" and executable.name == contaminated_process:
+                    build = "after"
+                line = f"\t{soname} => {libraries[build]} (0x1234)\n"
+                return subprocess.CompletedProcess(command, 0, stdout=line, stderr="")
+
+            with (
+                patch.dict(os.environ, {"LD_LIBRARY_PATH": "/example", "LD_PRELOAD": "/example/library.so"}),
+                patch.object(smoke.subprocess, "run", side_effect=resolve),
+            ):
+                for contaminated_process in ("WebContent", "Hub", "ImageDecoder"):
+                    with (
+                        self.subTest(process=contaminated_process),
+                        self.assertRaisesRegex(ValueError, "Contaminated SiteSmoke baseline:.*absolute RUNPATH"),
+                    ):
+                        smoke.validate_build_pair(drivers["before"], drivers["after"])
+                contaminated_process = None
+                smoke.validate_build_pair(drivers["before"], drivers["after"])
+                libraries["before"].unlink()
+                os.link(libraries["after"], libraries["before"])
+                with self.assertRaisesRegex(ValueError, "both builds resolve liblagom-web.so.0 to the same file"):
+                    smoke.validate_build_pair(drivers["before"], drivers["after"])
+
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
+    def test_build_pair_accepts_distinct_builds_without_shared_ladybird_libraries(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for name in ("before", "after"):
+                directory = root / name / "bin"
+                directory.mkdir(parents=True)
+                for executable in ("WebDriver", "Ladybird", "WebContent"):
+                    path = directory / executable
+                    path.write_bytes(b"\x7fELF")
+                    path.chmod(0o755)
+            before, after = (root / name / "bin/WebDriver" for name in ("before", "after"))
+            for result in (
+                subprocess.CompletedProcess([], 0, stdout="\tstatically linked\n", stderr=""),
+                subprocess.CompletedProcess([], 1, stdout="", stderr="\tnot a dynamic executable\n"),
+                subprocess.CompletedProcess([], 0, stdout="\tlibc.so.6 => /lib/libc.so.6 (0x123)\n", stderr=""),
+            ):
+                with self.subTest(result=result), patch.object(smoke.subprocess, "run", return_value=result):
+                    smoke.validate_build_pair(before, after)
+            before.unlink()
+            os.link(after, before)
+            with self.assertRaisesRegex(ValueError, "both WebDriver paths identify the same executable"):
+                smoke.validate_build_pair(before, after)
+
+    def test_linked_libraries_include_absolute_preloads_without_an_arrow(self):
+        with tempfile.TemporaryDirectory(prefix="preloaded libs ") as temporary:
+            root = Path(temporary)
+            name = "liblagom-web.so.0"
+            preload, linked = root / "preload" / name, root / "linked" / name
+            for library in (preload, linked):
+                library.parent.mkdir()
+                library.touch()
+            lines = f"\t{preload} (0x1234)\n\t{name} => {linked} (0x2345)\n\t/lib/libc.so.6 (0x3456)\n"
+            result = subprocess.CompletedProcess([], 0, stdout=lines, stderr="")
+            with patch.object(smoke.subprocess, "run", return_value=result):
+                self.assertEqual(
+                    smoke.linked_ladybird_libraries(root / "WebDriver", {}), [(name, preload), (name, linked)]
+                )
+
+    @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
+    def test_gate_preflight_accepts_nested_snapshot_but_refuses_candidate_library_inode(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "Build/release"
+            (candidate / "bin").mkdir(parents=True)
+            (candidate / "bin/WebDriver").touch(mode=0o755)
+            before = candidate / "snapshot/bin/WebDriver"
+            before.parent.mkdir(parents=True)
+            before.touch(mode=0o755)
+            for name in ("Ladybird", "WebContent"):
+                before.with_name(name).touch(mode=0o755)
+            path = before.parent / "liblagom-web.so.0"
+            path.touch()
+            paths = Mock(return_value=[(path.name, path)])
+            run_gate = Mock(return_value=0)
+            argv = ["site-smoke.py", "gate", "--baseline-webdriver", str(before), "--output", str(root / "output")]
+            with (
+                patch.object(sys, "argv", argv),
+                patch.dict(
+                    smoke.main.__globals__,
+                    {"ROOT": root, "connect": object(), "build_library_paths": paths, "run_gate": run_gate},
+                ),
+                contextlib.redirect_stderr(io.StringIO()) as errors,
+            ):
+                self.assertEqual(smoke.main(), 0)
+                paths.assert_called_once_with(
+                    [
+                        ("WebDriver", before),
+                        ("Ladybird", before.with_name("Ladybird")),
+                        ("WebContent", before.with_name("WebContent")),
+                    ]
+                )
+                run_gate.assert_called_once()
+                (candidate / "lib").mkdir()
+                os.link(path, candidate / "lib" / path.name)
+                with self.assertRaises(SystemExit) as failure:
+                    smoke.main()
+            self.assertEqual(failure.exception.code, 2)
+            self.assertIn("the baseline resolves liblagom-web.so.0 to candidate output", errors.getvalue())
+            run_gate.assert_called_once()
+
+    def test_gate_preflight_refuses_static_candidate_output_executable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate"
+            baseline = root / "baseline"
+            (candidate / "bin").mkdir(parents=True)
+            (baseline / "bin").mkdir(parents=True)
+            for directory in (candidate / "bin", baseline / "bin"):
+                for name in ("WebDriver", "Ladybird", "WebContent", "Hub"):
+                    (directory / name).touch(mode=0o755)
+            driver = baseline / "bin/WebDriver"
+            paths = Mock(return_value=[])
+            with patch.dict(smoke.validate_baseline_build.__globals__, {"build_library_paths": paths}):
+                self.assertEqual(smoke.validate_baseline_build(driver, candidate), driver)
+                with self.assertRaisesRegex(
+                    ValueError, "the baseline's WebDriver is the same file as candidate output"
+                ):
+                    smoke.validate_baseline_build(candidate / "bin/WebDriver", candidate)
+                (baseline / "bin/Hub").unlink()
+                os.link(candidate / "bin/Hub", baseline / "bin/Hub")
+                with self.assertRaisesRegex(ValueError, "the baseline's Hub is the same file as candidate output"):
+                    smoke.validate_baseline_build(driver, candidate)
+            paths.assert_called_once()
+
+    def test_gate_stops_after_build_when_build_pair_is_contaminated(self):
+        args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, baseline_webdriver=Path("baseline/WebDriver"))
+        with tempfile.TemporaryDirectory() as temporary:
+            output = Path(temporary)
+            build = Mock(return_value=0)
+            validate = Mock(side_effect=ValueError("Contaminated SiteSmoke baseline"))
+            with (
+                patch.object(smoke.subprocess, "check_output", return_value="candidate\n"),
+                patch.dict(smoke.run_gate.__globals__, {"run_stage": build, "validate_build_pair": validate}),
+                contextlib.redirect_stdout(io.StringIO()),
+                contextlib.redirect_stderr(io.StringIO()) as errors,
+            ):
+                self.assertEqual(smoke.run_gate(args, output, {"revision": "baseline"}), 2)
+            build.assert_called_once()
+            validate.assert_called_once_with(args.baseline_webdriver, smoke.ROOT / "Build/release/bin/WebDriver")
+            self.assertIn("Contaminated SiteSmoke baseline", errors.getvalue())
+            report = json.loads((output / "gate-summary.json").read_text())
+            self.assertFalse(report["passed"])
+            self.assertEqual(report["stages"]["build-pair"]["exit_status"], 2)
+
     def test_gate_counts_evidence_loss_on_unchanged_failed_loads(self):
         before = site("lost", "load-error")
         missing = dict(before, screenshot=None, body_element_count=None)
