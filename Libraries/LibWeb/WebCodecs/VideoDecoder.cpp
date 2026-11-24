@@ -75,10 +75,10 @@ void VideoDecoder::visit_edges(Cell::Visitor& visitor)
     visitor.visit(m_error_callback);
     for (auto& pending_flush : m_pending_flush_promises)
         visitor.visit(pending_flush.promise);
-    for (auto& message : m_control_message_queue) {
-        if (auto* decode_message = message.get_pointer<DecodeControlMessage>())
+    m_control_message_queue.for_each([&](auto const& message) {
+        if (auto const* decode_message = message.template get_pointer<DecodeControlMessage>())
             visitor.visit(decode_message->chunk);
-    }
+    });
 }
 
 void VideoDecoder::finalize()
@@ -219,10 +219,10 @@ WebIDL::ExceptionOr<void> VideoDecoder::configure(VideoDecoderConfig const& conf
 
     // NB: The chunks still waiting for the replaced codec are dropped with its output.
     size_t dropped_chunk_count = 0;
-    for (auto const& message : m_control_message_queue) {
-        if (message.has<DecodeControlMessage>())
+    m_control_message_queue.for_each([&](auto const& message) {
+        if (message.template has<DecodeControlMessage>())
             ++dropped_chunk_count;
-    }
+    });
     m_control_message_queue.clear();
     if (dropped_chunk_count > 0) {
         m_decode_queue_size -= dropped_chunk_count;
@@ -294,7 +294,7 @@ WebIDL::ExceptionOr<void> VideoDecoder::decode(EncodedVideoChunk& chunk)
     ++m_decode_queue_size;
 
     // 4. Queue a control message to decode the chunk.
-    m_control_message_queue.append(DecodeControlMessage { chunk });
+    m_control_message_queue.enqueue(DecodeControlMessage { chunk });
 
     // 5. Process the control message queue.
     process_control_message_queue();
@@ -369,7 +369,7 @@ void VideoDecoder::process_control_message_queue()
     // 1. While [[message queue blocked]] is false and [[control message queue]] is not empty:
     while (!m_control_message_queue.is_empty()) {
         // 1. Let front message be the first message in [[control message queue]].
-        auto front_message = m_control_message_queue.first();
+        auto front_message = m_control_message_queue.head();
 
         // 2. Let outcome be the result of running the control message steps described by front message.
         auto outcome = front_message.visit([&](auto const& message) { return run_control_message(message); });
@@ -379,7 +379,7 @@ void VideoDecoder::process_control_message_queue()
             break;
 
         // 4. Otherwise, dequeue front message from the [[control message queue]].
-        m_control_message_queue.take_first();
+        (void)m_control_message_queue.dequeue();
     }
 }
 
@@ -402,7 +402,7 @@ void VideoDecoder::flush(GC::Ref<WebIDL::Promise> promise)
     update_pending_flush_keep_alive();
 
     // 5. Queue a control message to flush the codec with promise.
-    m_control_message_queue.append(FlushControlMessage { flush_id });
+    m_control_message_queue.enqueue(FlushControlMessage { flush_id });
 
     // 6. Process the control message queue.
     process_control_message_queue();

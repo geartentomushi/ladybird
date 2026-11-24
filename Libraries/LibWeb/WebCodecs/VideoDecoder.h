@@ -8,6 +8,7 @@
 
 #include <AK/ByteBuffer.h>
 #include <AK/Optional.h>
+#include <AK/Queue.h>
 #include <AK/RefPtr.h>
 #include <AK/Variant.h>
 #include <AK/Vector.h>
@@ -94,7 +95,7 @@ private:
     // https://w3c.github.io/webcodecs/#dom-videodecoder-control-message-queue-slot
     // NB: Only decode and flush messages wait here, behind a decode the saturated codec cannot take yet. The other
     //     control messages run as soon as they are queued.
-    Vector<ControlMessage> m_control_message_queue;
+    Queue<ControlMessage> m_control_message_queue;
     // https://w3c.github.io/webcodecs/#dom-videodecoder-codec-saturated-slot
     bool m_codec_saturated { false };
 
