@@ -5731,13 +5731,28 @@ impl<'pass> GridFormattingContext<'pass> {
     fn row_baseline_shims(&self) -> Vec<Option<CssPixels>> {
         let mut baselines = vec![None; self.items.len()];
         let mut shared_baselines = Vec::<Option<CssPixels>>::new();
-        for (index, item) in self.items.iter().copied().enumerate() {
+        let row_of_aligned_item = |item: GridItem| {
             if !self.item_participates_in_row_baseline_alignment(item) || self.item_aligns_by_last_baseline(item) {
-                continue;
+                return None;
             }
-            let Ok(row) = usize::try_from(item.row) else {
+            usize::try_from(item.row).ok()
+        };
+        // NB: Only rows with an item that contributes to track sizing get shims, so the baselines in other rows are not
+        //     measured.
+        let rows_with_shims: std::collections::HashSet<usize> = self
+            .items
+            .iter()
+            .copied()
+            .filter(|&item| self.item_contributes_to_track_sizing(item, Axis::Row))
+            .filter_map(row_of_aligned_item)
+            .collect();
+        for (index, item) in self.items.iter().copied().enumerate() {
+            let Some(row) = row_of_aligned_item(item) else {
                 continue;
             };
+            if !rows_with_shims.contains(&row) {
+                continue;
+            }
             let baseline = self.item_row_baseline_for_track_sizing(item);
             if shared_baselines.len() <= row {
                 shared_baselines.resize(row + 1, None);
