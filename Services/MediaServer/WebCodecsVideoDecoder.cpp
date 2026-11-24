@@ -18,9 +18,10 @@ namespace MediaServer {
 NonnullRefPtr<WebCodecsVideoDecoder> WebCodecsVideoDecoder::create(Media::ParsedCodec codec, ByteBuffer description, Callbacks callbacks)
 {
     auto decoder = adopt_ref(*new WebCodecsVideoDecoder(Core::EventLoop::current(), codec, move(description), move(callbacks)));
-    decoder->m_thread = Threading::Thread::construct("WebCodecsDecode"sv, [decoder] { return decoder->run(); });
-    decoder->m_thread->start();
-    decoder->m_thread->detach();
+    // NB: The detached thread keeps itself, and so this decoder, alive until it exits.
+    auto thread = Threading::Thread::construct("WebCodecsDecode"sv, [decoder] { return decoder->run(); });
+    thread->start();
+    thread->detach();
     return decoder;
 }
 

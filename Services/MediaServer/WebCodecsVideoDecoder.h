@@ -75,7 +75,6 @@ private:
     Media::ParsedCodec m_codec;
     ByteBuffer m_description;
     Callbacks m_callbacks;
-    RefPtr<Threading::Thread> m_thread;
 
     Mutex m_mutex;
     ConditionVariable m_condition { m_mutex };
