@@ -890,6 +890,9 @@ set(SOURCES
     WebAudio/MediaStreamAudioDestinationNode.cpp
     WebAudio/MediaStreamAudioSourceNode.cpp
     WebCodecs/EncodedVideoChunk.cpp
+    WebCodecs/EventNames.cpp
+    WebCodecs/VideoDecoder.cpp
+    WebCodecs/VideoFrame.cpp
     WebDriver/Actions.cpp
     WebDriver/BiDi/BiDi.cpp
     WebDriver/BiDi/BrowsingContext.cpp

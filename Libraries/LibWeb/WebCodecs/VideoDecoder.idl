@@ -1,0 +1,103 @@
+// https://w3c.github.io/webcodecs/#videodecoder-interface
+[Exposed=(Window,DedicatedWorker), SecureContext]
+interface VideoDecoder : EventTarget {
+    constructor(VideoDecoderInit init);
+
+    readonly attribute CodecState state;
+    readonly attribute unsigned long decodeQueueSize;
+    attribute EventHandler ondequeue;
+
+    undefined configure(VideoDecoderConfig config);
+    undefined decode(EncodedVideoChunk chunk);
+    [CreatesPromise] Promise<undefined> flush();
+    undefined reset();
+    undefined close();
+
+    static Promise<VideoDecoderSupport> isConfigSupported(VideoDecoderConfig config);
+};
+
+// https://w3c.github.io/webcodecs/#dictdef-videodecoderinit
+dictionary VideoDecoderInit {
+    required VideoFrameOutputCallback output;
+    required WebCodecsErrorCallback error;
+};
+
+// https://w3c.github.io/webcodecs/#callbackdef-videoframeoutputcallback
+callback VideoFrameOutputCallback = undefined(VideoFrame output);
+
+// https://w3c.github.io/webcodecs/#callbackdef-webcodecserrorcallback
+callback WebCodecsErrorCallback = undefined(DOMException error);
+
+// https://w3c.github.io/webcodecs/#dictdef-videodecodersupport
+dictionary VideoDecoderSupport {
+    boolean supported;
+    VideoDecoderConfig config;
+};
+
+// https://w3c.github.io/webcodecs/#dictdef-videodecoderconfig
+[GenerateToValue]
+dictionary VideoDecoderConfig {
+    required DOMString codec;
+    // FIXME: This should be an AllowSharedBufferSource.
+    BufferSource description;
+    [EnforceRange] unsigned long codedWidth;
+    [EnforceRange] unsigned long codedHeight;
+    [EnforceRange] unsigned long displayAspectWidth;
+    [EnforceRange] unsigned long displayAspectHeight;
+    VideoColorSpaceInit colorSpace;
+    HardwareAcceleration hardwareAcceleration = "no-preference";
+    boolean optimizeForLatency;
+    double rotation = 0;
+    boolean flip = false;
+};
+
+// https://w3c.github.io/webcodecs/#dictdef-videocolorspaceinit
+[GenerateToValue]
+dictionary VideoColorSpaceInit {
+    VideoColorPrimaries? primaries = null;
+    VideoTransferCharacteristics? transfer = null;
+    VideoMatrixCoefficients? matrix = null;
+    boolean? fullRange = null;
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-videocolorprimaries
+enum VideoColorPrimaries {
+    "bt709",
+    "bt470bg",
+    "smpte170m",
+    "bt2020",
+    "smpte432",
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-videotransfercharacteristics
+enum VideoTransferCharacteristics {
+    "bt709",
+    "smpte170m",
+    "iec61966-2-1",
+    "linear",
+    "pq",
+    "hlg",
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-videomatrixcoefficients
+enum VideoMatrixCoefficients {
+    "rgb",
+    "bt709",
+    "bt470bg",
+    "smpte170m",
+    "bt2020-ncl",
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-hardwareacceleration
+enum HardwareAcceleration {
+    "no-preference",
+    "prefer-hardware",
+    "prefer-software",
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-codecstate
+enum CodecState {
+    "unconfigured",
+    "configured",
+    "closed"
+};

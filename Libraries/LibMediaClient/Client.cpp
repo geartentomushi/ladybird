@@ -58,6 +58,10 @@ void Client::die()
     if (*s_client == this)
         *s_client = nullptr;
 
+    auto webcodecs_video_decoders = move(m_webcodecs_video_decoders);
+    for (auto& [id, callbacks] : webcodecs_video_decoders)
+        callbacks.on_error(Media::DecoderError::with_description(Media::DecoderErrorCategory::Unknown, "The media server is gone"sv));
+
     auto media_streams = move(m_media_streams);
     auto playback_managers = move(m_playback_managers);
     for (auto& [id, playback_manager] : playback_managers)
@@ -235,6 +239,75 @@ void Client::audio_data_decode_failed(u64 request_id, Media::DecoderError error)
     (*callback)(move(error));
 }
 
+u64 Client::create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, WebCodecsVideoDecoderCallbacks callbacks)
+{
+    auto decoder_id = allocate_id();
+    if (!is_open()) {
+        Core::deferred_invoke([callbacks = move(callbacks)] mutable {
+            callbacks.on_error(Media::DecoderError::with_description(Media::DecoderErrorCategory::Memory, "Unable to hand the decoder configuration to the media server"sv));
+        });
+        return decoder_id;
+    }
+    m_webcodecs_video_decoders.set(decoder_id, move(callbacks));
+    update_idle_timer();
+    async_create_webcodecs_video_decoder(decoder_id, codec, description);
+    return decoder_id;
+}
+
+void Client::webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ReadonlyBytes data)
+{
+    if (!m_webcodecs_video_decoders.contains(decoder_id))
+        return;
+    async_webcodecs_video_decoder_decode(decoder_id, is_key, timestamp, duration, data);
+}
+
+void Client::webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id)
+{
+    if (!m_webcodecs_video_decoders.contains(decoder_id))
+        return;
+    async_webcodecs_video_decoder_flush(decoder_id, flush_id);
+}
+
+void Client::destroy_webcodecs_video_decoder(u64 decoder_id)
+{
+    if (!m_webcodecs_video_decoders.remove(decoder_id))
+        return;
+    update_idle_timer();
+    if (is_open())
+        async_destroy_webcodecs_video_decoder(decoder_id);
+}
+
+void Client::webcodecs_video_frame_decoded(u64 decoder_id, i64 timestamp, Optional<u64> duration, Gfx::ShareableBitmap bitmap)
+{
+    auto callbacks = m_webcodecs_video_decoders.get(decoder_id);
+    if (!callbacks.has_value())
+        return;
+    if (!bitmap.is_valid()) {
+        webcodecs_video_decoder_failed(decoder_id, Media::DecoderError::with_description(Media::DecoderErrorCategory::Corrupted, "The media server returned a malformed frame"sv));
+        return;
+    }
+    callbacks->on_frame(timestamp, duration, *bitmap.bitmap());
+}
+
+void Client::webcodecs_video_decoder_flushed(u64 decoder_id, u64 flush_id)
+{
+    auto callbacks = m_webcodecs_video_decoders.get(decoder_id);
+    if (!callbacks.has_value())
+        return;
+    callbacks->on_flushed(flush_id);
+}
+
+void Client::webcodecs_video_decoder_failed(u64 decoder_id, Media::DecoderError error)
+{
+    auto callbacks = m_webcodecs_video_decoders.take(decoder_id);
+    if (!callbacks.has_value())
+        return;
+    update_idle_timer();
+    if (is_open())
+        async_destroy_webcodecs_video_decoder(decoder_id);
+    callbacks->on_error(move(error));
+}
+
 void Client::register_media_stream(Badge<RemoteMediaStream>, RemoteMediaStream& stream)
 {
     m_media_streams.set(stream.id(), &stream);
@@ -264,7 +337,7 @@ void Client::update_idle_timer()
     auto is_idle = [&] {
         if (!m_media_streams.is_empty() || !m_playback_managers.is_empty())
             return false;
-        if (!m_pending_audio_data_decodes.is_empty())
+        if (!m_pending_audio_data_decodes.is_empty() || !m_webcodecs_video_decoders.is_empty())
             return false;
         return m_pending_file_media_support_requests.is_empty() && m_pending_decoder_capabilities_requests.is_empty();
     }();

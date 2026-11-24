@@ -1,0 +1,54 @@
+// https://w3c.github.io/webcodecs/#videoframe-interface
+// FIXME: Add the constructors, visibleRect, colorSpace, metadata(), allocationSize() and copyTo(), and make the
+//        interface Serializable and Transferable.
+[Exposed=(Window,DedicatedWorker)]
+interface VideoFrame {
+    readonly attribute VideoPixelFormat? format;
+    readonly attribute unsigned long codedWidth;
+    readonly attribute unsigned long codedHeight;
+    readonly attribute unsigned long displayWidth;
+    readonly attribute unsigned long displayHeight;
+    readonly attribute unsigned long long? duration;  // microseconds
+    readonly attribute long long timestamp;           // microseconds
+
+    VideoFrame clone();
+    undefined close();
+};
+
+// https://w3c.github.io/webcodecs/#enumdef-videopixelformat
+enum VideoPixelFormat {
+    // 4:2:0 Y, U, V
+    "I420",
+    "I420P10",
+    "I420P12",
+    // 4:2:0 Y, U, V, A
+    "I420A",
+    "I420AP10",
+    "I420AP12",
+    // 4:2:2 Y, U, V
+    "I422",
+    "I422P10",
+    "I422P12",
+    // 4:2:2 Y, U, V, A
+    "I422A",
+    "I422AP10",
+    "I422AP12",
+    // 4:4:4 Y, U, V
+    "I444",
+    "I444P10",
+    "I444P12",
+    // 4:4:4 Y, U, V, A
+    "I444A",
+    "I444AP10",
+    "I444AP12",
+    // 4:2:0 Y, UV
+    "NV12",
+    // 4:4:4 RGBA
+    "RGBA",
+    // 4:4:4 RGBX (opaque)
+    "RGBX",
+    // 4:4:4 BGRA
+    "BGRA",
+    // 4:4:4 BGRX (opaque)
+    "BGRX",
+};

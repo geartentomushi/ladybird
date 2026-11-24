@@ -22,6 +22,11 @@ endpoint MediaServer
 
     decode_audio_data(u64 request_id, Core::AnonymousBuffer data, u32 output_sample_rate) =|
 
+    create_webcodecs_video_decoder(u64 decoder_id, String codec, ByteBuffer description) =|
+    destroy_webcodecs_video_decoder(u64 decoder_id) =|
+    webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ByteBuffer data) =|
+    webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id) =|
+
     create_media_stream(u64 stream_id) =|
     destroy_media_stream(u64 stream_id) =|
     add_media_stream_chunk(u64 stream_id, u64 offset, ByteBuffer data) =|

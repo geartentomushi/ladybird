@@ -1,6 +1,7 @@
 set(SOURCES
     ConnectionFromClient.cpp
     PlaybackSession.cpp
+    WebCodecsVideoDecoder.cpp
 )
 
 add_library(mediaserverservice STATIC ${SOURCES})

@@ -1217,6 +1217,8 @@ class PeriodicWave;
 namespace Web::WebCodecs {
 
 class EncodedVideoChunk;
+class VideoDecoder;
+class VideoFrame;
 
 }
 

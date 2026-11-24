@@ -107,6 +107,9 @@ public:
         // https://html.spec.whatwg.org/multipage/iframe-embed-object.html#embed-task-source
         Embed,
 
+        // https://w3c.github.io/webcodecs/#codec-task-source
+        Codec,
+
         // !!! IMPORTANT: Keep this field last!
         // This serves as the base value of all unique task sources.
         // Some elements, such as the HTMLMediaElement, must have a unique task source per instance.
