@@ -147,7 +147,7 @@ Optional<Media::DecoderCapabilities> Client::query_decoder_capabilities(StringVi
     if (!is_open())
         return {};
     auto request_id = allocate_id();
-    async_request_decoder_capabilities(request_id, String::from_utf8_without_validation(codecs_parameter.bytes()));
+    async_request_decoder_capabilities(request_id, String::from_utf8_without_validation(codecs_parameter.bytes()), false);
     auto reply = wait_for_reply_to<Messages::MediaClient::DecoderCapabilitiesReported>(request_id, [](Client& client, auto& other_reply) {
         client.decoder_capabilities_reported(other_reply.request_id(), other_reply.take_capabilities());
     });
@@ -177,7 +177,7 @@ void Client::file_media_support_reported(u64 request_id, Media::MediaSupportInfo
     (*promise)->resolve(info);
 }
 
-NonnullRefPtr<Client::DecoderCapabilitiesPromise> Client::request_decoder_capabilities(StringView codecs_parameter)
+NonnullRefPtr<Client::DecoderCapabilitiesPromise> Client::request_decoder_capabilities(StringView codecs_parameter, bool requires_frames_that_read_back)
 {
     if (!is_open())
         return DecoderCapabilitiesPromise::rejected(Error::from_string_literal("The media server is gone"));
@@ -185,7 +185,7 @@ NonnullRefPtr<Client::DecoderCapabilitiesPromise> Client::request_decoder_capabi
     auto request_id = allocate_id();
     m_pending_decoder_capabilities_requests.set(request_id, promise);
     update_idle_timer();
-    async_request_decoder_capabilities(request_id, String::from_utf8_without_validation(codecs_parameter.bytes()));
+    async_request_decoder_capabilities(request_id, String::from_utf8_without_validation(codecs_parameter.bytes()), requires_frames_that_read_back);
     return promise;
 }
 

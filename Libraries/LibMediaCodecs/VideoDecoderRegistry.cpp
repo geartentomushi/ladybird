@@ -23,9 +23,11 @@ void install_video_decoders(Vector<ReadonlySpan<VideoDecoderRegistration>> sets)
         registrations.append(set.data(), set.size());
 }
 
-Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const& codec)
+Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const& codec, bool requires_frames_that_read_back)
 {
     for (auto const& registration : installed_video_decoders()) {
+        if (requires_frames_that_read_back && !registration.outputs_frames_that_read_back)
+            continue;
         auto capabilities = registration.capabilities(codec);
         if (capabilities.has_value())
             return capabilities;
@@ -33,7 +35,7 @@ Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const& code
     return {};
 }
 
-VideoDecoderSelection select_video_decoder(ParsedCodec const& codec, VideoDecoderSelection after, bool requires_alpha)
+VideoDecoderSelection select_video_decoder(ParsedCodec const& codec, VideoDecoderSelection after, bool requires_alpha, bool requires_frames_that_read_back)
 {
     if (track_type_from_codec_id(codec.codec_id()) != TrackType::Video)
         return {};
@@ -41,7 +43,12 @@ VideoDecoderSelection select_video_decoder(ParsedCodec const& codec, VideoDecode
     auto const& registrations = installed_video_decoders();
     auto registration_count = static_cast<i32>(registrations.size());
     for (auto index = after.registration_index() + 1; index < registration_count; index++) {
-        if ((!requires_alpha || registrations[index].supports_alpha) && registrations[index].capabilities(codec).has_value())
+        auto const& registration = registrations[index];
+        if (requires_alpha && !registration.supports_alpha)
+            continue;
+        if (requires_frames_that_read_back && !registration.outputs_frames_that_read_back)
+            continue;
+        if (registration.capabilities(codec).has_value())
             return VideoDecoderSelection { index };
     }
     return {};

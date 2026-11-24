@@ -13,13 +13,13 @@
 
 namespace Media {
 
-Optional<DecoderCapabilities> decoder_capabilities(ParsedCodec const& codec)
+Optional<DecoderCapabilities> decoder_capabilities(ParsedCodec const& codec, bool requires_frames_that_read_back)
 {
     switch (track_type_from_codec_id(codec.codec_id())) {
     case TrackType::Audio:
         return audio_decoder_capabilities(codec);
     case TrackType::Video:
-        return video_decoder_capabilities(codec);
+        return video_decoder_capabilities(codec, requires_frames_that_read_back);
     case TrackType::Subtitles:
     case TrackType::Unknown:
         return {};

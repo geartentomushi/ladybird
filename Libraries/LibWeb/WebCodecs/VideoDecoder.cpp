@@ -417,7 +417,8 @@ WebIDL::ExceptionOr<GC::Ref<WebIDL::Promise>> VideoDecoder::is_config_supported(
         resolve(false);
         return promise;
     }
-    auto capabilities = media_client.value()->request_decoder_capabilities(codec.bytes_as_string_view());
+    // NB: Only decoders whose frames can be read back are used for WebCodecs.
+    auto capabilities = media_client.value()->request_decoder_capabilities(codec.bytes_as_string_view(), true);
     capabilities->when_resolved([resolve](Optional<Media::DecoderCapabilities>& capabilities) {
         resolve(capabilities.has_value());
     });
