@@ -1,0 +1,8 @@
+rules: 10003
+import still applies: 11px
+inserted rule applies: 13px
+import rule kept: true, namespace rule kept: true
+connected faces: InsertedFace, NestedFace
+after removing @media: InsertedFace
+after removing @font-face: none
+layer before import: true, import still applies: 11px

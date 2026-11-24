@@ -37,4 +37,11 @@ void invalidate_rule_cache_for_style_sheet_owners(StyleSheetState const& style_s
     });
 }
 
+void invalidate_style_cache_for_style_sheet_owners(StyleSheetState const& style_sheet)
+{
+    style_sheet.for_each_owning_style_scope([](StyleScope& style_scope) {
+        style_scope.invalidate_style_cache();
+    });
+}
+
 }

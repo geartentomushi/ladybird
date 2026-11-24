@@ -21,5 +21,7 @@ void invalidate_rule_cache_after_style_sheet_change(StyleScope&, StyleSheetState
 
 // Drop the rule cache of every scope that owns `style_sheet`, because the rules it contributes to them moved.
 void invalidate_rule_cache_for_style_sheet_owners(StyleSheetState const& style_sheet);
+// For a change that adds or removes only style or keyframes rules, which can't affect counter styles.
+void invalidate_style_cache_for_style_sheet_owners(StyleSheetState const& style_sheet);
 
 }

@@ -276,22 +276,55 @@ Optional<RustRule> StyleSheetState::parse_rule(Utf16View rule) const
     return parse_css_rule(make_parsing_params(), rule);
 }
 
+static bool rule_can_precede_imports_or_namespaces(RustRule const& rule)
+{
+    auto type = rule.type();
+    return type == RustRule::Type::Import || type == RustRule::Type::Namespace || type == RustRule::Type::LayerStatement;
+}
+
+static bool rule_declares_fonts(RustRule const& rule)
+{
+    if (rule.type() == RustRule::Type::FontFace || rule.type() == RustRule::Type::FontFeatureValues)
+        return true;
+    auto const* children = Parser::ValueParserFFI::rust_rule_children(rule.handle());
+    if (!children)
+        return false;
+    bool declares = false;
+    Parser::ValueParserFFI::rust_rule_list_visit_font_rules(children, &declares, [](void const* context, Parser::ValueParserFFI::NativeRuleView const*) {
+        *static_cast<bool*>(const_cast<void*>(context)) = true;
+    });
+    return declares;
+}
+
+bool StyleSheetState::change_affects_only_held_rules(RustRule const& rule) const
+{
+    auto style_element_sheet = !constructed() && owner_node() && owner_node()->is_html_style_element();
+    auto rule_type = rule.type();
+    return style_element_sheet && (rule_type == CSSRule::Type::Keyframes || rule_type == CSSRule::Type::Style);
+}
+
 void StyleSheetState::rule_inserted(RustRule const& rule)
 {
-    recalculate_rule_caches();
+    // OPTIMIZATION: CSSOM insertion places any rule other than @import, @namespace and @layer statements after all
+    //               @import and @namespace rules, so it can't change the import and namespace caches. Rebuilding them
+    //               for each such rule makes a script that inserts many rules quadratic.
+    if (rule_can_precede_imports_or_namespaces(rule))
+        recalculate_rule_caches();
+    else
+        m_rule_cache = nullptr;
     record_style_rule_inserted(rule, *this);
 
     // OPTIMIZATION: A style rule or a keyframes rule arriving in a style element's own sheet changes only which
     //               rules the scope holds, so dropping the rule cache is enough. Anything else can change what
     //               the sheet as a whole contributes, which is what invalidate_owners() re-reads.
-    auto style_element_sheet = !constructed() && owner_node() && owner_node()->is_html_style_element();
-    auto rule_type = rule.type();
-    if (style_element_sheet && (rule_type == CSSRule::Type::Keyframes || rule_type == CSSRule::Type::Style))
-        invalidate_rule_cache_for_style_sheet_owners(*this);
+    if (change_affects_only_held_rules(rule))
+        invalidate_style_cache_for_style_sheet_owners(*this);
     else
         invalidate_owners();
 
-    synchronize_fonts_after_rule_change();
+    // OPTIMIZATION: Font synchronization walks the whole sheet, so skip it when the new rule brings no font rules.
+    if (rule_declares_fonts(rule))
+        synchronize_fonts_after_rule_change();
 }
 
 void StyleSheetState::remove_rule(u32 index)
@@ -308,8 +341,16 @@ void StyleSheetState::remove_rule(u32 index)
         recalculate_rule_caches();
     }
     record_style_rule_removed(*this, removed_rule, detached_import.ptr());
-    invalidate_owners();
-    synchronize_fonts_after_rule_change();
+    // OPTIMIZATION: As in rule_inserted(), a style or keyframes rule leaving a style element's own sheet changes
+    //               only which rules the scope holds.
+    if (change_affects_only_held_rules(removed_rule)) {
+        m_rule_cache = nullptr;
+        invalidate_style_cache_for_style_sheet_owners(*this);
+    }
+    else
+        invalidate_owners();
+    if (rule_declares_fonts(removed_rule))
+        synchronize_fonts_after_rule_change();
 }
 
 // https://drafts.csswg.org/cssom/#dom-cssstylesheet-replace

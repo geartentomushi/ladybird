@@ -1,0 +1,38 @@
+<!doctype html>
+<style id="style">
+@import url("data:text/css,.imported { width: 11px; }");
+@namespace svg url(http://www.w3.org/2000/svg);
+</style>
+<div class="imported target"></div>
+<script src="../include.js"></script>
+<script>
+asyncTest(async done => {
+    const sheet = document.getElementById("style").sheet;
+    const target = document.querySelector(".target");
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const count = 20000;
+    for (let i = 0; i < count; ++i)
+        sheet.insertRule(`.r${i} { margin-left: ${i % 7}px; }`, sheet.cssRules.length);
+    sheet.insertRule(`.target { height: 13px; }`, sheet.cssRules.length);
+    for (let i = 0; i < count / 2; ++i)
+        sheet.deleteRule(2);
+    println(`rules: ${sheet.cssRules.length}`);
+    println(`import still applies: ${getComputedStyle(target).width}`);
+    println(`inserted rule applies: ${getComputedStyle(target).height}`);
+    println(`import rule kept: ${sheet.cssRules[0] instanceof CSSImportRule}, namespace rule kept: ${sheet.cssRules[1] instanceof CSSNamespaceRule}`);
+
+    sheet.insertRule(`@font-face { font-family: InsertedFace; src: local(Arial); }`, sheet.cssRules.length);
+    sheet.insertRule(`@media all { @font-face { font-family: NestedFace; src: local(Arial); } }`, sheet.cssRules.length);
+    const families = () => [...document.fonts].map(face => face.family).sort().join(", ");
+    println(`connected faces: ${families()}`);
+    sheet.deleteRule(sheet.cssRules.length - 1);
+    println(`after removing @media: ${families()}`);
+    sheet.deleteRule(sheet.cssRules.length - 1);
+    println(`after removing @font-face: ${families() || "none"}`);
+
+    sheet.insertRule(`@layer base;`, 0);
+    println(`layer before import: ${sheet.cssRules[0] instanceof CSSLayerStatementRule}, import still applies: ${getComputedStyle(target).width}`);
+    done();
+});
+</script>
