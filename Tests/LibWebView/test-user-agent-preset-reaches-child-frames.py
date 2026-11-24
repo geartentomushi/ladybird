@@ -16,6 +16,7 @@ import threading
 import time
 
 from pathlib import Path
+from typing import cast
 
 devtools = runpy.run_path(str(Path(__file__).with_name("test-devtools-client-follows-the-tab.py")))
 DevToolsClient = devtools["DevToolsClient"]
@@ -38,13 +39,18 @@ COLLECT_USER_AGENT_DATA = """
 """
 
 
+class RequestServer(http.server.ThreadingHTTPServer):
+    requests: queue.Queue[tuple[str, dict[str, str]]]
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path == "/favicon.ico":
             self.send_error(404)
             return
         if self.path in ("/parent", "/child"):
-            self.server.requests.put((self.path, dict(self.headers)))
+            server = cast(RequestServer, self.server)
+            server.requests.put((self.path, dict(self.headers)))
         self.send_response(200)
         self.send_header("Content-Type", "text/html")
         self.send_header("Cache-Control", "no-store")
@@ -116,7 +122,9 @@ def launch(ladybird_binary, profile, url, preset):
     raise AssertionError("The DevTools server didn't start")
 
 
-def test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server, preset, expected_product):
+def test_user_agent_preset_reaches_child_frames(
+    ladybird_binary, profile, server: RequestServer, preset, expected_product
+):
     parent_url = f"http://127.0.0.1:{server.server_port}/parent"
     process, client = launch(ladybird_binary, profile, parent_url, preset)
     try:
@@ -145,7 +153,11 @@ def test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server
         )
         assert parent_data == child_data, (parent_data, child_data)
         if preset:
-            expected = {"brands": [], "mobile": False, "platform": "Linux" if expected_product == "Firefox/" else "macOS"}
+            expected = {
+                "brands": [],
+                "mobile": False,
+                "platform": "Linux" if expected_product == "Firefox/" else "macOS",
+            }
             assert parent_data == {"lowEntropy": expected, "brands": [], "hints": expected}, parent_data
         else:
             assert any(brand["brand"] == "Ladybird" for brand in parent_data["brands"]), parent_data
@@ -164,7 +176,9 @@ def test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server
                 assert {"sec-ch-ua", "sec-ch-ua-mobile", "sec-ch-ua-platform"} <= client_hints, (path, client_hints)
 
         print("PASS: A child frame in another process gets the tab's User-Agent preset and languages")
-        print(f"PASS: {preset or 'Default'}: UA Client Hints {'absent' if preset else 'present'} on parent and child requests")
+        print(
+            f"PASS: {preset or 'Default'}: UA Client Hints {'absent' if preset else 'present'} on parent and child requests"
+        )
     finally:
         client.close()
         stop(process)
@@ -176,15 +190,19 @@ def main():
     ladybird_binary = parser.parse_args().ladybird_binary
 
     global server_port
-    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server = RequestServer(("127.0.0.1", 0), Handler)
     server.requests = queue.Queue()
     server_port = server.server_port
     threading.Thread(target=server.serve_forever, daemon=True).start()
     try:
         with tempfile.TemporaryDirectory() as directory:
             profile = Path(directory) / "profile"
-            test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server, "Firefox Linux Desktop", "Firefox/")
-            test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server, "Safari macOS Desktop", "Safari/")
+            test_user_agent_preset_reaches_child_frames(
+                ladybird_binary, profile, server, "Firefox Linux Desktop", "Firefox/"
+            )
+            test_user_agent_preset_reaches_child_frames(
+                ladybird_binary, profile, server, "Safari macOS Desktop", "Safari/"
+            )
             # Relaunch the same profile without a CLI preset to reset to Ladybird's default.
             test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server, None, "Ladybird/")
     finally:

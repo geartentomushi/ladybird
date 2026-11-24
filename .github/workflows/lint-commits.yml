@@ -1,17 +1,67 @@
 name: Lint Commit Messages
 
-on: [pull_request_target]
+on: [pull_request_target, workflow_call]
 
 # Make sure to update Meta/lint-commit.sh to match this script when adding new checks!
 # (… but don't accept overlong 'fixup!' commit descriptions.)
 
 jobs:
   lint:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    if: |
+      (github.repository == 'LadybirdBrowser/ladybird' && github.event_name == 'pull_request_target') ||
+      (github.repository == 'geartentomushi/ladybird' && github.event_name == 'pull_request')
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
+      - name: Lint fork PR commits with base rules
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { spawnSync } = require("node:child_process");
+            const { mkdtempSync, rmSync, writeFileSync } = require("node:fs");
+            const { tmpdir } = require("node:os");
+            const { join } = require("node:path");
+            const { pull_request } = context.payload;
+            const { data: script } = await github.rest.repos.getContent({
+              ...context.repo, path: "Meta/lint-commit.sh", ref: pull_request.base.sha,
+            });
+            if (script.type !== "file" || script.encoding !== "base64") {
+              throw new Error("Could not read Meta/lint-commit.sh from the PR base");
+            }
+            const commits = await github.paginate(github.rest.pulls.listCommits, {
+              ...context.repo, pull_number: pull_request.number, per_page: 100,
+            });
+            const directory = mkdtempSync(join(tmpdir(), "commit-lint-"));
+            const linter = join(directory, "lint-commit.sh");
+            const messageFile = join(directory, "message");
+            const errors = [];
+            try {
+              writeFileSync(linter, Buffer.from(script.content, "base64"));
+              for (const { sha, commit: { message }, author } of commits) {
+                if (author?.id === 49699333) continue; // dependabot[bot]
+                const subject = message.split("\n", 1)[0];
+                if (/^(?:fixup|squash|amend)!(?: |$)/.test(subject)) {
+                  errors.push(`${sha}: Autosquash commit must be folded into its target commit`);
+                  continue;
+                }
+                writeFileSync(messageFile, message + "\n");
+                const result = spawnSync("bash", [linter, messageFile], { encoding: "utf-8" });
+                if (result.error) throw result.error;
+                if (result.status !== 0) {
+                  errors.push(`${sha}: ${result.stdout.trim() || result.stderr.trim() || "Commit linter failed"}`);
+                }
+              }
+            } finally {
+              rmSync(directory, { recursive: true, force: true });
+            }
+            if (errors.length > 0) core.setFailed(errors.join("\n"));
+
       - name: Lint PR commits
+        if: github.event_name == 'pull_request_target'
         uses: actions/github-script@v9
         with:
           script: |

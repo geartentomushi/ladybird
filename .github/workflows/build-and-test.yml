@@ -41,11 +41,22 @@ jobs:
       # checking this branch out, we gain a stabler `master` at the cost of reproducibility.
       - uses: actions/checkout@v7.0.1
         if: ${{ github.event_name != 'pull_request' }}
+        with:
+          persist-credentials: ${{ github.repository != 'geartentomushi/ladybird' }}
 
       - uses: actions/checkout@v7.0.1
         if: ${{ github.event_name == 'pull_request' }}
         with:
           ref: refs/pull/${{ github.event.pull_request.number }}/merge
+          persist-credentials: ${{ github.repository != 'geartentomushi/ladybird' }}
+
+      - name: Limit disk and memory usage on the GitHub-hosted runner
+        if: github.repository == 'geartentomushi/ladybird'
+        shell: bash
+        run: |
+          echo "CCACHE_MAXSIZE=2G" >> "$GITHUB_ENV"
+          echo "CMAKE_BUILD_PARALLEL_LEVEL=4" >> "$GITHUB_ENV"
+          echo "VCPKG_MAX_CONCURRENCY=4" >> "$GITHUB_ENV"
 
       - name: Build
         uses: ./.github/actions/build
@@ -92,7 +103,7 @@ jobs:
         timeout-minutes: 5
         working-directory: ${{ github.workspace }}/Build/Tests/LibWeb/test-web
         run: |
-          ../../../bin/test-web --verify-style -j10 \
+          ../../../bin/test-web --verify-style -j${{ github.repository == 'geartentomushi/ladybird' && '4' || '10' }} \
             -f Text/input/css/style-engine/ \
             -f Text/input/css/style-invalidation/
 
@@ -110,10 +121,20 @@ jobs:
             --python-executable "${{ env.pythonLocation }}/bin/python" \
             | tee -a "$GITHUB_STEP_SUMMARY"
 
+      - name: Check out pinned WPT for fork smoke tests
+        if: ${{ github.repository == 'geartentomushi/ladybird' && inputs.os_name == 'Linux' && (inputs.build_preset == 'Release' || inputs.build_preset == 'Sanitizer') }}
+        timeout-minutes: 10
+        uses: actions/checkout@v7.0.1
+        with:
+          repository: web-platform-tests/wpt
+          ref: f64282391a762b5e0a982c32f785d112299637c2
+          path: Tests/LibWeb/WPT/wpt
+          persist-credentials: false
+
       # Cloning WPT normally takes well under a minute, but now and then a clone stalls. Cut a stalled clone off and
       # start over, in a step of its own, so it can't use up the time the smoke tests have.
       - name: Clone WPT
-        if: ${{ inputs.os_name == 'Linux' && (inputs.build_preset == 'Release' || inputs.build_preset == 'Sanitizer') }}
+        if: ${{ github.repository != 'geartentomushi/ladybird' && inputs.os_name == 'Linux' && (inputs.build_preset == 'Release' || inputs.build_preset == 'Sanitizer') }}
         timeout-minutes: 10
         working-directory: ${{ github.workspace }}
         shell: bash
@@ -133,6 +154,9 @@ jobs:
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
+          if ${{ github.repository == 'geartentomushi/ladybird' }}; then
+            git config --global --add safe.directory "$GITHUB_WORKSPACE/Tests/LibWeb/WPT/wpt"
+          fi
           export ASAN_OPTIONS="log_path=\"${GITHUB_WORKSPACE}/Build/asan.log\""
           export UBSAN_OPTIONS="log_path=\"${GITHUB_WORKSPACE}/Build/ubsan.log\""
           Meta/WPT.sh run --test-list Tests/LibWeb/WPT/ci-smoke-tests.txt

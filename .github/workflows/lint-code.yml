@@ -6,9 +6,20 @@ on:
   pull_request:
 
 jobs:
+  fork-commit-messages:
+    name: Fork commit messages
+    if: github.repository == 'geartentomushi/ladybird' && github.event_name == 'pull_request'
+    permissions:
+      contents: read
+      pull-requests: read
+    uses: ./.github/workflows/lint-commits.yml
+
   lint:
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    name: ${{ github.repository == 'geartentomushi/ladybird' && 'Fork code lint' || 'lint' }}
+    runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    if: github.repository == 'LadybirdBrowser/ladybird' || github.repository == 'geartentomushi/ladybird'
+    permissions:
+      contents: read
     container:
       image: ghcr.io/ladybirdbrowser/ladybird-ci:2026.11.21
 
@@ -30,10 +41,11 @@ jobs:
         run: "${GITHUB_WORKSPACE}/Meta/lint-ci.sh"
 
   flap:
+    name: ${{ github.repository == 'geartentomushi/ladybird' && 'Fork Flap checks' || 'flap' }}
     permissions:
       contents: read
-    runs-on: blacksmith-2vcpu-ubuntu-2404
-    if: github.repository == 'LadybirdBrowser/ladybird'
+    runs-on: ${{ github.repository == 'LadybirdBrowser/ladybird' && 'blacksmith-2vcpu-ubuntu-2404' || 'ubuntu-24.04' }}
+    if: github.repository == 'LadybirdBrowser/ladybird' || github.repository == 'geartentomushi/ladybird'
     container:
       image: ghcr.io/ladybirdbrowser/ladybird-ci:2026.11.21
 

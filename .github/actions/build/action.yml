@@ -31,6 +31,10 @@ inputs:
     description: 'Whether to restore and save caches of downloaded files and build artifacts'
     required: false
     default: 'true'
+  strip_install:
+    description: 'Whether to strip debug information from the installed binaries'
+    required: false
+    default: 'true'
 
 runs:
   using: 'composite'
@@ -85,6 +89,13 @@ runs:
           elif ${{ inputs.toolchain == 'GNU' }} ; then
             echo "host_cc=gcc" >> "$GITHUB_OUTPUT"
             echo "host_cxx=g++" >> "$GITHUB_OUTPUT"
+          fi
+
+          if ${{ github.repository == 'geartentomushi/ladybird' && inputs.build_preset == 'Release' }} ; then
+            CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_BUILD_TYPE=Release -DVCPKG_INSTALL_OPTIONS=--clean-after-build"
+            if ${{ inputs.toolchain == 'Clang' }} ; then
+              CMAKE_OPTIONS="$CMAKE_OPTIONS -DCMAKE_CXX_FLAGS=-gline-tables-only"
+            fi
           fi
         elif ${{ inputs.os == 'macOS' }} ; then
           echo "host_cc=$(xcrun --find clang)" >> "$GITHUB_OUTPUT"
@@ -181,7 +192,12 @@ runs:
     - name: Install
       working-directory: ${{ github.workspace }}/Build
       shell: bash
-      run: cmake --install . --strip --prefix "${{ github.workspace }}/Install"
+      run: |
+        install_flags=()
+        if ${{ inputs.strip_install == 'true' }}; then
+          install_flags+=(--strip)
+        fi
+        cmake --install . "${install_flags[@]}" --prefix "${{ github.workspace }}/Install"
 
     - name: Save the WebAssembly spec test suite
       if: ${{ github.ref == 'refs/heads/master' && inputs.use_caches == 'true' && inputs.os != 'Windows' && steps.wasm-spec-tests-cache.outputs.cache-hit != 'true' }}

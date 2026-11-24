@@ -161,6 +161,10 @@ print_help() {
               N=0 to auto-enable if possible, with up to one instance per processor
               N=1 to disable parallel mode (default)
               N>1 to allow at most N instances
+      --total-chunks N --this-chunk N --chunk-type TYPE
+          Run one WPT shard. Use this instead of --parallel-instances for sharding across machines.
+      --no-fail-on-unexpected
+          Record unexpected test results without failing the command for them.
       --log PATH
           Alias for --log-raw PATH
       --test-list PATH
@@ -222,7 +226,7 @@ set_logging_flags()
 
 headless=1
 ARG=$1
-while [[ "$ARG" =~ ^(--show-window|--debug-process|--parallel-instances|--test-list|(--log(-(raw|unittest|xunit|html|mach|tbpl|grouped|chromium|wptreport|wptscreenshot))?))$ ]]; do
+while [[ "$ARG" =~ ^(--show-window|--debug-process|--parallel-instances|--test-list|--this-chunk|--total-chunks|--chunk-type|--no-fail-on-unexpected|(--log(-(raw|unittest|xunit|html|mach|tbpl|grouped|chromium|wptreport|wptscreenshot))?))$ ]]; do
     case "$ARG" in
         --show-window)
             headless=0
@@ -246,6 +250,14 @@ while [[ "$ARG" =~ ^(--show-window|--debug-process|--parallel-instances|--test-l
         --parallel-instances)
             PARALLEL_INSTANCES="${2}"
             shift
+            ;;
+        --this-chunk|--total-chunks|--chunk-type)
+            [ -n "${2}" ] || usage
+            WPT_ARGS+=("$ARG" "${2}")
+            shift
+            ;;
+        --no-fail-on-unexpected)
+            WPT_ARGS+=("$ARG")
             ;;
         *)
             set_logging_flags "${ARG}" "${2}"

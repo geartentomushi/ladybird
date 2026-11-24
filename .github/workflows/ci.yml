@@ -86,6 +86,20 @@ jobs:
       clang_plugins: ${{ matrix.clang_plugins }}
       container: ${{ matrix.container }}
 
+  Fork-Linux:
+    if: github.repository == 'geartentomushi/ladybird'
+    name: Fork Linux, x86_64, Release, Clang (build and tests)
+    permissions:
+      contents: read
+    uses: ./.github/workflows/build-and-test.yml
+    with:
+      toolchain: 'Clang'
+      os_name: 'Linux'
+      runner_labels: '["ubuntu-24.04"]'
+      arch: 'x86_64'
+      build_preset: 'Release'
+      container: *ci_container
+
   # The macOS Sanitizer build has a 2nd consumer: the macOS AX tests run against the app bundle the Sanitizer build
   # packages. We put it outside the matrix to make those tests wait for this build alone, not for the slowest job in it.
   macOS-Sanitizer:
