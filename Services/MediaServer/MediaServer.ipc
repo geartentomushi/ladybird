@@ -18,7 +18,7 @@ endpoint MediaServer
     connect_video_presentation_channel(int client_id, IPC::TransportHandle handle) =|
 
     request_file_media_support(u64 request_id, String type, String subtype, Optional<String> codecs_parameter) =|
-    request_decoder_capabilities(u64 request_id, String codecs_parameter) =|
+    request_decoder_capabilities(u64 request_id, String codecs_parameter, bool requires_frames_that_read_back) =|
 
     decode_audio_data(u64 request_id, Core::AnonymousBuffer data, u32 output_sample_rate) =|
 

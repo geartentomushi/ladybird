@@ -501,6 +501,20 @@ fn visit_compilation(
         visit_list(sheet.rules(), sheet, source, &context, environment, host, publication);
         return;
     }
+    // OPTIMIZATION: Scripts insert most rules at the top level of a sheet. Looking there first spares the search below
+    //               from descending into every rule before the one it looks for.
+    let mut found_at_top_level = false;
+    let _ = sheet.rules().visit_rules(&mut |rule| {
+        if rule.identity() != rule_identity {
+            return std::ops::ControlFlow::Continue(());
+        }
+        visit_rule(rule, sheet, source, &context, environment, host, publication);
+        found_at_top_level = true;
+        std::ops::ControlFlow::Break(())
+    });
+    if found_at_top_level {
+        return;
+    }
     #[expect(
         clippy::too_many_arguments,
         reason = "Targeted traversal carries a rule identity in addition to the compilation inputs"

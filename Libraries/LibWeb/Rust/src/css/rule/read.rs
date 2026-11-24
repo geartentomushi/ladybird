@@ -65,9 +65,28 @@ pub extern "C" fn rust_rule_list_has_implicit_scope(list: &NativeRuleList) -> bo
 }
 
 #[unsafe(no_mangle)]
-pub extern "C" fn rust_rule_list_has_only_style_rules(list: &NativeRuleList) -> bool {
+pub extern "C" fn rust_rule_has_implicit_scope(rule: &NativeRule) -> bool {
+    fn walk(rule: RuleRef<'_>) -> ControlFlow<()> {
+        if rule.scope().is_some_and(|scope| scope.start.is_none()) {
+            return ControlFlow::Break(());
+        }
+        rule.visit_children(&mut walk)
+    }
+    walk(RuleRef::Materialized(rule)).is_break()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rust_rule_list_has_only_conditional_style_rules(list: &NativeRuleList, media_allowed: bool) -> bool {
     list.visit_descendant_rules(&mut |rule| {
-        if matches!(rule.rule_type(), NativeRuleType::Style | NativeRuleType::NestedDeclarations) {
+        let allowed = match rule.rule_type() {
+            NativeRuleType::Style
+            | NativeRuleType::NestedDeclarations
+            | NativeRuleType::Container
+            | NativeRuleType::Supports => true,
+            NativeRuleType::Media => media_allowed,
+            _ => false,
+        };
+        if allowed {
             ControlFlow::Continue(())
         } else {
             ControlFlow::Break(())

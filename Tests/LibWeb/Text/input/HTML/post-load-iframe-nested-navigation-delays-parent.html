@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<body>
+<script>
+    asyncTest(async done => {
+        const server = httpTestServer();
+        const gate = uniqueID();
+        const nestedGate = uniqueID();
+        const gateURL = await server.createEcho("GET", "/post-load-nested-navigation-parent-gate", {
+            status: 404,
+            headers: { "Cache-Control": "no-store" },
+            body: "",
+            wait_for_unblock: gate,
+        });
+        const nestedURL = await server.createEcho("GET", "/post-load-nested-navigation-child-image", {
+            status: 404,
+            headers: { "Cache-Control": "no-store" },
+            body: "",
+            wait_for_unblock: nestedGate,
+        });
+        const unblockURL = token => new URL(`/unblock/${token}`, gateURL);
+
+        const frame = document.createElement("iframe");
+        frame.srcdoc = `
+            <img id="gate" src="${gateURL}">
+            <script>
+                const nextTask = () => new Promise(resolve => {
+                    const channel = new MessageChannel();
+                    channel.port1.onmessage = () => {
+                        channel.port1.close();
+                        channel.port2.close();
+                        resolve();
+                    };
+                    channel.port2.postMessage(null);
+                });
+                document.addEventListener("DOMContentLoaded", () => {
+                    const child = document.createElement("iframe");
+                    child.srcdoc = "<body>Child</body>";
+                    child.addEventListener("load", async () => {
+                        const nested = child.contentDocument.createElement("iframe");
+                        nested.srcdoc = '<title>Nested document</title><img src="${nestedURL}">';
+                        child.contentDocument.body.append(nested);
+
+                        let releasedNestedImage = false;
+                        const parentLoadedInOrder = new Promise(resolve => {
+                            addEventListener("load", () => {
+                                resolve(releasedNestedImage
+                                    && nested.contentDocument.title === "Nested document"
+                                    && nested.contentDocument.readyState === "complete");
+                            }, { once: true });
+                        });
+                        const gateSettled = new Promise(resolve => {
+                            document.getElementById("gate").addEventListener("error", resolve, { once: true });
+                        });
+                        await fetch("${unblockURL(gate)}");
+                        await gateSettled;
+                        // Give the parent load check and any load task it queues a turn.
+                        await nextTask();
+                        await nextTask();
+                        const parentStillLoading = document.readyState !== "complete";
+                        releasedNestedImage = true;
+                        await fetch("${unblockURL(nestedGate)}");
+                        parent.postMessage(await parentLoadedInOrder && parentStillLoading, "*");
+                    }, { once: true });
+                    document.body.append(child);
+                }, { once: true });
+            <\/script>
+        `;
+        addEventListener("message", event => {
+            if (event.source !== frame.contentWindow)
+                return;
+            println(`Parent load waited for the nested navigation: ${event.data}`);
+            done();
+        });
+        document.body.append(frame);
+    });
+</script>

@@ -196,7 +196,11 @@ WEB_API TreeScopeID style_engine_tree_scope_for(DOM::Node&);
 // being rebuilt. Patching what moved is the point: retiring identities that did not change would
 // turn an `insertRule` into a program change over the whole sheet.
 WEB_API void record_style_rule_inserted(CSSRule&);
-WEB_API void record_style_rule_inserted(RustRule const&, StyleSheetState&);
+enum class RuleInsertionDepth {
+    TopLevel,
+    Nested,
+};
+WEB_API void record_style_rule_inserted(RustRule const&, StyleSheetState&, RuleInsertionDepth = RuleInsertionDepth::Nested);
 WEB_API void record_imported_style_sheet_loaded(u64 import_rule_identity, StyleSheetState&);
 WEB_API void record_style_rule_removed(CSSRule&);
 WEB_API void record_style_rule_removed(StyleSheetState&, RustRule const&, StyleSheetState const* detached_import = nullptr);

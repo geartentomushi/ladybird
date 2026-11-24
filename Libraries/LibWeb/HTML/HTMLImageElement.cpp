@@ -1295,7 +1295,8 @@ after_step_7:
         self.remove_alt_text_shadow_tree();
 
         // 24. Let delay load event be true if the img's lazy loading attribute is in the Eager state, or if scripting is disabled for the img, and false otherwise.
-        auto delay_load_event = self.lazy_loading_attribute() == LazyLoading::Eager;
+        // INTEROP: An image started by an already loaded document does not delay its ancestor's load event.
+        auto delay_load_event = self.lazy_loading_attribute() == LazyLoading::Eager && self.document().load_event_still_needed();
 
         // When delay load event is true, fetching the image must delay the load event of the element's node document
         // until the task that is queued by the networking task source once the resource has been fetched (defined below) has been run.

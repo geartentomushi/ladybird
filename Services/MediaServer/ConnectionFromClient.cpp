@@ -168,14 +168,14 @@ static Media::MediaSupportInfo file_media_support_for(String type, String subtyp
 }
 
 // The type is decodable only if every codec it lists is, and it plays as well as its weakest codec does.
-static Optional<Media::DecoderCapabilities> decoder_capabilities_for_codecs(StringView codecs_parameter)
+static Optional<Media::DecoderCapabilities> decoder_capabilities_for_codecs(StringView codecs_parameter, bool requires_frames_that_read_back)
 {
     Optional<Media::DecoderCapabilities> combined_capabilities;
     for (auto codec_string : codecs_parameter.split_view(',', SplitBehavior::KeepEmpty)) {
         auto codec = Media::parse_codec_parameters_string(codec_string.trim_whitespace());
         if (!codec.has_value())
             return {};
-        auto codec_capabilities = Media::decoder_capabilities(*codec);
+        auto codec_capabilities = Media::decoder_capabilities(*codec, requires_frames_that_read_back);
         if (!codec_capabilities.has_value())
             return {};
         if (!combined_capabilities.has_value()) {
@@ -203,11 +203,11 @@ void ConnectionFromClient::request_file_media_support(u64 request_id, String typ
     thread->detach();
 }
 
-void ConnectionFromClient::request_decoder_capabilities(u64 request_id, String codecs_parameter)
+void ConnectionFromClient::request_decoder_capabilities(u64 request_id, String codecs_parameter, bool requires_frames_that_read_back)
 {
     auto& main_thread_event_loop = Core::EventLoop::current();
-    auto thread = Threading::Thread::construct("Capabilities"sv, [strong_this = NonnullRefPtr(*this), &main_thread_event_loop, request_id, codecs_parameter = move(codecs_parameter)] mutable -> intptr_t {
-        auto capabilities = decoder_capabilities_for_codecs(codecs_parameter);
+    auto thread = Threading::Thread::construct("Capabilities"sv, [strong_this = NonnullRefPtr(*this), &main_thread_event_loop, request_id, codecs_parameter = move(codecs_parameter), requires_frames_that_read_back] mutable -> intptr_t {
+        auto capabilities = decoder_capabilities_for_codecs(codecs_parameter, requires_frames_that_read_back);
         main_thread_event_loop.deferred_invoke([strong_this = move(strong_this), request_id, capabilities] {
             if (strong_this->is_open())
                 strong_this->async_decoder_capabilities_reported(request_id, capabilities);

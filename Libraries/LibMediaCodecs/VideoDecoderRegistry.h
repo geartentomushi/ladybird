@@ -26,15 +26,18 @@ struct VideoDecoderRegistration {
     DecoderCapabilitiesFunction capabilities;
     VideoDecoderFactory create;
     bool supports_alpha { false };
+    // Whether every frame the decoder outputs can be read back into memory, rather than some staying in surfaces only
+    // a GPU can read.
+    bool outputs_frames_that_read_back { true };
 };
 
 // Each process installs the sets of video decoders it hosts, in priority order, before it decodes anything.
 MEDIACODECS_API void install_video_decoders(Vector<ReadonlySpan<VideoDecoderRegistration>>);
 
-MEDIACODECS_API Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const&);
+MEDIACODECS_API Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const&, bool requires_frames_that_read_back = false);
 
 // Identifies the highest-priority decoder after the optionally-provided selection that can handle this codec.
-MEDIACODECS_API VideoDecoderSelection select_video_decoder(ParsedCodec const&, VideoDecoderSelection after = {}, bool requires_alpha = false);
+MEDIACODECS_API VideoDecoderSelection select_video_decoder(ParsedCodec const&, VideoDecoderSelection after = {}, bool requires_alpha = false, bool requires_frames_that_read_back = false);
 
 MEDIACODECS_API DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_video_decoder(VideoDecoderSelection, CodecID, ReadonlyBytes codec_initialization_data, VideoDecoderOptions const& = {});
 

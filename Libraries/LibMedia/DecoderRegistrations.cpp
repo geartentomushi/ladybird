@@ -28,8 +28,14 @@ static DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_remote_video_decoder(C
 
 ReadonlySpan<VideoDecoderRegistration> remote_video_decoders()
 {
+    // The decoder server's hardware decoders on Linux decode into dma-bufs, which this process cannot read back.
+#ifdef AK_OS_LINUX
+    static constexpr bool outputs_frames_that_read_back = false;
+#else
+    static constexpr bool outputs_frames_that_read_back = true;
+#endif
     static Array const decoders {
-        VideoDecoderRegistration { RemoteVideoDecoder::capabilities, create_remote_video_decoder },
+        VideoDecoderRegistration { RemoteVideoDecoder::capabilities, create_remote_video_decoder, false, outputs_frames_that_read_back },
     };
     return decoders;
 }

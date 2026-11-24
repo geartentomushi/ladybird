@@ -1240,11 +1240,14 @@ impl OutsideMarkerLine {
 struct LaidOutOutsideMarker {
     marker: Node,
     layout: formatting_context::ChildLayout,
+    /// How far the dominant baseline of the list item, which the marker aligns its own dominant baseline with, lies above
+    /// the alphabetic one that the line box the marker creates is built around.
+    distance_to_dominant_baseline: CssPixels,
 }
 
 impl LaidOutOutsideMarker {
     fn line(&self) -> Option<OutsideMarkerLine> {
-        let baseline = self.layout.baselines().first?;
+        let baseline = self.layout.baselines().first? + self.distance_to_dominant_baseline;
         Some(OutsideMarkerLine {
             ascent: baseline,
             descent: self.layout.cells().content_block_size() - baseline,
@@ -3923,7 +3926,13 @@ impl<'pass> BlockFormattingContext<'pass> {
             list_item.percentage_block_insets_have_definite_basis,
         );
         layout.report_percentage_block_size_dependency_of(run, marker);
-        Some(LaidOutOutsideMarker { marker, layout })
+        Some(LaidOutOutsideMarker {
+            marker,
+            layout,
+            distance_to_dominant_baseline: formatting_context::distance_from_alphabetic_to_dominant_baseline(
+                self.style(list_item.node),
+            ),
+        })
     }
 
     /// Places the outside `marker` of `list_item`, and returns the block end of the marker's border box in the list
@@ -3936,7 +3945,7 @@ impl<'pass> BlockFormattingContext<'pass> {
         list_item_first_baseline: Option<CssPixels>,
     ) -> CssPixels {
         let marker_line = marker.line();
-        let LaidOutOutsideMarker { marker, layout } = marker;
+        let LaidOutOutsideMarker { marker, layout, .. } = marker;
         let marker_style = self.style(marker);
         let marker_metrics = layout.cells();
         let marker_block_size = marker_metrics.content_block_size();
