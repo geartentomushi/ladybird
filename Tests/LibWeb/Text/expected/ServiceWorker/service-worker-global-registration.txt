@@ -1,0 +1,4 @@
+{"phase":"script","scope":true,"updateViaCache":"none","sameObjects":true,"state":"parsed","installing":false,"active":false}
+{"phase":"install","scope":true,"updateViaCache":"none","sameObjects":true,"state":"installing","installing":true,"active":false}
+{"phase":"activate","scope":true,"updateViaCache":"none","sameObjects":true,"state":"activating","installing":false,"active":true}
+unregister() resolves with: true

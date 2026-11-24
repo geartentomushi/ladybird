@@ -9,6 +9,7 @@
 #include <AK/Utf16String.h>
 #include <LibIPC/Forward.h>
 #include <LibURL/URL.h>
+#include <LibWebCommon/Bindings/ServiceWorkerRegistration.h>
 #include <LibWebCommon/Export.h>
 #include <LibWebCommon/HTML/Scripting/SerializedEnvironmentSettingsObject.h>
 #include <LibWebCommon/HTML/SerializationRecords.h>
@@ -22,6 +23,12 @@ namespace Web::HTML {
 // less than a process, but still has a heap, JIT threads and connections to itself, and one page can start them all.
 // The Browser allows this many per top-level site, and a WebContent process this many on its threads.
 static constexpr size_t maximum_worker_count = 64;
+
+// The service worker registration that a service worker agent runs for.
+struct ServiceWorkerRegistrationSnapshot {
+    URL::URL scope_url;
+    Bindings::ServiceWorkerUpdateViaCache update_via_cache { Bindings::ServiceWorkerUpdateViaCache::Imports };
+};
 
 struct WEBCOMMON_API WorkerAgentStartRequest {
     URL::URL url;
@@ -37,11 +44,18 @@ struct WEBCOMMON_API WorkerAgentStartRequest {
     // loops, which have no display connection of their own.
     double maximum_frames_per_second { 60.0 };
     WorkerAgentOwnerToken owner_token { 0 };
+    Optional<ServiceWorkerRegistrationSnapshot> service_worker_registration;
 };
 
 }
 
 namespace IPC {
+
+template<>
+WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::HTML::ServiceWorkerRegistrationSnapshot const&);
+
+template<>
+WEBCOMMON_API ErrorOr<Web::HTML::ServiceWorkerRegistrationSnapshot> decode(Decoder&);
 
 template<>
 WEBCOMMON_API ErrorOr<void> encode(Encoder&, Web::HTML::WorkerAgentStartRequest const&);
