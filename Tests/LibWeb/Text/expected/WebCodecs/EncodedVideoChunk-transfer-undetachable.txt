@@ -1,0 +1,3 @@
+Exception: TypeError
+Transferable buffer byteLength: 4
+Memory buffer byteLength: 65536
