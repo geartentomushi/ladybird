@@ -1,2 +1,3 @@
 Entries under a transparent ancestor: 0
+Visible sibling reported: true
 Largest candidate reported after the opacity change: true

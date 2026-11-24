@@ -1,8 +1,11 @@
 <!DOCTYPE html>
 <script src="../include.js"></script>
-<div id="ancestor" style="opacity: 0">
-    <div style="font-size: 20px">Small candidate</div>
-    <div><div id="largest" style="font-size: 40px">Largest candidate</div></div>
+<div>
+    <div id="ancestor" style="opacity: 0">
+        <div id="small" style="font-size: 20px">Small candidate</div>
+        <div><div id="largest" style="font-size: 40px">Largest candidate</div></div>
+    </div>
+    <div id="visible" style="font-size: 16px">Visible sibling</div>
 </div>
 <script>
     asyncTest(async done => {
@@ -13,7 +16,8 @@
         await animationFrame();
         await animationFrame();
         entries.push(...observer.takeRecords());
-        println(`Entries under a transparent ancestor: ${entries.length}`);
+        println(`Entries under a transparent ancestor: ${entries.filter(entry => entry.id === "small" || entry.id === "largest").length}`);
+        println(`Visible sibling reported: ${entries.some(entry => entry.id === "visible")}`);
 
         document.getElementById("ancestor").style.opacity = "1";
         await animationFrame();
