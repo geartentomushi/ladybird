@@ -16,6 +16,7 @@
 #include <LibWeb/HTML/StructuredSerialize.h>
 #include <LibWeb/HTML/WorkerGlobalScope.h>
 #include <LibWebCommon/HTML/Scripting/SerializedEnvironmentSettingsObject.h>
+#include <LibWebCommon/HTML/WorkerAgentTypes.h>
 
 namespace Web::HTML {
 
@@ -32,7 +33,7 @@ public:
     explicit WorkerHost(URL::URL url, Web::HTML::WorkerType type, String name);
     ~WorkerHost();
 
-    void run(GC::Ref<Web::Page>, Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject const&, Web::HTML::RequestCredentials, Web::HTML::AgentType, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself);
+    void run(GC::Ref<Web::Page>, Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject const&, Web::HTML::RequestCredentials, Web::HTML::AgentType, URL::Origin origin, Web::HTML::EnvironmentId environment_id, bool has_process_to_itself, Optional<Web::HTML::ServiceWorkerRegistrationSnapshot> service_worker_registration);
     void connect_shared_worker(Web::HTML::TransferDataEncoder message_port_data, Web::HTML::SerializedEnvironmentSettingsObject);
 
     void run_service_worker_lifecycle_step(Web::HTML::ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
