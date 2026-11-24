@@ -1,0 +1,13 @@
+Harness status: OK
+
+Found 8 tests
+
+8 Pass
+Pass	tests for navigator.userAgentData
+Pass	test NavigatorUAData.toJSON() output
+Pass	getHighEntropyValues() should return low-entropy hints by default (1).
+Pass	getHighEntropyValues() should return low-entropy hints by default (2).
+Pass	getHighEntropyValues() should return low-entropy hints by default (3).
+Pass	getHighEntropyValues() should return low-entropy hints by default (4).
+Pass	Arch should be one of two permitted values.
+Pass	Platform version and wow64-ness on Fuchsia and Linux should be fixed values

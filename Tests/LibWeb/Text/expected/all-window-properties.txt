@@ -351,6 +351,7 @@ NavigationHistoryEntry
 NavigationPrecommitController
 NavigationTransition
 Navigator
+NavigatorUAData
 Node
 NodeIterator
 NodeList

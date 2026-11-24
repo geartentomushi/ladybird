@@ -29,6 +29,7 @@ struct SerializedDocument {
     URL::Origin site_for_cookies { URL::Origin::create_opaque() };
     bool relevant_settings_object_is_secure_context { false };
     SerializedPolicyContainer relevant_settings_object_policy_container;
+    bool allows_high_entropy_user_agent_values { false };
 };
 
 struct SerializedWindow {
@@ -48,6 +49,7 @@ struct SerializedWorkerGlobalScope {
     // AnimationFrameProvider. Recorded at serialization time so that a nested dedicated
     // worker can compute its own supported-ness without reaching across processes.
     bool is_supported_animation_frame_provider { false };
+    bool allows_high_entropy_user_agent_values { false };
 };
 
 using SerializedGlobal = Variant<SerializedWindow, SerializedWorkerGlobalScope>;

@@ -6,11 +6,16 @@
 
 #pragma once
 
+#include <AK/String.h>
 #include <AK/Utf16FlyString.h>
 #include <AK/Utf16String.h>
+#include <LibGC/Cell.h>
+#include <LibGC/Ptr.h>
 #include <LibWeb/Forward.h>
 
 namespace Web::HTML {
+
+class NavigatorUAData;
 
 class NavigatorIDMixin {
 public:
@@ -40,6 +45,7 @@ public:
 
     // https://html.spec.whatwg.org/multipage/system-state.html#dom-navigator-useragent
     Utf16String user_agent() const;
+    GC::Ref<NavigatorUAData> user_agent_data();
 
     // https://html.spec.whatwg.org/multipage/system-state.html#dom-navigator-vendor
     Utf16FlyString vendor() const;
@@ -58,6 +64,11 @@ public:
 
 protected:
     virtual EnvironmentSettingsObject const& navigator_id_settings_object() const = 0;
+    void visit_navigator_id_edges(GC::Cell::Visitor&);
+
+private:
+    GC::Ptr<NavigatorUAData> m_user_agent_data;
+    String m_user_agent_data_key;
 };
 
 }

@@ -1,0 +1,12 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    promiseTest(async () => {
+        const frame = document.createElement("iframe");
+        document.body.append(frame);
+        const promise = frame.contentWindow.navigator.userAgentData.getHighEntropyValues(["architecture"]);
+        frame.remove();
+        const result = await Promise.race([promise, new Promise(resolve => setTimeout(resolve, 1000))]);
+        println(`Promise resolved with high-entropy hints: ${typeof result?.architecture === "string"}`);
+    });
+</script>

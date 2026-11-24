@@ -20,6 +20,8 @@ StringView policy_controlled_feature_token(PolicyControlledFeature feature)
         return "autoplay"sv;
     case PolicyControlledFeature::Camera:
         return "camera"sv;
+    case PolicyControlledFeature::ClientHintsUAHighEntropyValues:
+        return "ch-ua-high-entropy-values"sv;
     case PolicyControlledFeature::CrossOriginIsolated:
         return "cross-origin-isolated"sv;
     case PolicyControlledFeature::EncryptedMedia:
@@ -75,6 +77,8 @@ DefaultAllowlist default_allowlist(PolicyControlledFeature feature)
     // https://html.spec.whatwg.org/multipage/infrastructure.html#focus-without-user-activation-feature
     // AD-HOC: Allow cross-origin script focus as in Chromium and Firefox; the specification's default is "self".
     case PolicyControlledFeature::FocusWithoutUserActivation:
+    // https://wicg.github.io/ua-client-hints/#permisisons-policy-integration
+    case PolicyControlledFeature::ClientHintsUAHighEntropyValues:
     // https://w3c.github.io/gamepad/#permission-policy
     case PolicyControlledFeature::Gamepad:
     // https://w3c.github.io/picture-in-picture/#permissions-policy

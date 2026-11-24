@@ -75,6 +75,7 @@ bool Navigator::webdriver() const
 void Navigator::visit_edges(GC::Cell::Visitor& visitor)
 {
     Base::visit_edges(visitor);
+    visit_navigator_id_edges(visitor);
     visitor.visit(m_window);
     visitor.visit(m_battery_promise);
     visitor.visit(m_mime_type_array);
