@@ -7,6 +7,7 @@
 #include <AK/RefPtr.h>
 #include <LibGC/Heap.h>
 #include <LibIPC/File.h>
+#include <LibHTTP/Header.h>
 #include <LibJS/Runtime/ConsoleObject.h>
 #include <LibWeb/Bindings/DedicatedWorkerGlobalScope.h>
 #include <LibWeb/Bindings/MessageEvent.h>
@@ -25,6 +26,7 @@
 #include <LibWeb/HTML/Scripting/ClassicScript.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HTML/Scripting/Fetching.h>
+#include <LibWeb/HTML/Scripting/ModuleScript.h>
 #include <LibWeb/HTML/Scripting/RemoteEnvironmentSettings.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
 #include <LibWeb/HTML/Scripting/WorkerEnvironmentSettingsObject.h>
@@ -216,8 +218,13 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
         destination = Web::Fetch::Infrastructure::Request::Destination::ServiceWorker;
 
     // In both cases, let performFetch be the following perform the fetch hook given request, isTopLevel, and processCustomFetchResponse:
-    Web::HTML::PerformTheFetchHook perform_fetch = GC::create_function(inside_settings->heap(), GC::captures(inside_settings, outside_settings, worker_global_scope, is_shared, has_process_to_itself), [](auto& inside_settings, auto& outside_settings, auto& worker_global_scope, auto& is_shared, auto& has_process_to_itself, NonnullRefPtr<Web::Fetch::Infrastructure::Request> request, Web::HTML::TopLevelModule is_top_level, Web::HTML::ProcessCustomFetchResponse process_custom_fetch_response) -> Web::WebIDL::ExceptionOr<void> {
+    Web::HTML::PerformTheFetchHook perform_fetch = GC::create_function(inside_settings->heap(), GC::captures(inside_settings, outside_settings, worker_global_scope, is_shared, is_service_worker, has_process_to_itself), [](auto& inside_settings, auto& outside_settings, auto& worker_global_scope, auto& is_shared, auto& is_service_worker, auto& has_process_to_itself, NonnullRefPtr<Web::Fetch::Infrastructure::Request> request, Web::HTML::TopLevelModule is_top_level, Web::HTML::ProcessCustomFetchResponse process_custom_fetch_response) -> Web::WebIDL::ExceptionOr<void> {
         auto& realm = inside_settings->realm();
+
+        // https://w3c.github.io/ServiceWorker/#update-algorithm (perform the fetch hook, step 1)
+        // NB: The agent fetches the main script again, so it sends the header the Update algorithm sent.
+        if (is_service_worker && is_top_level == Web::HTML::TopLevelModule::Yes)
+            request->header_list()->append(HTTP::Header::isomorphic_encode("Service-Worker"sv, "script"sv));
 
         Web::Fetch::Infrastructure::FetchAlgorithms::Input fetch_algorithms_input { Web::Fetch::Engine::BodyIntent::ConsumeForCallback };
 
@@ -365,6 +372,7 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
         } else {
             // FIXME: Fail to run a module service worker whose evaluation throws.
             (void)as<Web::HTML::ModuleScript>(*script).run();
+            }
         }
         protected_this->notify_script_ran();
 
