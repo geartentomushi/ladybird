@@ -13,7 +13,14 @@
         const context = canvas.getContext("2d");
         context.drawImage(video, 0, 0);
         println(`Left half alpha: ${context.getImageData(8, 16, 1, 1).data[3]}`);
+        println(`Middle stripe alpha: ${context.getImageData(16, 16, 1, 1).data[3]}`);
         println(`Right half alpha: ${context.getImageData(24, 16, 1, 1).data[3]}`);
+
+        context.fillStyle = "blue";
+        context.fillRect(0, 0, 32, 32);
+        context.drawImage(video, 0, 0);
+        const [red, , blue, alpha] = context.getImageData(16, 16, 1, 1).data;
+        println(`Middle stripe blends red video and blue background: ${Math.abs(red - 128) <= 3 && Math.abs(blue - 127) <= 3 && alpha === 255}`);
         done();
     });
 </script>

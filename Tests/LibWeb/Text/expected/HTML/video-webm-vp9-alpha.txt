@@ -1,2 +1,4 @@
 Left half alpha: 0
+Middle stripe alpha: 128
 Right half alpha: 255
+Middle stripe blends red video and blue background: true
