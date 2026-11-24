@@ -12,6 +12,11 @@
             self.clients.claim().then(
                 () => report("claim() before activation resolved"),
                 error => report("claim() before activation rejects with " + error.name));
+            self.addEventListener("install", () => {
+                self.clients.claim().then(
+                    () => report("claim() during install resolved"),
+                    error => report("claim() during install rejects with " + error.name));
+            });
             self.addEventListener("activate", event => {
                 event.waitUntil(self.clients.claim().then(
                     value => report("claim() during activate resolves with " + value),
