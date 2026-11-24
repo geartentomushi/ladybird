@@ -5743,8 +5743,10 @@ impl<'pass> GridFormattingContext<'pass> {
             .items
             .iter()
             .copied()
-            .filter(|&item| self.item_contributes_to_track_sizing(item, Axis::Row))
-            .filter_map(row_of_aligned_item)
+            .filter_map(|item| {
+                let row = row_of_aligned_item(item)?;
+                self.item_contributes_to_track_sizing(item, Axis::Row).then_some(row)
+            })
             .collect();
         for (index, item) in self.items.iter().copied().enumerate() {
             let Some(row) = row_of_aligned_item(item) else {
