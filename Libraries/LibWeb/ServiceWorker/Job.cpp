@@ -346,7 +346,7 @@ void update_worker_state(HTML::EventLoop& event_loop, ServiceWorkerRecord& worke
 }
 
 // https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 8 and 9)
-static void fire_update_found(HTML::EventLoop& event_loop, Registration& registration)
+void fire_update_found(HTML::EventLoop& event_loop, Registration& registration)
 {
     // 8. Let settingsObjects be all environment settings objects whose origin is registration's scope url's origin.
     // 9. For each settingsObject of settingsObjects, queue a task on settingsObject's responsible event loop in the DOM

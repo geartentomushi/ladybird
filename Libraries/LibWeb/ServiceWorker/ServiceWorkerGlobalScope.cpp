@@ -189,9 +189,10 @@ void ServiceWorkerGlobalScope::run_lifecycle_step(HTML::ServiceWorkerLifecycleSt
     if (m_registration) {
         auto& event_loop = HTML::relevant_settings_object(*this).responsible_event_loop();
         if (step == HTML::ServiceWorkerLifecycleStep::Install) {
-            // https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 1-3)
+            // https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 1-3 and 8-9)
             update_registration_state(event_loop, *m_registration, RegistrationWorkerSlot::Installing, m_service_worker);
             update_worker_state(event_loop, *m_service_worker, ServiceWorkerState::Installing);
+            fire_update_found(event_loop, *m_registration);
             on_complete = GC::create_function(GC::Heap::the(), GC::captures(*this, on_complete), [](ServiceWorkerGlobalScope& self, GC::Ref<GC::Function<void(bool)>>& on_complete, bool succeeded) {
                 self.did_finish_install(succeeded);
                 on_complete->function()(succeeded);

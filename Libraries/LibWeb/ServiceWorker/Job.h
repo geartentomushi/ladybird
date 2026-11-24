@@ -95,4 +95,7 @@ void update_registration_state(HTML::EventLoop&, Registration&, RegistrationWork
 // https://w3c.github.io/ServiceWorker/#update-state-algorithm
 void update_worker_state(HTML::EventLoop&, ServiceWorkerRecord&, ServiceWorkerState);
 
+// https://w3c.github.io/ServiceWorker/#installation-algorithm (steps 8 and 9)
+void fire_update_found(HTML::EventLoop&, Registration&);
+
 }
