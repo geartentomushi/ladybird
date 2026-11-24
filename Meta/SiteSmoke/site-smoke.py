@@ -323,9 +323,9 @@ def sample_render(bidi, context, row, image_path, errors):
         row["dom_error"] = str(error)
     params["expression"] = (
         "document.documentElement ? "
-        "[document.documentElement.scrollWidth, document.documentElement.scrollHeight].join('x') : ''"
+        "document.documentElement.scrollWidth + 'x' + document.documentElement.scrollHeight : ''"
     )
-    with contextlib.suppress(*errors):
+    with contextlib.suppress(*errors, ValueError):
         result = bidi.command("script.evaluate", params)
         if result["type"] == "success" and result["result"]["type"] == "string" and result["result"]["value"]:
             width, height = map(int, result["result"]["value"].split("x"))
