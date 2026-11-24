@@ -65,6 +65,13 @@ DecoderErrorOr<u64> VideoFramesAwaitingOutput::add(CodedFrame const& coded_frame
     return key;
 }
 
+void VideoFramesAwaitingOutput::set_alpha_plane(u64 key, AlphaPlane plane)
+{
+    auto frame = m_frames.find(key);
+    VERIFY(frame != m_frames.end());
+    frame->value.alpha_plane = move(plane);
+}
+
 Optional<VideoFramesAwaitingOutput::Frame> VideoFramesAwaitingOutput::take(i64 key)
 {
     return m_frames.take(static_cast<u64>(key));

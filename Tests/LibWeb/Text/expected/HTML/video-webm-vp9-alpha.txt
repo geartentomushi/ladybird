@@ -1,0 +1,2 @@
+Left half alpha: 0
+Right half alpha: 255

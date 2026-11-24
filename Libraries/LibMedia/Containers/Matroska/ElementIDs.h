@@ -62,6 +62,7 @@ constexpr u32 TRACK_AUDIO_ID = 0xE1;
 // Video
 constexpr u32 PIXEL_WIDTH_ID = 0xB0;
 constexpr u32 PIXEL_HEIGHT_ID = 0xBA;
+constexpr u32 ALPHA_MODE_ID = 0x53C0;
 constexpr u32 COLOR_ENTRY_ID = 0x55B0;
 constexpr u32 PRIMARIES_ID = 0x55BB;
 constexpr u32 TRANSFER_CHARACTERISTICS_ID = 0x55BA;

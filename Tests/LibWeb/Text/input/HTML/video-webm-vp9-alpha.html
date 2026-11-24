@@ -1,0 +1,19 @@
+<!doctype html>
+<script src="../include.js"></script>
+<video muted></video>
+<script>
+    asyncTest(async done => {
+        const video = document.querySelector("video");
+        await new Promise(resolve => {
+            video.addEventListener("loadeddata", resolve, { once: true });
+            video.src = httpTestServer().getStaticURL("Assets/vp9-alpha-32x32.webm");
+        });
+
+        const canvas = document.createElement("canvas");
+        const context = canvas.getContext("2d");
+        context.drawImage(video, 0, 0);
+        println(`Left half alpha: ${context.getImageData(8, 16, 1, 1).data[3]}`);
+        println(`Right half alpha: ${context.getImageData(24, 16, 1, 1).data[3]}`);
+        done();
+    });
+</script>

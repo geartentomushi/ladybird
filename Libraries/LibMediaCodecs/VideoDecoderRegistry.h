@@ -24,6 +24,7 @@ using VideoDecoderFactory = DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> (*)(Code
 struct VideoDecoderRegistration {
     DecoderCapabilitiesFunction capabilities;
     VideoDecoderFactory create;
+    bool supports_alpha { false };
 };
 
 // Each process installs the sets of video decoders it hosts, in priority order, before it decodes anything.
@@ -32,7 +33,7 @@ MEDIACODECS_API void install_video_decoders(Vector<ReadonlySpan<VideoDecoderRegi
 MEDIACODECS_API Optional<DecoderCapabilities> video_decoder_capabilities(ParsedCodec const&);
 
 // Identifies the highest-priority decoder after the optionally-provided selection that can handle this codec.
-MEDIACODECS_API VideoDecoderSelection select_video_decoder(ParsedCodec const&, VideoDecoderSelection after = {});
+MEDIACODECS_API VideoDecoderSelection select_video_decoder(ParsedCodec const&, VideoDecoderSelection after = {}, bool requires_alpha = false);
 
 MEDIACODECS_API DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_video_decoder(VideoDecoderSelection, CodecID, ReadonlyBytes codec_initialization_data);
 

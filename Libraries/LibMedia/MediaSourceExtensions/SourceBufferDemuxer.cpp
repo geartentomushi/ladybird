@@ -210,7 +210,7 @@ void SourceBufferDemuxer::recalculate_run_bounds(FrameRun& run)
 
 static size_t buffered_byte_count(Media::CodedFrame const& frame)
 {
-    auto byte_count = SourceBufferDemuxer::buffered_bytes_per_frame + frame.data().size();
+    auto byte_count = SourceBufferDemuxer::buffered_bytes_per_frame + frame.data().size() + frame.alpha_data().size();
     if (auto configuration = frame.new_codec_configuration(); configuration.has_value())
         byte_count += configuration.value().size();
     return byte_count;

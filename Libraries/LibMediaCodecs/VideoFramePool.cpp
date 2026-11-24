@@ -254,13 +254,15 @@ ErrorOr<NonnullRefPtr<VideoFrame>> create_received_video_frame(VideoFrameMetadat
 
     if (auto surface = storage->surface()) {
         auto surface_size = surface->size();
-        if (metadata.subsampling != Subsampling::yuv420() || metadata.size.width() > surface_size.width() || metadata.size.height() > surface_size.height())
+        if (metadata.has_alpha || metadata.subsampling != Subsampling::yuv420() || metadata.size.width() > surface_size.width() || metadata.size.height() > surface_size.height())
             return Error::from_string_literal("Video frame metadata does not match its surface");
     } else {
         TRY(yuv_data_in_buffer(storage->pixel_buffer(), metadata.size, metadata.bit_depth, metadata.subsampling, metadata.color_metadata.cicp));
+        if (metadata.has_alpha && TRY(frame_plane_layout(metadata.size, metadata.bit_depth, metadata.subsampling, true)).total_byte_count > storage->pixel_buffer().size())
+            return Error::from_string_literal("Video frame alpha plane does not fit its buffer");
     }
 
-    return make_ref_counted<VideoFrame>(metadata.timestamp, metadata.duration, metadata.size.to_type<u32>(), metadata.bit_depth, metadata.subsampling, metadata.color_metadata, move(storage));
+    return make_ref_counted<VideoFrame>(metadata.timestamp, metadata.duration, metadata.size.to_type<u32>(), metadata.bit_depth, metadata.subsampling, metadata.color_metadata, move(storage), metadata.has_alpha);
 }
 
 }

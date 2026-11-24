@@ -8,6 +8,8 @@
 
 #include <AK/FixedArray.h>
 #include <AK/Optional.h>
+#include <AK/AtomicRefCounted.h>
+#include <AK/RefPtr.h>
 #include <AK/Time.h>
 #include <LibMediaCodecs/CodecID.h>
 #include <LibMediaCodecs/FrameFlags.h>
@@ -15,6 +17,15 @@
 namespace Media {
 
 class CodedFrame final {
+    struct AlphaData : AtomicRefCounted<AlphaData> {
+        explicit AlphaData(FixedArray<u8> bytes)
+            : bytes(move(bytes))
+        {
+        }
+
+        FixedArray<u8> bytes;
+    };
+
 public:
     CodedFrame(CodecID codec_id, AK::Duration presentation_timestamp, AK::Duration decode_timestamp, AK::Duration duration, FrameFlags flags, FixedArray<u8>&& data, Optional<FixedArray<u8>> new_codec_configuration = {})
         : m_codec_id(codec_id)
@@ -34,6 +45,7 @@ public:
         m_leading_discard = other.m_leading_discard;
         m_trailing_discard = other.m_trailing_discard;
         m_maximum_scene_luminance = other.m_maximum_scene_luminance;
+        m_alpha_data = other.m_alpha_data;
     }
 
     CodedFrame(CodedFrame&&) = default;
@@ -72,6 +84,15 @@ public:
     void set_maximum_scene_luminance(Optional<float> luminance) { m_maximum_scene_luminance = luminance.value_or(0); }
     bool is_keyframe() const { return has_flag(m_flags, FrameFlags::Keyframe); }
     ReadonlyBytes data() const LIFETIME_BOUND { return m_data.span(); }
+    ReadonlyBytes alpha_data() const LIFETIME_BOUND { return m_alpha_data ? m_alpha_data->bytes.span() : ReadonlyBytes {}; }
+    ErrorOr<void> set_alpha_data(FixedArray<u8> data)
+    {
+        if (!data.is_empty())
+            m_alpha_data = TRY(try_make_ref_counted<AlphaData>(move(data)));
+        else
+            m_alpha_data.clear();
+        return {};
+    }
     Optional<ReadonlyBytes> new_codec_configuration() const LIFETIME_BOUND
     {
         if (!m_has_new_codec_configuration)
@@ -104,6 +125,7 @@ private:
     AK::Duration m_leading_discard;
     AK::Duration m_trailing_discard;
     FixedArray<u8> m_data;
+    RefPtr<AlphaData> m_alpha_data;
     FixedArray<u8> m_new_codec_configuration;
 };
 

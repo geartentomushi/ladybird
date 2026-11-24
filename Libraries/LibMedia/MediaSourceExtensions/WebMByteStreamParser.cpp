@@ -279,6 +279,16 @@ Media::DecoderErrorOr<ParseMediaSegmentResult> WebMByteStreamParser::parse_media
                 if (block.lacing() != Block::Lacing::None)
                     return Media::DecoderError::with_description(Media::DecoderErrorCategory::NotImplemented, "Block lacing is not supported"sv);
                 auto frame_data = TRY(streamer.read_raw_octets(data_size));
+                auto codec_id = codec_id_for_track(block.track_number());
+                FixedArray<u8> alpha_data;
+                if (codec_id == Media::CodecID::VP9) {
+                    auto track = m_track_entries.get(block.track_number());
+                    auto range = block.alpha_data();
+                    if (range.has_value() && track.has_value() && (*track)->video_track().map([](auto const& video) { return video.has_alpha; }).value_or(false)) {
+                        TRY(cursor.seek(range->position, AK::SeekMode::SetPosition));
+                        alpha_data = TRY(streamer.read_raw_octets(range->size));
+                    }
+                }
                 TRY(cursor.seek(current_position, AK::SeekMode::SetPosition));
 
                 // Every decode sequence begins with the track's configuration, so that a decoder can be created
@@ -288,13 +298,14 @@ Media::DecoderErrorOr<ParseMediaSegmentResult> WebMByteStreamParser::parse_media
                     codec_configuration = MUST(FixedArray<u8>::create(codec_initialization_data_for_track(block.track_number())));
 
                 auto coded_frame = Media::CodedFrame(
-                    codec_id_for_track(block.track_number()),
+                    codec_id,
                     block.timestamp().value(),
                     block.timestamp().value(),
                     block.duration().value_or(AK::Duration::zero()),
                     block.only_keyframes() ? Media::FrameFlags::Keyframe : Media::FrameFlags::None,
                     move(frame_data),
                     move(codec_configuration));
+                DECODER_TRY_ALLOC(coded_frame.set_alpha_data(move(alpha_data)));
                 coded_frame.set_maximum_scene_luminance(block.maximum_scene_luminance());
                 result.coded_frames.append({
                     .track_number = block.track_number(),

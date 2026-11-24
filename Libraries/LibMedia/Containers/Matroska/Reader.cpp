@@ -560,6 +560,9 @@ static DecoderErrorOr<TrackEntry::VideoTrack> parse_video_track_information(Stre
         case COLOR_ENTRY_ID:
             video_track.color_format = TRY(parse_video_color_information(streamer));
             break;
+        case ALPHA_MODE_ID:
+            video_track.has_alpha = TRY(streamer.read_u64()) == 1;
+            break;
         default:
             TRY(streamer.read_unknown_element());
         }
@@ -1032,7 +1035,7 @@ static DecoderErrorOr<void> parse_block_additions(Streamer& streamer, Block& blo
         // https://www.matroska.org/technical/elements.html
         // BlockAddID: default 1
         u64 block_add_id = 1;
-        Optional<FixedArray<u8>> block_additional;
+        Optional<Block::DataRange> block_additional;
         TRY(Reader::parse_master_element(streamer, "BlockMore"sv, [&](u64 block_more_element_id) -> DecoderErrorOr<ElementIterationDecision> {
             switch (block_more_element_id) {
             case BLOCK_ADD_ID_ID:
@@ -1040,17 +1043,12 @@ static DecoderErrorOr<void> parse_block_additions(Streamer& streamer, Block& blo
                 break;
             case BLOCK_ADDITIONAL_ID: {
                 auto size = TRY(streamer.read_variable_size_integer());
-                // An addition too large to be HDR10+ is skipped rather than read, whatever its BlockAddID.
-                if (size > Codecs::HDR10_PLUS_MAXIMUM_T35_MESSAGE_SIZE) {
-                    block_additional.clear();
-                    Checked<size_t> end = streamer.position();
-                    end += size;
-                    if (end.has_overflow())
-                        return DecoderError::corrupted("BlockAdditional extends past the representable size"sv);
-                    TRY(streamer.seek_to_position(end.value()));
-                    break;
-                }
-                block_additional = TRY(streamer.read_raw_octets(size));
+                Checked<size_t> end = streamer.position();
+                end += size;
+                if (end.has_overflow())
+                    return DecoderError::corrupted("BlockAdditional extends past the representable size"sv);
+                block_additional = Block::DataRange { streamer.position(), end.value() - streamer.position() };
+                TRY(streamer.seek_to_position(end.value()));
                 break;
             }
             default:
@@ -1060,8 +1058,17 @@ static DecoderErrorOr<void> parse_block_additions(Streamer& streamer, Block& blo
             return ElementIterationDecision::Continue;
         }));
 
-        if (block_add_id == ITU_T_T35_BLOCK_ADD_ID && block_additional.has_value()) {
-            if (auto luminance = Codecs::hdr10_plus_maximum_scene_luminance(block_additional->span()); luminance.has_value())
+        if (!block_additional.has_value())
+            return ElementIterationDecision::Continue;
+
+        if (block_add_id == 1) {
+            block.set_alpha_data(block_additional);
+        } else if (block_add_id == ITU_T_T35_BLOCK_ADD_ID && block_additional->size <= Codecs::HDR10_PLUS_MAXIMUM_T35_MESSAGE_SIZE) {
+            auto end = streamer.position();
+            TRY(streamer.seek_to_position(block_additional->position));
+            auto data = TRY(streamer.read_raw_octets(block_additional->size));
+            TRY(streamer.seek_to_position(end));
+            if (auto luminance = Codecs::hdr10_plus_maximum_scene_luminance(data.span()); luminance.has_value())
                 block.set_maximum_scene_luminance(luminance);
         }
         return ElementIterationDecision::Continue;
@@ -1078,6 +1085,7 @@ static DecoderErrorOr<void> parse_or_skip_block_additions(Streamer& streamer, Bl
 
     // Malformed additions are skipped as an unrecognized element would be, rather than failing the block they accompany.
     block.set_maximum_scene_luminance({});
+    block.set_alpha_data({});
     TRY(streamer.seek_to_position(additions_position));
     return streamer.read_unknown_element();
 }
