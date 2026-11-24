@@ -11,6 +11,23 @@
 namespace IPC {
 
 template<>
+ErrorOr<void> encode(Encoder& encoder, Web::HTML::ServiceWorkerRegistrationSnapshot const& registration)
+{
+    TRY(encoder.encode(registration.scope_url));
+    TRY(encoder.encode(registration.update_via_cache));
+    return {};
+}
+
+template<>
+ErrorOr<Web::HTML::ServiceWorkerRegistrationSnapshot> decode(Decoder& decoder)
+{
+    return Web::HTML::ServiceWorkerRegistrationSnapshot {
+        .scope_url = TRY(decoder.decode<URL::URL>()),
+        .update_via_cache = TRY(decoder.decode<Web::Bindings::ServiceWorkerUpdateViaCache>()),
+    };
+}
+
+template<>
 ErrorOr<void> encode(Encoder& encoder, Web::HTML::WorkerAgentStartRequest const& request)
 {
     TRY(encoder.encode(request.url));
@@ -24,6 +41,7 @@ ErrorOr<void> encode(Encoder& encoder, Web::HTML::WorkerAgentStartRequest const&
     TRY(encoder.encode(request.caller_is_secure_context));
     TRY(encoder.encode(request.maximum_frames_per_second));
     TRY(encoder.encode(request.owner_token));
+    TRY(encoder.encode(request.service_worker_registration));
     return {};
 }
 
@@ -42,6 +60,7 @@ ErrorOr<Web::HTML::WorkerAgentStartRequest> decode(Decoder& decoder)
         .caller_is_secure_context = TRY(decoder.decode<bool>()),
         .maximum_frames_per_second = TRY(decoder.decode<double>()),
         .owner_token = TRY(decoder.decode<Web::HTML::WorkerAgentOwnerToken>()),
+        .service_worker_registration = TRY(decoder.decode<Optional<Web::HTML::ServiceWorkerRegistrationSnapshot>>()),
     };
 }
 
