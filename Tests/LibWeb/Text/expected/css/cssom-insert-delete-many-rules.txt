@@ -6,3 +6,4 @@ connected faces: InsertedFace, NestedFace
 after removing @media: InsertedFace
 after removing @font-face: none
 layer before import: true, import still applies: 11px
+unread delete: height 5px, import still applies: 7px

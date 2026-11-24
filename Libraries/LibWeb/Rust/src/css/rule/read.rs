@@ -65,6 +65,37 @@ pub extern "C" fn rust_rule_list_has_implicit_scope(list: &NativeRuleList) -> bo
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn rust_rule_list_has_only_style_rules(list: &NativeRuleList) -> bool {
+    list.visit_descendant_rules(&mut |rule| {
+        if matches!(rule.rule_type(), NativeRuleType::Style | NativeRuleType::NestedDeclarations) {
+            ControlFlow::Continue(())
+        } else {
+            ControlFlow::Break(())
+        }
+    })
+    .is_continue()
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn rust_rule_list_has_font_or_layer_rules(list: &NativeRuleList) -> bool {
+    list.visit_descendant_rules(&mut |rule| {
+        if matches!(
+            rule.rule_type(),
+            NativeRuleType::FontFace
+                | NativeRuleType::FontFeatureValues
+                | NativeRuleType::Import
+                | NativeRuleType::LayerBlock
+                | NativeRuleType::LayerStatement
+        ) {
+            ControlFlow::Break(())
+        } else {
+            ControlFlow::Continue(())
+        }
+    })
+    .is_break()
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn rust_rule_list_has_counter_style_rules(list: &NativeRuleList) -> bool {
     list.visit_descendant_rules(&mut |rule| {
         if rule.rule_type() == NativeRuleType::CounterStyle {

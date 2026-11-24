@@ -282,31 +282,42 @@ static bool rule_can_precede_imports_or_namespaces(RustRule const& rule)
     return type == RustRule::Type::Import || type == RustRule::Type::Namespace || type == RustRule::Type::LayerStatement;
 }
 
-static bool rule_declares_fonts(RustRule const& rule)
+// A rule whose fonts or layers can change which @font-face rules apply.
+static bool rule_may_affect_fonts(RustRule const& rule)
 {
-    if (rule.type() == RustRule::Type::FontFace || rule.type() == RustRule::Type::FontFeatureValues)
+    switch (rule.type()) {
+    case RustRule::Type::FontFace:
+    case RustRule::Type::FontFeatureValues:
+    case RustRule::Type::Import:
+    case RustRule::Type::LayerBlock:
+    case RustRule::Type::LayerStatement:
         return true;
+    default:
+        break;
+    }
     auto const* children = Parser::ValueParserFFI::rust_rule_children(rule.handle());
-    if (!children)
+    return children && Parser::ValueParserFFI::rust_rule_list_has_font_or_layer_rules(children);
+}
+
+// A style rule with only style rules nested in it, so no conditions, layers or other at-rules.
+static bool rule_is_plain_style_rule(RustRule const& rule)
+{
+    if (rule.type() != RustRule::Type::Style)
         return false;
-    bool declares = false;
-    Parser::ValueParserFFI::rust_rule_list_visit_font_rules(children, &declares, [](void const* context, Parser::ValueParserFFI::NativeRuleView const*) {
-        *static_cast<bool*>(const_cast<void*>(context)) = true;
-    });
-    return declares;
+    auto const* children = Parser::ValueParserFFI::rust_rule_children(rule.handle());
+    return !children || Parser::ValueParserFFI::rust_rule_list_has_only_style_rules(children);
 }
 
 bool StyleSheetState::change_affects_only_held_rules(RustRule const& rule) const
 {
     auto style_element_sheet = !constructed() && owner_node() && owner_node()->is_html_style_element();
-    auto rule_type = rule.type();
-    return style_element_sheet && (rule_type == CSSRule::Type::Keyframes || rule_type == CSSRule::Type::Style);
+    return style_element_sheet && (rule.type() == RustRule::Type::Keyframes || rule_is_plain_style_rule(rule));
 }
 
 void StyleSheetState::rule_inserted(RustRule const& rule)
 {
     // OPTIMIZATION: CSSOM insertion places any rule other than @import, @namespace and @layer statements after all
-    //               @import and @namespace rules, so it can't change the import and namespace caches. Rebuilding them
+    //               @import and @namespace rules, so it cannot change the import and namespace caches. Rebuilding them
     //               for each such rule makes a script that inserts many rules quadratic.
     if (rule_can_precede_imports_or_namespaces(rule))
         recalculate_rule_caches();
@@ -322,8 +333,8 @@ void StyleSheetState::rule_inserted(RustRule const& rule)
     else
         invalidate_owners();
 
-    // OPTIMIZATION: Font synchronization walks the whole sheet, so skip it when the new rule brings no font rules.
-    if (rule_declares_fonts(rule))
+    // OPTIMIZATION: Font synchronization walks the whole sheet, so skip it when the new rule cannot change which fonts apply.
+    if (rule_may_affect_fonts(rule))
         synchronize_fonts_after_rule_change();
 }
 
@@ -338,7 +349,10 @@ void StyleSheetState::remove_rule(u32 index)
     } else {
         disconnect_font_faces_in_rule(removed_rule);
         m_native_sheet.rules().remove(index);
-        recalculate_rule_caches();
+        if (rule_can_precede_imports_or_namespaces(removed_rule))
+            recalculate_rule_caches();
+        else
+            m_rule_cache = nullptr;
     }
     record_style_rule_removed(*this, removed_rule, detached_import.ptr());
     // OPTIMIZATION: As in rule_inserted(), a style or keyframes rule leaving a style element's own sheet changes
@@ -349,7 +363,7 @@ void StyleSheetState::remove_rule(u32 index)
     }
     else
         invalidate_owners();
-    if (rule_declares_fonts(removed_rule))
+    if (rule_may_affect_fonts(removed_rule))
         synchronize_fonts_after_rule_change();
 }
 

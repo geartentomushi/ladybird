@@ -4,6 +4,12 @@
 @namespace svg url(http://www.w3.org/2000/svg);
 </style>
 <div class="imported target"></div>
+<style id="unread">
+@import url("data:text/css,.unread { width: 7px; }");
+.unread { height: 5px; }
+.unread { height: 9px; }
+</style>
+<div class="unread"></div>
 <script src="../include.js"></script>
 <script>
 asyncTest(async done => {
@@ -33,6 +39,12 @@ asyncTest(async done => {
 
     sheet.insertRule(`@layer base;`, 0);
     println(`layer before import: ${sheet.cssRules[0] instanceof CSSLayerStatementRule}, import still applies: ${getComputedStyle(target).width}`);
+
+    // Deleting without ever reading cssRules takes a separate path.
+    const unread = document.getElementById("unread").sheet;
+    const unreadTarget = document.querySelector("div.unread");
+    unread.deleteRule(2);
+    println(`unread delete: height ${getComputedStyle(unreadTarget).height}, import still applies: ${getComputedStyle(unreadTarget).width}`);
     done();
 });
 </script>
