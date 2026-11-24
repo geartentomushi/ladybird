@@ -1,0 +1,2 @@
+Entries under a transparent ancestor: 0
+Largest candidate reported after the opacity change: true

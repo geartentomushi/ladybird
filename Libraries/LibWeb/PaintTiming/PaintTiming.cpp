@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/HashMap.h>
 #include <AK/NeverDestroyed.h>
 #include <AK/QuickSort.h>
 #include <LibGC/RootVector.h>
@@ -315,12 +316,8 @@ public:
             return false;
 
         // - el and all of its ancestors' used opacity is greater than zero.
-        if (check_ancestor_opacity == CheckAncestorOpacity::Yes) {
-            for (auto const* ancestor = &node; ancestor; ancestor = ancestor->parent_ptr()) {
-                if (auto const* ancestor_with_style = as_if<Layout::NodeWithStyle>(*ancestor); ancestor_with_style && ancestor_with_style->opacity() <= 0)
-                    return false;
-            }
-        }
+        if (check_ancestor_opacity == CheckAncestorOpacity::Yes && !has_positive_ancestor_opacity(node, node_with_style))
+            return false;
 
         // - el's paintable bounding rect intersects with the scrolling area of the document.
         // https://w3c.github.io/paint-timing/#paintable-bounding-rect
@@ -334,7 +331,32 @@ public:
     }
 
 private:
+    bool has_positive_ancestor_opacity(Layout::Node const& node, Layout::NodeWithStyle const* node_with_style) const
+    {
+        if (node_with_style == &node && node_with_style->opacity() <= 0)
+            return false;
+
+        Vector<Layout::Node const*, 16> uncached_ancestors;
+        bool has_positive_opacity = true;
+        for (auto const* ancestor = node.parent_ptr(); ancestor; ancestor = ancestor->parent_ptr()) {
+            if (auto cached = m_positive_ancestor_opacity.get(ancestor); cached.has_value()) {
+                has_positive_opacity = *cached;
+                break;
+            }
+            uncached_ancestors.append(ancestor);
+            if (auto const* styled_ancestor = as_if<Layout::NodeWithStyle>(*ancestor); styled_ancestor && styled_ancestor->opacity() <= 0) {
+                has_positive_opacity = false;
+                break;
+            }
+        }
+
+        for (auto const* ancestor : uncached_ancestors)
+            m_positive_ancestor_opacity.set(ancestor, has_positive_opacity);
+        return has_positive_opacity;
+    }
+
     Layout::ForcedReadScope m_read;
+    mutable HashMap<Layout::Node const*, bool> m_positive_ancestor_opacity;
     Layout::Viewport const* m_viewport { nullptr };
     Optional<CSSPixelRect> m_scrolling_area;
     CSSPixelPoint m_scroll_offset;
