@@ -10,6 +10,8 @@
 #include <AK/Utf16StringBuilder.h>
 #include <LibWeb/Fetch/Infrastructure/HTTP.h>
 #include <LibWeb/HTML/NavigatorID.h>
+#include <LibWeb/HTML/NavigatorUAData.h>
+#include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/Loader/LoaderConfig.h>
 #include <LibWeb/Loader/ResourceLoader.h>
 #include <LibWebCommon/Loader/UserAgent.h>
@@ -120,6 +122,22 @@ Utf16String NavigatorIDMixin::user_agent() const
     // Must return the default `User-Agent` value.
     auto user_agent = Fetch::Infrastructure::environment_default_user_agent_value(current_loader_config()->config, navigator_id_settings_object());
     return Utf16String::from_ascii_without_validation(user_agent.bytes());
+}
+
+GC::Ref<NavigatorUAData> NavigatorIDMixin::user_agent_data()
+{
+    auto& settings = const_cast<EnvironmentSettingsObject&>(navigator_id_settings_object());
+    auto user_agent = Fetch::Infrastructure::environment_default_user_agent_value(current_loader_config()->config, settings);
+    if (!m_user_agent_data || m_user_agent_data_key != user_agent) {
+        m_user_agent_data = NavigatorUAData::create(settings.realm(), Fetch::Infrastructure::user_agent_client_hints(user_agent.bytes_as_string_view()));
+        m_user_agent_data_key = move(user_agent);
+    }
+    return *m_user_agent_data;
+}
+
+void NavigatorIDMixin::visit_navigator_id_edges(GC::Cell::Visitor& visitor)
+{
+    visitor.visit(m_user_agent_data);
 }
 
 // https://html.spec.whatwg.org/multipage/system-state.html#dom-navigator-vendor

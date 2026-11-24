@@ -30,6 +30,7 @@ WorkerNavigator::~WorkerNavigator() = default;
 void WorkerNavigator::visit_edges(GC::Cell::Visitor& visitor)
 {
     Base::visit_edges(visitor);
+    visit_navigator_id_edges(visitor);
     visitor.visit(m_global_scope);
     visitor.visit(m_media_capabilities);
     visitor.visit(m_service_worker_container);
