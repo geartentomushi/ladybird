@@ -299,7 +299,6 @@ static bool rule_may_affect_fonts(RustRule const& rule)
     return children && Parser::ValueParserFFI::rust_rule_list_has_font_or_layer_rules(children);
 }
 
-// A style rule with only style rules nested in it, so no conditions, layers or other at-rules.
 // Whether the rule holds nothing but style rules, possibly within @container and @supports rules, and @media rules
 // when those are allowed.
 static bool rule_holds_only_conditional_style_rules(RustRule const& rule, bool media_allowed)
