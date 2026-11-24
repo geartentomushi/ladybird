@@ -1363,6 +1363,11 @@ impl<'pass> NodeFacts<'pass> {
         has_ancestor_fact(self.data(), AncestorFact::ParentIsFlexOrGridContainer)
     }
 
+    /// Whether the box is the anonymous content box of a fieldset, which its fieldset lays out as a block child.
+    pub(crate) fn is_fieldset_content_wrapper(&self) -> bool {
+        node_is_fieldset_content_wrapper(self.data(), node_style_view(self.data()))
+    }
+
     pub(crate) fn parent_is_unfloated_flow_container(&self) -> bool {
         has_ancestor_fact(self.data(), AncestorFact::ParentIsUnfloatedFlowContainer)
     }

@@ -3148,6 +3148,15 @@ impl<'pass> FlexFormattingContext<'pass> {
         self.flex_item_details[index].inputs.style.writing_mode() != writing_mode::HORIZONTAL_TB
     }
 
+    /// Whether the item at `index` has no baselines across the container's block axis, which the container's own
+    /// baselines lie across, whichever of its axes that is.
+    fn item_lacks_baseline_across_block_axis(&self, index: usize) -> bool {
+        if self.run.pass.frame.is_transposed() {
+            return self.item_establishes_orthogonal_flow(index);
+        }
+        self.item_baseline_is_synthesized(index)
+    }
+
     fn item_establishes_orthogonal_flow(&self, index: usize) -> bool {
         self.flex_item_details[index].inputs.establishes_orthogonal_flow
     }
@@ -3230,6 +3239,11 @@ impl<'pass> FlexFormattingContext<'pass> {
                     formatting_context::BaselineSet::First => baselines.first,
                     formatting_context::BaselineSet::Last => baselines.last,
                 }) {
+                // https://drafts.csswg.org/css-align-3/#baseline-export
+                // NB: A scroll container's content-derived baseline is clamped to its border box.
+                Some(baseline) if extras.inputs.is_scroll_container => (margin_box_left + baseline)
+                    .max(metrics.margin_left())
+                    .min(margin_box_left + metrics.content_inline_size() + metrics.border_box_right(collapsed)),
                 Some(baseline) => margin_box_left + baseline,
                 // https://drafts.csswg.org/css-align-3/#synthesize-baseline
                 // The alphabetic baseline is synthesized from the line-under edge of the border box: its left edge
@@ -3240,18 +3254,23 @@ impl<'pass> FlexFormattingContext<'pass> {
                 None => metrics.margin_left(),
             };
         }
+        let central = self.dominant_baseline_is_central();
         if self.item_baseline_is_synthesized(index) {
             let collapsed = metrics.uses_collapsing_borders_model();
+            if central {
+                return metrics.margin_top() + metrics.border_box_block_size(collapsed) / 2;
+            }
             return metrics.margin_box_top(collapsed)
                 + metrics.content_block_size()
                 + metrics.border_box_bottom(collapsed);
         }
-        formatting_context::box_baseline_with_content_baselines(
+        formatting_context::box_baseline_with_content_dominant_baselines(
             &self.run.pass,
             self.flex_items[index].box_,
             metrics,
             self.item_baseline_set(index),
             extras.content_baselines,
+            central,
         )
     }
 
@@ -4689,7 +4708,13 @@ impl<'pass> FlexFormattingContext<'pass> {
             baseline_set,
             source,
             purpose,
+            self.dominant_baseline_is_central(),
         )
+    }
+
+    /// Whether the container's items align by their central baselines rather than their alphabetic ones.
+    fn dominant_baseline_is_central(&self) -> bool {
+        formatting_context::dominant_baseline_is_central(self.style(self.run.box_))
     }
 
     fn baseline_source_for_item(&self, item: usize) -> formatting_context::ChildBaselineSource {
@@ -4706,7 +4731,7 @@ impl<'pass> FlexFormattingContext<'pass> {
             }
         }
 
-        if self.item_baseline_is_synthesized(item) {
+        if self.item_lacks_baseline_across_block_axis(item) {
             formatting_context::ChildBaselineSource::Synthesized
         } else {
             formatting_context::ChildBaselineSource::OwnOrSynthesized
