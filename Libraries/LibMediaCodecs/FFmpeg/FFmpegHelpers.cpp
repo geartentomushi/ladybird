@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/ByteBuffer.h>
 #include <AK/ScopeGuard.h>
 #include <LibMediaCodecs/CodedFrame.h>
 
@@ -55,7 +56,13 @@ DecoderErrorOr<u64> VideoFramesAwaitingOutput::add(CodedFrame const& coded_frame
     auto key = m_next_key++;
     if (m_frames.size() >= MAXIMUM_FRAMES_AWAITING_OUTPUT) {
         auto stale_frame_count = m_frames.size();
-        m_frames.remove_all_matching([&](u64 frame_key, auto const&) { return frame_key + MAXIMUM_FRAMES_AWAITING_OUTPUT <= key; });
+        m_frames.remove_all_matching([&](u64 frame_key, Frame const& frame) {
+            if (key - frame_key < MAXIMUM_FRAMES_AWAITING_OUTPUT)
+                return false;
+            if (frame.alpha_plane.has_value())
+                m_alpha_bytes -= frame.alpha_plane->data.size();
+            return true;
+        });
         stale_frame_count -= m_frames.size();
         if (stale_frame_count > 0)
             dbgln("FFmpeg: {} frames were never output", stale_frame_count);
@@ -65,16 +72,30 @@ DecoderErrorOr<u64> VideoFramesAwaitingOutput::add(CodedFrame const& coded_frame
     return key;
 }
 
-void VideoFramesAwaitingOutput::set_alpha_plane(u64 key, AlphaPlane plane)
+DecoderErrorOr<void> VideoFramesAwaitingOutput::store_alpha_plane(u64 key, Gfx::IntSize size, u8 const* data, size_t stride)
 {
     auto frame = m_frames.find(key);
     VERIFY(frame != m_frames.end());
-    frame->value.alpha_plane = move(plane);
+    VERIFY(!frame->value.alpha_plane.has_value());
+    auto width = static_cast<size_t>(size.width());
+    auto height = static_cast<size_t>(size.height());
+    auto byte_count = width * height;
+    if (byte_count > m_alpha_byte_budget - m_alpha_bytes)
+        return DecoderError::with_description(DecoderErrorCategory::Memory, "Pending VP9 alpha planes exceed the byte budget"sv);
+    auto bytes = DECODER_TRY_ALLOC(ByteBuffer::create_uninitialized(byte_count));
+    for (size_t row = 0; row < height; ++row)
+        memcpy(bytes.data() + row * width, data + row * stride, width);
+    frame->value.alpha_plane = AlphaPlane { size, Core::ImmutableBytes::adopt(move(bytes)) };
+    m_alpha_bytes += byte_count;
+    return {};
 }
 
 Optional<VideoFramesAwaitingOutput::Frame> VideoFramesAwaitingOutput::take(i64 key)
 {
-    return m_frames.take(static_cast<u64>(key));
+    auto frame = m_frames.take(static_cast<u64>(key));
+    if (frame.has_value() && frame->alpha_plane.has_value())
+        m_alpha_bytes -= frame->alpha_plane->data.size();
+    return frame;
 }
 
 DecoderErrorOr<void> send_coded_frame(FFmpegFunctions const& functions, AVCodecContext& codec_context, AVPacket& packet, CodedFrame const& coded_frame, u64 key)

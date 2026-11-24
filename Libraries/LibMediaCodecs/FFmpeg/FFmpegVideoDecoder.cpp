@@ -4,7 +4,6 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include <AK/ByteBuffer.h>
 #include <AK/ScopeGuard.h>
 #include <LibCore/System.h>
 #include <LibGfx/YUVData.h>
@@ -171,13 +170,7 @@ DecoderErrorOr<void> FFmpegVideoDecoder::decode_alpha_plane(ReadonlyBytes data, 
         return DecoderError::with_description(DecoderErrorCategory::Invalid, "Unsupported VP9 alpha pixel format"sv);
     }
 
-    auto width = static_cast<size_t>(alpha.width);
-    auto height = static_cast<size_t>(alpha.height);
-    auto bytes = DECODER_TRY_ALLOC(ByteBuffer::create_uninitialized(width * height));
-    for (size_t row = 0; row < height; ++row)
-        memcpy(bytes.data() + row * width, alpha.data[0] + row * static_cast<size_t>(alpha.linesize[0]), width);
-    m_frames_awaiting_output.set_alpha_plane(key, { { alpha.width, alpha.height }, Core::ImmutableBytes::adopt(move(bytes)) });
-    return {};
+    return m_frames_awaiting_output.store_alpha_plane(key, { alpha.width, alpha.height }, alpha.data[0], static_cast<size_t>(alpha.linesize[0]));
 }
 
 void FFmpegVideoDecoder::signal_end_of_stream()

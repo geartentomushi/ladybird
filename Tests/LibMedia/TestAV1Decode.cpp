@@ -78,3 +78,28 @@ TEST_CASE(a_flush_forgets_the_high_dynamic_range_metadata_of_earlier_frames)
     key = MUST(frames.add(coded_frame(temporal_delimiter, 0), Media::DecodeIntent::Output));
     EXPECT(!frames.take(static_cast<i64>(key))->high_dynamic_range_metadata.content_light_level_information.has_value());
 }
+
+TEST_CASE(pending_alpha_planes_have_a_byte_budget)
+{
+    Media::FFmpeg::VideoFramesAwaitingOutput frames { Media::CodecID::VP9, {}, 4 };
+    Media::CodedFrame frame { Media::CodecID::VP9, {}, {}, {}, Media::FrameFlags::Keyframe, {} };
+    auto pixels = to_array<u8>({ 0, 128, 255, 255 });
+    auto first = MUST(frames.add(frame, Media::DecodeIntent::Output));
+    MUST(frames.store_alpha_plane(first, { 2, 2 }, pixels.data(), 2));
+    auto second = MUST(frames.add(frame, Media::DecodeIntent::Output));
+    auto rejected = frames.store_alpha_plane(second, { 2, 2 }, pixels.data(), 2);
+    EXPECT(rejected.is_error());
+    EXPECT_EQ(rejected.error().category(), Media::DecoderErrorCategory::Memory);
+    EXPECT_EQ(frames.take(static_cast<i64>(first))->alpha_plane->data.size(), 4u);
+    MUST(frames.store_alpha_plane(second, { 2, 2 }, pixels.data(), 2));
+
+    u64 next = 0;
+    for (auto i = 0; i < 256; ++i)
+        next = MUST(frames.add(frame, Media::DecodeIntent::Output));
+    EXPECT(!frames.take(static_cast<i64>(second)).has_value());
+    MUST(frames.store_alpha_plane(next, { 2, 2 }, pixels.data(), 2));
+
+    frames.flush();
+    next = MUST(frames.add(frame, Media::DecodeIntent::Output));
+    MUST(frames.store_alpha_plane(next, { 2, 2 }, pixels.data(), 2));
+}
