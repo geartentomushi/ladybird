@@ -511,11 +511,8 @@ static void install(GC::Ref<Job> job, GC::Ref<UpdateAlgorithmState> state)
             update_registration_state(event_loop, registration, RegistrationWorkerSlot::Installing, nullptr);
 
             // 3. If newestWorker is null, then remove registration map[(registration's storage key, serialized registration's scope url)].
-            // NB: Unless an unregister job already removed it.
-            if (!state->newest_worker()) {
-                if (auto current = Registration::get(registration.storage_key(), registration.scope_url()); current.has_value() && &current.value() == &registration)
-                    Registration::remove(registration.storage_key(), registration.scope_url());
-            }
+            if (!state->newest_worker())
+                Registration::remove(registration.storage_key(), registration.scope_url());
 
             // 4. Invoke Finish Job with job and abort these steps.
             finish_job(vm, job);
