@@ -127,9 +127,11 @@ Utf16String NavigatorIDMixin::user_agent() const
 GC::Ref<NavigatorUAData> NavigatorIDMixin::user_agent_data()
 {
     auto& settings = const_cast<EnvironmentSettingsObject&>(navigator_id_settings_object());
-    auto user_agent = Fetch::Infrastructure::environment_default_user_agent_value(current_loader_config()->config, settings);
-    if (!m_user_agent_data || m_user_agent_data_key != user_agent) {
-        m_user_agent_data = NavigatorUAData::create(settings.realm(), Fetch::Infrastructure::user_agent_client_hints(user_agent.bytes_as_string_view()));
+    auto loader_config = current_loader_config();
+    auto user_agent = Fetch::Infrastructure::environment_default_user_agent_value(loader_config->config, settings);
+    bool uses_user_agent_preset = loader_config->config.user_agent != Web::default_user_agent;
+    if (!m_user_agent_data || m_user_agent_data_key != user_agent || m_user_agent_data->uses_user_agent_preset() != uses_user_agent_preset) {
+        m_user_agent_data = NavigatorUAData::create(settings.realm(), Fetch::Infrastructure::user_agent_client_hints(user_agent.bytes_as_string_view()), uses_user_agent_preset);
         m_user_agent_data_key = move(user_agent);
     }
     return *m_user_agent_data;

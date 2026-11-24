@@ -17,8 +17,9 @@ class NavigatorUAData final : public Bindings::GCAllocatedWrappable {
     GC_DECLARE_ALLOCATOR(NavigatorUAData);
 
 public:
-    static GC::Ref<NavigatorUAData> create(JS::Realm&, Fetch::Infrastructure::UserAgentClientHints);
+    static GC::Ref<NavigatorUAData> create(JS::Realm&, Fetch::Infrastructure::UserAgentClientHints, bool uses_user_agent_preset);
 
+    bool uses_user_agent_preset() const { return m_uses_user_agent_preset; }
     Vector<Bindings::NavigatorUABrandVersion> brands() const;
     bool mobile() const { return m_hints.mobile; }
     Utf16String platform() const;
@@ -26,12 +27,14 @@ public:
     Bindings::UALowEntropyJSON to_json() const;
 
 private:
-    NavigatorUAData(JS::Realm&, Fetch::Infrastructure::UserAgentClientHints);
+    NavigatorUAData(JS::Realm&, Fetch::Infrastructure::UserAgentClientHints, bool uses_user_agent_preset);
+    bool should_suppress_user_agent_hints() const;
     virtual GC::Ptr<Bindings::Wrappable> relevant_global_impl() const override;
     virtual void visit_edges(GC::Cell::Visitor&) override;
 
     GC::Ref<JS::Realm> m_realm;
     Fetch::Infrastructure::UserAgentClientHints m_hints;
+    bool m_uses_user_agent_preset;
 };
 
 }

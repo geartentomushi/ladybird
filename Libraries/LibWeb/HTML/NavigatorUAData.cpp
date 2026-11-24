@@ -13,6 +13,7 @@
 #include <LibWeb/HTML/NavigatorUAData.h>
 #include <LibWeb/HTML/Scripting/TemporaryExecutionContext.h>
 #include <LibWeb/HTML/Window.h>
+#include <LibWeb/Loader/LoaderConfig.h>
 #include <LibWeb/WebIDL/Promise.h>
 #include <LibWebCommon/Loader/UserAgent.h>
 
@@ -20,14 +21,15 @@ namespace Web::HTML {
 
 GC_DEFINE_ALLOCATOR(NavigatorUAData);
 
-GC::Ref<NavigatorUAData> NavigatorUAData::create(JS::Realm& realm, Fetch::Infrastructure::UserAgentClientHints hints)
+GC::Ref<NavigatorUAData> NavigatorUAData::create(JS::Realm& realm, Fetch::Infrastructure::UserAgentClientHints hints, bool uses_user_agent_preset)
 {
-    return realm.heap().allocate<NavigatorUAData>(realm, move(hints));
+    return realm.heap().allocate<NavigatorUAData>(realm, move(hints), uses_user_agent_preset);
 }
 
-NavigatorUAData::NavigatorUAData(JS::Realm& realm, Fetch::Infrastructure::UserAgentClientHints hints)
+NavigatorUAData::NavigatorUAData(JS::Realm& realm, Fetch::Infrastructure::UserAgentClientHints hints, bool uses_user_agent_preset)
     : m_realm(realm)
     , m_hints(move(hints))
+    , m_uses_user_agent_preset(uses_user_agent_preset)
 {
 }
 
@@ -42,9 +44,17 @@ void NavigatorUAData::visit_edges(GC::Cell::Visitor& visitor)
     visitor.visit(m_realm);
 }
 
+bool NavigatorUAData::should_suppress_user_agent_hints() const
+{
+    return m_uses_user_agent_preset || current_loader_config()->config.user_agent != Web::default_user_agent;
+}
+
 Vector<Bindings::NavigatorUABrandVersion> NavigatorUAData::brands() const
 {
     Vector<Bindings::NavigatorUABrandVersion> brands;
+    if (should_suppress_user_agent_hints())
+        return brands;
+
     for (auto const& brand : m_hints.brands) {
         brands.append({
             .brand = Utf16String::from_utf8(brand.brand),
@@ -86,7 +96,7 @@ void NavigatorUAData::get_high_entropy_values(JS::Realm& realm, Vector<Utf16Stri
             return worker->allows_high_entropy_user_agent_values();
         return false;
     };
-    if (!allows_high_entropy_user_agent_values()) {
+    if (should_suppress_user_agent_hints() || !allows_high_entropy_user_agent_values()) {
         WebIDL::resolve_promise(promise, Bindings::ua_data_values_to_value(realm, values));
         return;
     }

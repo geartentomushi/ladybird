@@ -27,6 +27,16 @@ TIMEOUT_SECONDS = helpers["EVENT_TIMEOUT_SECONDS"]
 # The port the test server listens on, for the child frame's cross-site URL.
 server_port = 0
 
+COLLECT_USER_AGENT_DATA = """
+    async function collectUserAgentData() {
+        const data = navigator.userAgentData;
+        const hints = await data.getHighEntropyValues([
+            "architecture", "bitness", "formFactors", "fullVersionList", "model", "platformVersion", "uaFullVersion", "wow64"
+        ]);
+        return { lowEntropy: data.toJSON(), brands: data.brands, hints };
+    }
+"""
+
 
 class Handler(http.server.BaseHTTPRequestHandler):
     def do_GET(self):
@@ -41,13 +51,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.end_headers()
         if self.path == "/child":
             # The child frame reports what its own process answers, and what it sends on the wire.
-            body = """<!doctype html><title>/child</title><script>
-                parent.postMessage(JSON.stringify({ userAgent: navigator.userAgent, languages: navigator.languages }), "*");
+            body = f"""<!doctype html><title>/child</title><script>
+                {COLLECT_USER_AGENT_DATA}
+                parent.postMessage(JSON.stringify({{ userAgent: navigator.userAgent, languages: navigator.languages }}), "*");
+                collectUserAgentData().then(data => parent.postMessage(JSON.stringify({{ userAgentData: data }}), "*"));
             </script>"""
         else:
             body = f"""<!doctype html><title>/parent</title><script>
+                {COLLECT_USER_AGENT_DATA}
                 window.child = null;
-                addEventListener("message", event => {{ window.child = JSON.parse(event.data); }});
+                window.childUserAgentData = null;
+                window.parentUserAgentData = null;
+                addEventListener("message", event => {{
+                    const payload = JSON.parse(event.data);
+                    if (payload.userAgentData)
+                        window.childUserAgentData = payload.userAgentData;
+                    else
+                        window.child = payload;
+                }});
+                collectUserAgentData().then(data => window.parentUserAgentData = data);
             </script><iframe src="http://localhost:{server_port}/child"></iframe>"""
         self.wfile.write(body.encode())
 
@@ -113,6 +135,22 @@ def test_user_agent_preset_reaches_child_frames(ladybird_binary, profile, server
         wait_until("the child frame reports", lambda: client.evaluate("window.child !== null"))
         child = json.loads(client.evaluate("JSON.stringify(window.child)"))
         assert child == parent, (child, parent)
+
+        wait_until(
+            "both frames report JavaScript UA Client Hints",
+            lambda: client.evaluate("window.parentUserAgentData !== null && window.childUserAgentData !== null"),
+        )
+        parent_data, child_data = json.loads(
+            client.evaluate("JSON.stringify([window.parentUserAgentData, window.childUserAgentData])")
+        )
+        assert parent_data == child_data, (parent_data, child_data)
+        if preset:
+            expected = {"brands": [], "mobile": False, "platform": "Linux" if expected_product == "Firefox/" else "macOS"}
+            assert parent_data == {"lowEntropy": expected, "brands": [], "hints": expected}, parent_data
+        else:
+            assert any(brand["brand"] == "Ladybird" for brand in parent_data["brands"]), parent_data
+            assert {"architecture", "bitness"} <= parent_data["hints"].keys(), parent_data
+        print(f"PASS: {preset or 'Default'}: JavaScript UA Client Hints agree in both frames")
 
         requests = dict(server.requests.get(timeout=TIMEOUT_SECONDS) for _ in range(2))
         assert requests.keys() == {"/parent", "/child"}, requests
