@@ -6,9 +6,9 @@
 
 #pragma once
 
+#include <AK/AtomicRefCounted.h>
 #include <AK/FixedArray.h>
 #include <AK/Optional.h>
-#include <AK/AtomicRefCounted.h>
 #include <AK/RefPtr.h>
 #include <AK/Time.h>
 #include <LibMediaCodecs/CodecID.h>

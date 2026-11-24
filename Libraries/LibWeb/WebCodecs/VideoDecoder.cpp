@@ -351,18 +351,16 @@ void VideoDecoder::codec_chunk_dequeued(u64 codec_generation)
     // https://w3c.github.io/webcodecs/#dom-videodecoder-decode
     // 3. If [[codec saturated]] equals true and [[codec implementation]] is no longer saturated, queue a task to
     //    perform the following steps:
+    // NB: These steps run here rather than in a task, as a destroyed document discards its tasks, and the flushes
+    //     waiting behind the chunks would then never settle and so keep us and our codec alive.
     if (!m_codec_saturated)
         return;
-    queue_a_codec_task(GC::captures(*this, codec_generation), [](VideoDecoder& self, u64& codec_generation) {
-        if (codec_generation != self.m_codec_generation)
-            return;
 
-        // 1. Assign false to [[codec saturated]].
-        self.m_codec_saturated = false;
+    // 1. Assign false to [[codec saturated]].
+    m_codec_saturated = false;
 
-        // 2. Process the control message queue.
-        self.process_control_message_queue();
-    });
+    // 2. Process the control message queue.
+    process_control_message_queue();
 }
 
 // https://w3c.github.io/webcodecs/#process-the-control-message-queue
