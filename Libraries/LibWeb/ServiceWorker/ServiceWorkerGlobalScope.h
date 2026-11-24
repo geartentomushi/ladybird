@@ -40,10 +40,14 @@ public:
 
     GC::Ref<WebIDL::Promise> skip_waiting();
 
+    GC::Ref<Clients> clients();
     GC::Ref<ServiceWorkerRegistration> registration();
     GC::Ref<ServiceWorker> service_worker();
 
     void set_up_service_worker(HTML::ServiceWorkerRegistrationSnapshot const&);
+
+    // https://w3c.github.io/ServiceWorker/#dfn-active-worker
+    bool is_active_worker() const;
 
     // Runs a step of the service worker's lifecycle that its registration asked for from another agent.
     void run_lifecycle_step(HTML::ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
@@ -58,6 +62,7 @@ private:
     void did_finish_install(bool succeeded);
 
     GC::Ptr<CookieStore::CookieStore> m_cookie_store;
+    GC::Ptr<Clients> m_clients;
 
     // NB: The service worker registration and the service worker live in the agent of the client that registered the
     //     service worker. This agent keeps its own copy of both, which follows the lifecycle steps run on it.
