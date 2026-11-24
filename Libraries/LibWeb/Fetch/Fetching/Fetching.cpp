@@ -2617,8 +2617,6 @@ GC::Ref<PendingResponse> http_network_or_cache_fetch(JS::Realm& realm, Infrastru
         if (fetch_params.loader_config().enable_global_privacy_control && !http_request->header_list()->contains("Sec-GPC"sv))
             http_request->header_list()->append({ "Sec-GPC"sv, "1"sv });
 
-        append_user_agent_client_hints_for_request(*http_request, fetch_params.loader_config());
-
         // 21. If includeCredentials is true, then:
         if (include_credentials == HTTP::Cookie::IncludeCredentials::Yes) {
             // 1. If the user agent is not configured to block cookies for httpRequest (see section 7 of [COOKIES]),
@@ -2665,6 +2663,8 @@ GC::Ref<PendingResponse> http_network_or_cache_fetch(JS::Realm& realm, Infrastru
         WebDriver::BiDi::apply_network_request_header_overrides(*http_fetch_params);
         if (WebDriver::BiDi::network_configuration_enabled())
             WebDriver::BiDi::apply_network_extra_headers(*http_fetch_params);
+
+        append_user_agent_client_hints_for_request(*http_request, fetch_params.loader_config());
 
         // 23. Set httpCache to the result of determining the HTTP cache partition, given httpRequest.
         http_cache = determine_the_http_cache_partition(*http_request);
