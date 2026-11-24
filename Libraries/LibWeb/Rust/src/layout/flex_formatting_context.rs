@@ -2302,6 +2302,18 @@ impl<'pass> FlexFormattingContext<'pass> {
 
     /// The alignment along the cross axis of a box styled `style`.
     fn cross_alignment_of(&self, style: StyleValues<'_>) -> SelfAlignment {
+        let mut alignment = self.resolved_cross_alignment_of(style);
+        // NB: Last baseline computes to its fallback alignment, safe self-end, but a flex item participates in
+        //     last-baseline alignment instead.
+        if self.aligns_by_last_baseline(style) {
+            alignment.position = SelfPosition::Baseline;
+            alignment.safety = OverflowSafety::Default;
+        }
+        alignment
+    }
+
+    /// The computed alignment along the cross axis of a box styled `style`, resolved against the cross axis.
+    fn resolved_cross_alignment_of(&self, style: StyleValues<'_>) -> SelfAlignment {
         // AD-HOC: The items of a legacy webkit box align as its -webkit-box-align says, whatever their align-self and
         //         its safety are, and the box's align-items doesn't apply, matching other engines.
         let (keyword, safety) = if self.is_legacy_webkit_box() {
@@ -2318,20 +2330,13 @@ impl<'pass> FlexFormattingContext<'pass> {
             style.direction(),
             self.cross_axis_is_horizontal(),
         );
-        let mut alignment = keyword.resolve(
+        keyword.resolve(
             safety,
             AxisDirections {
                 self_start_is_low,
                 ..self.container.cross_axis_directions
             },
-        );
-        // NB: Last baseline computes to its fallback alignment, safe self-end, but a flex item participates in
-        //     last-baseline alignment instead.
-        if self.aligns_by_last_baseline(style) {
-            alignment.position = SelfPosition::Baseline;
-            alignment.safety = OverflowSafety::Default;
-        }
-        alignment
+        )
     }
 
     /// The flex-start side of the cross axis.
@@ -3003,7 +3008,14 @@ impl<'pass> FlexFormattingContext<'pass> {
             let half_line = self.flex_lines[line_index].cross_size / 2;
             for item_position in 0..self.flex_lines[line_index].items.len() {
                 let index = self.flex_lines[line_index].items.at(item_position);
-                let alignment = self.flex_items[index].alignment_facts.alignment;
+                // NB: An item that can't participate in last-baseline alignment uses its fallback alignment.
+                let alignment = if self.item_aligns_by_last_baseline(index)
+                    && !self.item_participates_in_baseline_alignment(index)
+                {
+                    self.resolved_cross_alignment_of(self.flex_item_details[index].inputs.style)
+                } else {
+                    self.flex_items[index].alignment_facts.alignment
+                };
                 let item = &self.flex_items[index];
                 // The offsets are from the center of the line, toward the physical right or bottom.
                 let at_physical_start = -half_line + item.margins.cross_before + item.borders_and_padding.cross_before;
