@@ -5852,7 +5852,7 @@ impl<'pass> GridFormattingContext<'pass> {
                 constraints,
             ));
         }
-        if self.minimum_size(item, Axis::Row).is_length_percentage() {
+        if !self.minimum_size(item, Axis::Row).is_auto() {
             size = size.max(sizing.calculate_inner_size_for_property(
                 sized,
                 Axis::Row.sizing_axis(),
