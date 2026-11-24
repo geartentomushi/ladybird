@@ -7,7 +7,9 @@
 #pragma once
 
 #include <LibWeb/Bindings/ServiceWorker.h>
+#include <AK/RefPtr.h>
 #include <LibWeb/DOM/EventTarget.h>
+#include <LibWeb/ServiceWorker/ServiceWorkerRecord.h>
 
 #define ENUMERATE_SERVICE_WORKER_EVENT_HANDLERS(E)  \
     E(onstatechange, HTML::EventNames::statechange) \
@@ -40,7 +42,7 @@ private:
     ServiceWorker(ServiceWorkerRecord*);
 
     ServiceWorkerState m_state { ServiceWorkerState::Parsed };
-    ServiceWorkerRecord* m_service_worker_record;
+    RefPtr<ServiceWorkerRecord> m_service_worker_record;
 };
 
 }
