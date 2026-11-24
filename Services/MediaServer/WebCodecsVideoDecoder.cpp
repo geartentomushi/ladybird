@@ -54,10 +54,16 @@ void WebCodecsVideoDecoder::flush(u64 flush_id)
 
 void WebCodecsVideoDecoder::stop()
 {
-    MutexLocker locker { m_mutex };
-    m_stopped = true;
-    m_commands.clear();
-    m_condition.broadcast();
+    {
+        MutexLocker locker { m_mutex };
+        m_stopped = true;
+        m_commands.clear();
+        m_condition.broadcast();
+    }
+
+    // NB: The decode thread may drop the last reference to us, so destroy the callbacks, and the connection references
+    //     they hold, here on the main thread.
+    m_callbacks = {};
 }
 
 template<typename Callback>
