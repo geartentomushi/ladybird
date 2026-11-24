@@ -1,0 +1,3 @@
+Frame: 16x16
+texImage2D error: 0
+Texel is red: true
