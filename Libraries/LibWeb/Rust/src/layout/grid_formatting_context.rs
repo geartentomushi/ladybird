@@ -4083,7 +4083,10 @@ impl<'pass> GridFormattingContext<'pass> {
             if self.grid_item_is_subgridded(item, axis) {
                 result.extend(self.subgrid_item_contributions_to_track_sizing(item, axis));
             } else {
-                let shim = baseline_shims.as_ref().and_then(|shims| shims[index]).unwrap_or_default();
+                let shim = baseline_shims
+                    .as_ref()
+                    .and_then(|shims| shims[index])
+                    .unwrap_or_default();
                 result.push(self.shimmed_item_contribution(item, axis, track_count, shim));
             }
         }
@@ -5729,10 +5732,7 @@ impl<'pass> GridFormattingContext<'pass> {
         let mut baselines = vec![None; self.items.len()];
         let mut shared_baselines = Vec::<Option<CssPixels>>::new();
         for (index, item) in self.items.iter().copied().enumerate() {
-            if !self.item_participates_in_row_baseline_alignment(item)
-                || self.item_aligns_by_last_baseline(item)
-                || !self.item_contributes_to_track_sizing(item, Axis::Row)
-            {
+            if !self.item_participates_in_row_baseline_alignment(item) || self.item_aligns_by_last_baseline(item) {
                 continue;
             }
             let Ok(row) = usize::try_from(item.row) else {
@@ -5744,7 +5744,10 @@ impl<'pass> GridFormattingContext<'pass> {
             }
             let shared = &mut shared_baselines[row];
             *shared = Some(shared.map_or(baseline, |shared| shared.max(baseline)));
-            baselines[index] = Some((row, baseline));
+            // NB: An item that does not contribute to track sizing still shares its row's baseline.
+            if self.item_contributes_to_track_sizing(item, Axis::Row) {
+                baselines[index] = Some((row, baseline));
+            }
         }
         baselines
             .into_iter()
