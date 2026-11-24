@@ -724,6 +724,7 @@ set(SOURCES
     Selection/SelectionModifier.cpp
     ServiceWorker/Cache.cpp
     ServiceWorker/CacheStorage.cpp
+    ServiceWorker/Clients.cpp
     ServiceWorker/EventNames.cpp
     ServiceWorker/ExtendableEvent.cpp
     ServiceWorker/Job.cpp
