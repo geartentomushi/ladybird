@@ -3823,7 +3823,9 @@ impl<'context> InlineFormattingContext<'context> {
             .line_boxes
             .last()
             .map(line_box::LineBoxData::retained_metrics);
-        let baselines = formatting_context::derive_baselines_from_lines(&self.line_data.get_mut().line_boxes);
+        let containing_style = self.style(self.containing_block);
+        let baselines =
+            formatting_context::derive_baselines_from_lines(&self.line_data.get_mut().line_boxes, containing_style);
         // https://drafts.csswg.org/css2/#adjoining-margins
         // - no line boxes, no clearance, no padding and no border separate them (Note that certain zero-height line boxes
         //   (see 9.4.2) are ignored for this purpose.)

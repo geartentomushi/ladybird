@@ -3148,6 +3148,15 @@ impl<'pass> FlexFormattingContext<'pass> {
         self.flex_item_details[index].inputs.style.writing_mode() != writing_mode::HORIZONTAL_TB
     }
 
+    /// Whether the item at `index` has no baselines across the container's block axis, which the container's own
+    /// baselines lie across, whichever of its axes that is.
+    fn item_lacks_baseline_across_block_axis(&self, index: usize) -> bool {
+        if self.run.pass.frame.is_transposed() {
+            return self.item_establishes_orthogonal_flow(index);
+        }
+        self.item_baseline_is_synthesized(index)
+    }
+
     fn item_establishes_orthogonal_flow(&self, index: usize) -> bool {
         self.flex_item_details[index].inputs.establishes_orthogonal_flow
     }
@@ -4711,7 +4720,7 @@ impl<'pass> FlexFormattingContext<'pass> {
             }
         }
 
-        if self.item_baseline_is_synthesized(item) {
+        if self.item_lacks_baseline_across_block_axis(item) {
             formatting_context::ChildBaselineSource::Synthesized
         } else {
             formatting_context::ChildBaselineSource::OwnOrSynthesized

@@ -715,6 +715,20 @@ pub(crate) fn box_baseline_with_content_baselines(
     baseline_set: BaselineSet,
     content_baselines: DerivedBaselines,
 ) -> CssPixels {
+    box_baseline_with_content_dominant_baselines(pass, box_, metrics, baseline_set, content_baselines, false)
+}
+
+/// With `central`, the box aligns by its central baseline rather than its alphabetic one, which matters only where it
+/// synthesizes its baseline: content gives the baselines lines align by, which are central ones in a vertical
+/// typographic mode.
+fn box_baseline_with_content_dominant_baselines(
+    pass: &LayoutPass<'_>,
+    box_: Node,
+    metrics: &impl BoxMetricCells,
+    baseline_set: BaselineSet,
+    content_baselines: DerivedBaselines,
+    central: bool,
+) -> CssPixels {
     let facts = NodeFacts::new(pass, box_);
     let style = StyleValues::for_node(pass, box_);
     let collapsed = metrics.uses_collapsing_borders_model();
@@ -831,7 +845,12 @@ pub(crate) fn box_baseline_with_content_baselines(
         return metrics.margin_box_top(collapsed) + metrics.content_block_size();
     }
 
-    // If the box has no baseline set, the bottom margin edge of the box is metrics.
+    // https://drafts.csswg.org/css-inline-3/#baseline-synthesis-box
+    // A box with no baseline set synthesizes its alphabetic baseline at its line-under margin edge, and its central
+    // baseline halfway between its line-over and line-under margin edges.
+    if central {
+        return metrics.margin_box_block_size(collapsed) / 2;
+    }
     metrics.margin_box_block_size(collapsed)
 }
 
@@ -854,6 +873,26 @@ pub(crate) fn inline_box_baseline(
         BaselineSet::Last,
         content_baselines,
         BaselinePurpose::InlineAlignment,
+        false,
+    )
+}
+
+/// The central baseline of `box_`, an atomic inline on a line whose dominant baseline is the central one.
+/// https://drafts.csswg.org/css-inline-3/#alignment-baseline-property
+pub(crate) fn inline_box_central_baseline(
+    pass: &LayoutPass<'_>,
+    box_: Node,
+    metrics: &impl BoxMetricCells,
+    content_baselines: DerivedBaselines,
+) -> CssPixels {
+    box_baseline_for_purpose(
+        pass,
+        box_,
+        metrics,
+        BaselineSet::Last,
+        content_baselines,
+        BaselinePurpose::InlineAlignment,
+        true,
     )
 }
 
@@ -864,6 +903,7 @@ fn box_baseline_for_purpose(
     mut baseline_set: BaselineSet,
     mut content_baselines: DerivedBaselines,
     purpose: BaselinePurpose,
+    central: bool,
 ) -> CssPixels {
     if purpose == BaselinePurpose::InlineAlignment {
         let facts = NodeFacts::new(pass, box_);
@@ -888,7 +928,7 @@ fn box_baseline_for_purpose(
             _ => content_baselines.last = content_baselines.inline_alignment.or(content_baselines.last),
         }
     }
-    box_baseline_with_content_baselines(pass, box_, metrics, baseline_set, content_baselines)
+    box_baseline_with_content_dominant_baselines(pass, box_, metrics, baseline_set, content_baselines, central)
 }
 
 /// First and last baseline sets derived for one box, relative to its content
@@ -923,7 +963,8 @@ pub(crate) fn baselines_of_block_level_box_on_line(
 ) -> LineBaselines {
     let offset_from_margin_edge = content_block_offset - cells.margin_box_top(cells.uses_collapsing_borders_model);
     let baseline = |baseline_set, purpose| {
-        offset_from_margin_edge + box_baseline_for_purpose(pass, box_, cells, baseline_set, content_baselines, purpose)
+        offset_from_margin_edge
+            + box_baseline_for_purpose(pass, box_, cells, baseline_set, content_baselines, purpose, false)
     };
     LineBaselines {
         first: baseline(BaselineSet::First, BaselinePurpose::Container),
@@ -932,15 +973,20 @@ pub(crate) fn baselines_of_block_level_box_on_line(
     }
 }
 
-/// The baselines of `lines`, relative to the content box of the block container that holds them.
-pub(crate) fn derive_baselines_from_lines(lines: &[line_box::LineBoxData]) -> DerivedBaselines {
+/// The baselines of `lines`, relative to the content box of the block container with `style` that holds them.
+/// https://drafts.csswg.org/css-inline-3/#dominant-baseline-property
+/// NB: A line records its alphabetic baseline, but gives its container the dominant one, which boxes in an alignment
+///     context align by: in a vertical typographic mode, the central baseline.
+pub(crate) fn derive_baselines_from_lines(lines: &[line_box::LineBoxData], style: StyleValues<'_>) -> DerivedBaselines {
+    let distance_to_dominant_baseline = distance_from_alphabetic_to_dominant_baseline(style);
     let mut remaining_lines = lines.iter();
     let first = remaining_lines.find(|line| !line.is_empty()).or_else(|| lines.first());
     if let Some(first) = first {
         let last = remaining_lines.rfind(|line| !line.is_empty()).unwrap_or(first);
         let baselines_of_line = |line: &line_box::LineBoxData| {
             if !line.has_block_level_box {
-                let baseline = line.physical_vertical_end() - line.block_length + line.baseline;
+                let baseline =
+                    line.physical_vertical_end() - line.block_length + line.baseline - distance_to_dominant_baseline;
                 return LineBaselines {
                     first: baseline,
                     last: baseline,
@@ -1060,7 +1106,15 @@ pub(crate) fn baseline_of_laid_out_child_for_purpose(
     let child_offset_from_margin_edge = content_offset.y - child_metrics.margin_box_top(collapsed);
     Some(
         child_offset_from_margin_edge
-            + box_baseline_for_purpose(pass, node, child_metrics, baseline_set, content_baselines, purpose),
+            + box_baseline_for_purpose(
+                pass,
+                node,
+                child_metrics,
+                baseline_set,
+                content_baselines,
+                purpose,
+                false,
+            ),
     )
 }
 
@@ -2607,7 +2661,7 @@ fn lay_out_run_root_and_contents<'pass>(
             own_root_after_body.content_inline_size,
             own_frame.writing_mode(),
         );
-        result = result_in_parent_frame(&pass, run.box_, result, own_root_after_body, parent_frame, own_frame);
+        result = result_in_parent_frame(result, own_root_after_body, parent_frame, own_frame);
     }
     root.set(own_root_after_body.in_frame(own_frame, parent_frame));
 
@@ -2703,8 +2757,6 @@ fn lay_out_run_root_and_contents<'pass>(
             result.orthogonal_flow_baselines = orthogonal_flow_baselines(
                 shifted_baselines,
                 root_in_own_frame_left_by_run.content_block_size,
-                &pass,
-                run.box_,
                 parent_frame,
                 own_frame,
             );
@@ -2946,8 +2998,6 @@ fn body_input_in_own_frame(
 
 /// Maps what the layout of a run root's contents in its own frame found into its parent's frame.
 fn result_in_parent_frame(
-    pass: &LayoutPass<'_>,
-    root: Node,
     mut result: ChildLayoutResult,
     root_in_own_frame: used_values::RootInputCells,
     parent_frame: geometry::Frame,
@@ -2963,8 +3013,6 @@ fn result_in_parent_frame(
         result.orthogonal_flow_baselines = orthogonal_flow_baselines(
             result.baselines,
             root_in_own_frame.content_block_size,
-            pass,
-            root,
             parent_frame,
             own_frame,
         );
@@ -2989,8 +3037,6 @@ fn result_in_parent_frame(
 fn orthogonal_flow_baselines(
     baselines: DerivedBaselines,
     content_block_size: CssPixels,
-    pass: &LayoutPass<'_>,
-    root: Node,
     parent_frame: geometry::Frame,
     own_frame: geometry::Frame,
 ) -> Option<DerivedBaselines> {
@@ -2999,16 +3045,8 @@ fn orthogonal_flow_baselines(
         own_frame.side_in(geometry::Side::Top, parent_frame),
         geometry::Side::Left
     );
-    // NB: Only lines in a vertical typographic mode have a dominant baseline other than the alphabetic one, so only
-    //     then is the block whose lines give the baseline looked for.
-    let distance_to_dominant_baseline = if dominant_baseline_is_central(StyleValues::for_node(pass, root)) {
-        distance_from_alphabetic_to_dominant_baseline(style_of_first_baseline_line_root(pass, root))
-    } else {
-        CssPixels::default()
-    };
     let along_parent_horizontal_axis = |baseline: Option<CssPixels>| {
         baseline.map(|baseline| {
-            let baseline = baseline - distance_to_dominant_baseline;
             if block_start_is_left {
                 baseline
             } else {
@@ -3024,46 +3062,13 @@ fn orthogonal_flow_baselines(
     (orthogonal_flow_baselines != DerivedBaselines::default()).then_some(orthogonal_flow_baselines)
 }
 
-/// The style of the block container whose lines give `node` its first baseline: `node` itself, where its children are
-/// inline, or else the first in-flow descendant in document order that gives it baselines and has a line of content. So,
-/// the dominant baseline of text in a nested block is found from that block's font, and an empty block before it is
-/// passed over, as it gives no baseline.
-fn style_of_first_baseline_line_root<'pass>(pass: &LayoutPass<'pass>, node: Node) -> StyleValues<'pass> {
-    // NB: An explicit stack rather than recursion, as the boxes can nest arbitrarily deep.
-    let mut candidates = vec![node];
-    while let Some(current) = candidates.pop() {
-        let facts = NodeFacts::new(pass, current);
-        if !facts.is_block_container() {
-            // NB: A box that establishes another kind of formatting context gives the baselines of its own contents.
-            return StyleValues::for_node(pass, current);
-        }
-        if facts.children_are_inline() {
-            if pass
-                .children(current)
-                .any(|child| !pass.can_skip_is_anonymous_text_run(child))
-            {
-                return StyleValues::for_node(pass, current);
-            }
-            continue;
-        }
-        let first_candidate = candidates.len();
-        candidates.extend(pass.children(current).filter(|&child| {
-            NodeFacts::new(pass, child).is_box()
-                && !pass.can_skip_is_anonymous_text_run(child)
-                && child_gives_container_baselines(pass, current, child)
-        }));
-        candidates[first_candidate..].reverse();
-    }
-    StyleValues::for_node(pass, node)
-}
-
 /// How far a box's dominant baseline lies from the alphabetic baseline its lines record, toward the top of its frame.
 /// https://drafts.csswg.org/css-inline-3/#valdef-dominant-baseline-auto
 /// If in horizontal typographic mode, the dominant baseline is alphabetic. If in vertical typographic mode and
 /// text-orientation is mixed or upright, the dominant baseline is central.
 /// https://drafts.csswg.org/css-inline-3/#central
 /// central: Use the central baseline (halfway between the ascent and descent).
-fn distance_from_alphabetic_to_dominant_baseline(style: StyleValues<'_>) -> CssPixels {
+pub(crate) fn distance_from_alphabetic_to_dominant_baseline(style: StyleValues<'_>) -> CssPixels {
     if !dominant_baseline_is_central(style) {
         return CssPixels::default();
     }
@@ -3075,7 +3080,7 @@ fn distance_from_alphabetic_to_dominant_baseline(style: StyleValues<'_>) -> CssP
 }
 
 /// Whether the lines of a box with `style` have the central baseline as their dominant one, rather than the alphabetic.
-fn dominant_baseline_is_central(style: StyleValues<'_>) -> bool {
+pub(crate) fn dominant_baseline_is_central(style: StyleValues<'_>) -> bool {
     matches!(
         style.writing_mode(),
         writing_mode::VERTICAL_RL | writing_mode::VERTICAL_LR

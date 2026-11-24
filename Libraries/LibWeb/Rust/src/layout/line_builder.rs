@@ -1203,20 +1203,52 @@ impl<'builder, 'context> LineBuilder<'builder, 'context> {
                 )
             };
             let style = self.style(style_source);
-            let fragment_baseline =
-                if is_ellipsis || self.facts(node).is_text_node() || self.facts(node).is_fragmented_inline() {
-                    self.text_fragment_layout_bounds(line_index, fragment_index, style)
-                        .ascent
+            let fragment_baseline = if is_ellipsis
+                || self.facts(node).is_text_node()
+                || self.facts(node).is_fragmented_inline()
+            {
+                self.text_fragment_layout_bounds(line_index, fragment_index, style)
+                    .ascent
+            } else {
+                let box_cells = box_cells.expect("the fragment of an element item carries the cells of its box");
+                let content_baselines = content_baselines
+                    .expect("the fragment of an element item carries the content baselines of its box");
+                let parent_style = self.parent_style(style_source);
+                if self.line(line_index).fragments[fragment_index].is_atomic_inline
+                    && !self.facts(node).is_list_item_marker_box()
+                    && formatting_context::dominant_baseline_is_central(parent_style)
+                    && (!style.vertical_align_is_keyword()
+                        || matches!(
+                            style.vertical_align_keyword(),
+                            vertical_align::BASELINE | vertical_align::SUB | vertical_align::SUPER
+                        ))
+                {
+                    // https://drafts.csswg.org/css-inline-3/#alignment-baseline-property
+                    // NB: On a line whose dominant baseline is the central one, an atomic inline aligns its central
+                    //     baseline with its parent's, which lies above the alphabetic baseline the line records.
+                    let svg_reset = style.svg_reset();
+                    if svg_reset.has_alignment_baseline && svg_reset.alignment_baseline == baseline_metric::MIDDLE {
+                        // https://drafts.csswg.org/css-inline-3/#valdef-alignment-baseline-middle
+                        // middle: Uses the x-middle baselines.
+                        // FIXME: Align by the x-middle baseline, which lines don't record yet, rather than as before.
+                        formatting_context::inline_box_baseline(
+                            &self.context().pass,
+                            node,
+                            &box_cells,
+                            content_baselines,
+                        )
+                    } else {
+                        formatting_context::inline_box_central_baseline(
+                            &self.context().pass,
+                            node,
+                            &box_cells,
+                            content_baselines,
+                        ) + formatting_context::distance_from_alphabetic_to_dominant_baseline(parent_style)
+                    }
                 } else {
-                    let box_cells = box_cells.expect("the fragment of an element item carries the cells of its box");
-                    formatting_context::inline_box_baseline(
-                        &self.context().pass,
-                        node,
-                        &box_cells,
-                        content_baselines
-                            .expect("the fragment of an element item carries the content baselines of its box"),
-                    )
-                };
+                    formatting_context::inline_box_baseline(&self.context().pass, node, &box_cells, content_baselines)
+                }
+            };
             self.line_mut(line_index).fragments[fragment_index].baseline = fragment_baseline;
             if has_line_relative_aligned_subtree
                 && let Some((root, _)) = self.line_relative_aligned_subtree_root(style_source)
