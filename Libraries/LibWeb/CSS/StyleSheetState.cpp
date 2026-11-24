@@ -360,7 +360,8 @@ void StyleSheetState::remove_rule(u32 index)
     if (change_affects_only_held_rules(removed_rule)) {
         m_rule_cache = nullptr;
         invalidate_style_cache_for_style_sheet_owners(*this);
-    } else
+    }
+    else
         invalidate_owners();
     if (rule_may_affect_fonts(removed_rule))
         synchronize_fonts_after_rule_change();
