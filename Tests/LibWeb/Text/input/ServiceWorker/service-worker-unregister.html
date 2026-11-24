@@ -52,6 +52,7 @@
         }));
         await waitForState(extendedWorker, "activating");
         println(`unregister() during activation resolves with: ${await extendedRegistration.unregister()}`);
+        println(`worker state when unregister() resolves: ${extendedWorker.state}`);
         await extendedRedundant;
         println(`worker unregistered during activation: ${extendedStates.join(" -> ")}`);
 
