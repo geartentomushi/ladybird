@@ -89,6 +89,7 @@ public:
         Function<void()> on_chunk_dequeued;
     };
     u64 create_webcodecs_video_decoder(String const& codec, ReadonlyBytes description, WebCodecsVideoDecoderCallbacks);
+    size_t webcodecs_video_decoder_count() const { return m_webcodecs_video_decoders.size(); }
     void webcodecs_video_decoder_decode(u64 decoder_id, bool is_key, i64 timestamp, Optional<u64> duration, ReadonlyBytes data);
     void webcodecs_video_decoder_flush(u64 decoder_id, u64 flush_id);
     void destroy_webcodecs_video_decoder(u64 decoder_id);

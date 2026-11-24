@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    // A single 16x16 solid red VP9 key frame.
+    const keyFrame = Uint8Array.from(atob("gkmDQgAA8AD2ADgkHBhKAAAwYAAAEL//9x2v////X9/////yKsAA"), c => c.charCodeAt(0));
+
+    function decodeWithDroppedDecoder() {
+        return new Promise(resolve => {
+            const decoder = new VideoDecoder({
+                output: frame => {
+                    frame.close();
+                    resolve("decoded");
+                },
+                error: e => resolve(e.name),
+            });
+            decoder.configure({ codec: "vp09.00.10.08" });
+            decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 0, data: keyFrame }));
+            decoder.flush().catch(() => {});
+        });
+    }
+
+    asyncTest(async done => {
+        const outcomes = new Set();
+        for (let i = 0; i < 40; ++i)
+            outcomes.add(await decodeWithDroppedDecoder());
+        println(`40 decoders that were never closed: ${[...outcomes].join(", ")}`);
+        done();
+    });
+</script>
