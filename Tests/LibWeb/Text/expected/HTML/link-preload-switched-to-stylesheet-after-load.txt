@@ -1,2 +1,2 @@
 Body color after promotion: rgb(0, 128, 0)
-Stylesheet load event fired
+Stylesheet load event fired after the setter returned: true

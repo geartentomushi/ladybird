@@ -14,12 +14,14 @@
         link.href = url;
 
         link.addEventListener("load", async () => {
-            const stylesheetLoaded = new Promise(resolve => link.addEventListener("load", resolve, { once: true }));
+            let setterReturned = false;
+            const stylesheetLoaded = new Promise(resolve => {
+                link.addEventListener("load", () => resolve(setterReturned), { once: true });
+            });
             link.rel = "stylesheet";
-            await Promise.resolve();
+            setterReturned = true;
             println(`Body color after promotion: ${getComputedStyle(document.body).color}`);
-            await stylesheetLoaded;
-            println("Stylesheet load event fired");
+            println(`Stylesheet load event fired after the setter returned: ${await stylesheetLoaded}`);
             done();
         }, { once: true });
 
