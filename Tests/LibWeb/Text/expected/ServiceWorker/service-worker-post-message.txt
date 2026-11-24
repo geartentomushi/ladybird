@@ -1,3 +1,4 @@
+self.serviceWorker.postMessage() with a function throws DataCloneError
 postMessage() with a function throws DataCloneError
 worker received: {"hello":"world"}
 port received: ping

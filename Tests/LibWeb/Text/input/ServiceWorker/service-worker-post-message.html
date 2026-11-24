@@ -7,6 +7,11 @@
         const channelName = `service-worker-post-message-${runId}`;
         const workerScript = `
             const channel = new BroadcastChannel("${channelName}");
+            try {
+                self.serviceWorker.postMessage(() => {});
+            } catch (error) {
+                channel.postMessage(\`self.serviceWorker.postMessage() with a function throws \${error.name}\`);
+            }
             self.addEventListener("message", event => {
                 if (event.ports.length > 0) {
                     event.ports[0].postMessage(\`port received: \${event.data}\`);
@@ -19,12 +24,15 @@
         const scriptURL = await server.createEcho("GET", `/service-worker-post-message-${runId}.js`, { status: 200, headers: javascript, body: workerScript });
 
         const channel = new BroadcastChannel(channelName);
+        const selfPosted = new Promise(resolve => {
+            channel.onmessage = event => resolve(event.data);
+        });
+        const registration = await navigator.serviceWorker.register(scriptURL, { scope: "/" });
+        println(await selfPosted);
+        const worker = registration.installing || registration.waiting || registration.active;
         const received = new Promise(resolve => {
             channel.onmessage = event => resolve(event.data);
         });
-
-        const registration = await navigator.serviceWorker.register(scriptURL, { scope: "/" });
-        const worker = registration.installing || registration.waiting || registration.active;
 
         try {
             worker.postMessage(() => {});

@@ -8,6 +8,7 @@
 #include <LibWeb/Bindings/MessagePort.h>
 #include <LibWeb/HTML/EventNames.h>
 #include <LibWeb/HTML/MessagePort.h>
+#include <LibWeb/HTML/StructuredSerialize.h>
 #include <LibWeb/HTML/WorkerAgentParent.h>
 #include <LibWeb/ServiceWorker/ServiceWorker.h>
 
@@ -47,12 +48,16 @@ WebIDL::ExceptionOr<void> ServiceWorker::post_message(JS::Realm& realm, JS::Valu
     //     worker does. Posting to the port serializes the message and rethrows any exceptions.
     // FIXME: Dispatch an ExtendableMessageEvent whose source is a Client or ServiceWorker for the incumbent global.
     // FIXME: Run the service worker again if it is not running.
-    if (m_state == ServiceWorkerState::Redundant || !m_service_worker_record || !m_service_worker_record->agent)
-        return {};
-    auto outside_port = m_service_worker_record->agent->outside_port();
-    if (!outside_port)
-        return {};
-    return outside_port->post_message(realm, message, transfer);
+    GC::Ptr<HTML::MessagePort> outside_port;
+    if (m_state != ServiceWorkerState::Redundant && m_service_worker_record && m_service_worker_record->agent)
+        outside_port = m_service_worker_record->agent->outside_port();
+    if (outside_port)
+        return outside_port->post_message(realm, message, transfer);
+
+    // NB: Nothing delivers the message, but it is still serialized, which can throw and detaches the transferred objects.
+    // FIXME: Deliver messages that a service worker posts to its own ServiceWorker object.
+    TRY(HTML::structured_serialize_with_transfer(realm, message, transfer.span()));
+    return {};
 }
 
 // https://w3c.github.io/ServiceWorker/#dom-serviceworker-postmessage-options
