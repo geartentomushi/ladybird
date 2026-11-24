@@ -17,6 +17,10 @@
                     event.ports[0].postMessage(\`port received: \${event.data}\`);
                     return;
                 }
+                if (event.data === "reply") {
+                    event.source.postMessage("worker replied");
+                    return;
+                }
                 channel.postMessage(\`worker received: \${JSON.stringify(event.data)}\`);
             });
         `;
@@ -56,6 +60,12 @@
         });
         worker.postMessage("pong", { transfer: [optionsChannel.port2] });
         println(await optionsReplied);
+
+        const workerReplied = new Promise(resolve => {
+            navigator.serviceWorker.onmessage = event => resolve(event.data);
+        });
+        worker.postMessage("reply");
+        println(`navigator.serviceWorker received: ${await workerReplied}`);
 
         port1.close();
         optionsChannel.port1.close();
