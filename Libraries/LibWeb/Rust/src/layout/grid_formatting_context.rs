@@ -3619,7 +3619,16 @@ impl<'pass> GridFormattingContext<'pass> {
         })
     }
 
-    fn item_contribution(&self, item: GridItem, axis: Axis, combined_track_count: usize) -> ItemContribution {
+    /// The contributions of `item`, with `baseline_shim` added to them before they are limited by fixed tracks.
+    /// https://drafts.csswg.org/css-grid-2/#algo-content
+    /// Consider these “shims” as part of the items’ intrinsic size contribution for the purpose of track sizing.
+    fn shimmed_item_contribution(
+        &self,
+        item: GridItem,
+        axis: Axis,
+        combined_track_count: usize,
+        baseline_shim: CssPixels,
+    ) -> ItemContribution {
         let spanned_tracks = Self::spanned_interleaved_range(item, axis, combined_track_count);
         if !self.item_contributes_to_track_sizing(item, axis) {
             return ItemContribution {
@@ -3640,8 +3649,23 @@ impl<'pass> GridFormattingContext<'pass> {
             *min_content.get_or_init(|| self.min_content_contribution_with(item, axis, preferred_behaves_as_auto));
         let max_content =
             *max_content.get_or_init(|| self.max_content_contribution_with(item, axis, preferred_behaves_as_auto));
+        let min_content = min_content + baseline_shim;
+        let max_content = max_content + baseline_shim;
         let fixed_track_limit = std::cell::OnceCell::new();
         let grid_container_maximum_size = std::cell::OnceCell::new();
+        // NB: The shim grows the minimum contribution only as far as a fixed track limits the item's content.
+        let minimum = if baseline_shim > CssPixels::default() {
+            minimum.max(self.limited_content_contribution(
+                minimum + baseline_shim,
+                CssPixels::default(),
+                &fixed_track_limit,
+                &grid_container_maximum_size,
+                item,
+                axis,
+            ))
+        } else {
+            minimum
+        };
         let limited_min = self.limited_content_contribution(
             min_content,
             minimum,
@@ -4059,11 +4083,8 @@ impl<'pass> GridFormattingContext<'pass> {
             if self.grid_item_is_subgridded(item, axis) {
                 result.extend(self.subgrid_item_contributions_to_track_sizing(item, axis));
             } else {
-                let mut contribution = self.item_contribution(item, axis, track_count);
-                if let Some(shim) = baseline_shims.as_ref().and_then(|shims| shims[index]) {
-                    contribution.add_baseline_shim(shim);
-                }
-                result.push(contribution);
+                let shim = baseline_shims.as_ref().and_then(|shims| shims[index]).unwrap_or_default();
+                result.push(self.shimmed_item_contribution(item, axis, track_count, shim));
             }
         }
         result
@@ -6427,15 +6448,6 @@ pub(crate) struct ItemContribution {
 }
 
 impl ItemContribution {
-    /// Adds a baseline shim, which counts as part of each of the item's intrinsic size contributions.
-    fn add_baseline_shim(&mut self, shim: CssPixels) {
-        self.minimum += shim;
-        self.min_content += shim;
-        self.limited_min_content += shim;
-        self.max_content += shim;
-        self.limited_max_content += shim;
-    }
-
     fn participates_in_intrinsic_sizing(&self, tracks: &[Track<'_>], available: AvailableSize) -> bool {
         !self
             .spanned_tracks

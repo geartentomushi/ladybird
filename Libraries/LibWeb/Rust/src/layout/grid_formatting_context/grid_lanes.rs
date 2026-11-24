@@ -284,13 +284,10 @@ impl GridFormattingContext<'_> {
                 if self.grid_item_is_subgridded(item, axis) {
                     result.extend(self.subgrid_item_contributions_to_track_sizing(item, axis));
                 } else {
-                    let mut contribution = self.item_contribution(item, axis, track_count);
                     // https://drafts.csswg.org/css-grid-2/#algo-content
                     // NB: An explicitly placed item has one position, so it is shimmed as in a regular grid.
-                    if let Some(shim) = baseline_shims.as_ref().and_then(|shims| shims[index]) {
-                        contribution.add_baseline_shim(shim);
-                    }
-                    result.push(contribution);
+                    let shim = baseline_shims.as_ref().and_then(|shims| shims[index]).unwrap_or_default();
+                    result.push(self.shimmed_item_contribution(item, axis, track_count, shim));
                 }
                 continue;
             }
@@ -336,10 +333,8 @@ impl GridFormattingContext<'_> {
             for start in 0..start_count {
                 let mut placed = item;
                 placed.set_position(axis, start as i32, span);
-                let mut contribution = self.item_contribution(placed, axis, track_count);
-                if let Some(shim) = shim {
-                    contribution.add_baseline_shim(shim);
-                }
+                let contribution =
+                    self.shimmed_item_contribution(placed, axis, track_count, shim.unwrap_or_default());
                 let virtual_items = &mut groups[group_index].virtual_items;
                 match virtual_items.get_mut(start) {
                     Some(virtual_item) => {
