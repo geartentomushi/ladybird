@@ -2,9 +2,8 @@
 <script src="../../include.js"></script>
 <script>
     // The echoes are created synchronously so the iframe is in this document before it reaches the end of its load,
-    // where the load event waits for the frame's document to stop delaying it. That document starts loading an image
-    // in its own load event handler, so it is still delaying the load event when it becomes ready for post-load
-    // tasks, and its process has to tell the container again once the image is in.
+    // where the load event waits for the frame's document. That document starts loading an image
+    // in its own load event handler, which must not keep this document waiting.
     const runId = crypto.randomUUID();
 
     const createEcho = (path, options) => {
@@ -20,7 +19,7 @@
         headers: { "Content-Type": "image/png", "Cache-Control": "no-store" },
         body: "iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAD0lEQVR4nGNgaGAAIQgFAA4OAgFhGn2EAAAAAElFTkSuQmCC",
         body_encoding: "base64",
-        delay_ms: 500,
+        wait_for_unblock: runId,
     });
 
     const childPath = createEcho(`/oop-iframe-delays-container-load-${runId}`, {
@@ -29,23 +28,27 @@
         body: `<!DOCTYPE html><script>
             addEventListener("load", () => {
                 const image = new Image();
+                image.onload = () => parent.postMessage("image loaded", "*");
                 image.src = ${JSON.stringify(imagePath)};
                 document.body.append(image);
             });
         <\/script>`,
     });
 
-    const childHost = uniqueLocalhostHostname("oop-iframe-delays-container-load");
+    const childHost = uniqueLocalhostHostname("oop-iframe-post-load-image");
     document.write(`<iframe src="http://${childHost}:${location.port}${childPath}"></iframe>`);
 </script>
 <script>
     asyncTest(done => {
-        const start = performance.now();
+        window.addEventListener("message", event => {
+            if (event.data === "image loaded")
+                done();
+        });
         window.addEventListener("load", () => {
             println(`frame is remote: ${remoteFrameCount() === 1}`);
-            println(`load event waited for the frame's image: ${performance.now() - start >= 400}`);
+            println("parent loaded before releasing the frame's image");
             println(internals.dumpSiteIsolationProcessTree().trimEnd());
-            done();
+            fetch(`/unblock/${runId}`);
         });
     });
 </script>
