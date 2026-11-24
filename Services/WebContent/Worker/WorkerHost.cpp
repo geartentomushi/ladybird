@@ -9,6 +9,7 @@
 #include <LibIPC/File.h>
 #include <LibHTTP/Header.h>
 #include <LibJS/Runtime/ConsoleObject.h>
+#include <LibJS/Runtime/Promise.h>
 #include <LibWeb/Bindings/DedicatedWorkerGlobalScope.h>
 #include <LibWeb/Bindings/MessageEvent.h>
 #include <LibWeb/Bindings/ServiceWorkerGlobalScope.h>
@@ -36,6 +37,7 @@
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/Loader/ResourceLoader.h>
 #include <LibWeb/ServiceWorker/ServiceWorkerGlobalScope.h>
+#include <LibWeb/WebIDL/Promise.h>
 #include <WebContent/Worker/PageHost.h>
 #include <WebContent/Worker/WorkerHost.h>
 
@@ -370,8 +372,15 @@ void WorkerHost::run(GC::Ref<Web::Page> page, Web::HTML::TransferDataEncoder mes
                 return;
             }
         } else {
-            // FIXME: Fail to run a module service worker whose evaluation throws.
-            (void)as<Web::HTML::ModuleScript>(*script).run();
+            auto evaluation_promise = as<Web::HTML::ModuleScript>(*script).run();
+
+            // NB: Evaluation of a module without top-level await settles its promise synchronously.
+            // FIXME: Wait for the evaluation promise of a module service worker that uses top-level await.
+            if (is_service_worker && evaluation_promise) {
+                if (auto* promise = as_if<JS::Promise>(*evaluation_promise->promise()); promise && promise->state() == JS::Promise::State::Rejected) {
+                    as<WebWorker::PageHost>(page->client()).did_fail_loading_worker_script();
+                    return;
+                }
             }
         }
         protected_this->notify_script_ran();
