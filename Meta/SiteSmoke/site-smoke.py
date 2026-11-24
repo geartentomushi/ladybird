@@ -498,6 +498,8 @@ def reference_differences(reference, current):
     if reference["settings"]["viewport"] != current["settings"]["viewport"]:
         raise ValueError("The reference and Ladybird runs use different viewports")
     reference_sites = {row["url"]: row for row in reference["sites"]}
+    if set(reference_sites) != {row["url"] for row in current["sites"]}:
+        raise ValueError("The reference and Ladybird runs use different targets")
     differences = []
     for site in current["sites"]:
         expected = reference_sites.get(site["url"])
