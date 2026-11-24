@@ -540,7 +540,8 @@ void HTMLLinkElement::fetch_and_process_linked_resource(bool promoting_preload)
     cancel_pending_stylesheet_processing(UnblockRendering::No);
     ScopeGuard unblock_if_no_blocking_stylesheet = [this] {
         if (document().is_render_blocking_element(*this)
-            && ((m_relationship & Relationship::Icon) || !(m_relationship & Relationship::Stylesheet) || !m_fetch_controller || !is_potentially_render_blocking()
+            && ((m_relationship & Relationship::Icon) || !(m_relationship & Relationship::Stylesheet)
+                || (!m_fetch_controller && !m_stylesheet_processing_pending) || !is_potentially_render_blocking()
                 || !CSS::RustMediaList::parse(media()).evaluate(document())))
             unblock_rendering();
     };
