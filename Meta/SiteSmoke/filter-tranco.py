@@ -71,13 +71,16 @@ def select_domains(rows, count=100):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Select the first 100 browsable domains from Tranco snapshot 8PW6V")
+    parser = argparse.ArgumentParser(description="Select the first browsable domains from Tranco snapshot 8PW6V")
     parser.add_argument("snapshot", type=Path, help="Unmodified CSV downloaded from Tranco's snapshot URL")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--count", type=int, default=100, help="Number of browsable domains to select")
     args = parser.parse_args()
+    if args.count < 1:
+        parser.error("Require a positive --count")
     try:
         with args.snapshot.open(newline="") as source:
-            domains = select_domains(csv.reader(source))
+            domains = select_domains(csv.reader(source), args.count)
         with args.output.open("w", newline="") as output:
             output.write(SNAPSHOT + "\n")
             writer = csv.writer(output, lineterminator="\n")

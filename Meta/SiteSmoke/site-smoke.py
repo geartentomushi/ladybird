@@ -13,6 +13,7 @@ import os
 import re
 import runpy
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -42,6 +43,8 @@ VIEWPORT = {"width": 1280, "height": 800}
 BIDI_MAX_MESSAGE_SIZE = 8 * 1024 * 1024
 STATUSES = ("success", "timeout", "crash", "load-error", "harness-error")
 ERROR_CATEGORIES = ("not_implemented", "javascript_exception", "console_error")
+SITE_LISTS = {path.stem.removeprefix("tranco-"): path for path in sorted(HERE.glob("tranco-top-*.csv"))}
+DEFAULT_SITE_LIST = "top-100"
 
 
 class DriverError(RuntimeError):
@@ -143,15 +146,61 @@ def open_private_file(path, flags):
     return os.open(path, flags | os.O_EXCL, 0o600)
 
 
+class ChromeReference:
+    """Launches headless Chrome through ChromeDriver as a reference browser for comparisons."""
+
+    def __init__(self, chromedriver, chrome):
+        self.chromedriver = chromedriver
+        self.chrome = chrome
+        version = subprocess.run([chrome, "--version"], capture_output=True, text=True, check=True).stdout
+        match = re.search(r"\b(\d+)\.\d+\.\d+\.\d+\b", version)
+        if not match:
+            raise DriverError(f"Cannot read the Chrome version from: {version.strip()}")
+        self.user_agent = (
+            "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) "
+            f"Chrome/{match[1]}.0.0.0 Safari/537.36"
+        )
+
+    def command(self, port, profile):
+        return [self.chromedriver, f"--port={port}", "--allowed-ips=127.0.0.1"]
+
+    def capabilities(self, profile):
+        return {
+            "browserName": "chrome",
+            "goog:chromeOptions": {
+                "binary": str(self.chrome),
+                "args": [
+                    "--headless=new",
+                    "--no-first-run",
+                    "--no-default-browser-check",
+                    "--disable-gpu",
+                    "--hide-scrollbars",
+                    f"--user-data-dir={profile}",
+                    f"--user-agent={self.user_agent}",
+                ],
+            },
+        }
+
+
+def unused_port():
+    with contextlib.closing(socket.socket()) as listener:
+        listener.bind(("127.0.0.1", 0))
+        return listener.getsockname()[1]
+
+
 @contextlib.contextmanager
 def launch_driver(executable, directory, log_path, processes):
     with tempfile.TemporaryDirectory(prefix="profile-", dir=directory) as temporary:
         profile = Path(temporary) / "profile"
         with open(log_path, "wb", opener=open_private_file) as log:
-            process = processes.start(
-                [executable, "--headless", "--force-cpu-painting", "--port", "0", "--profile-path", profile],
-                log,
-            )
+            if isinstance(executable, ChromeReference):
+                port = unused_port()
+                command = executable.command(port, profile)
+            else:
+                port = None
+                command = [executable, "--headless", "--force-cpu-painting", "--port", "0", "--profile-path", profile]
+            process = processes.start(command, log)
+            process.fixed_port = port
             try:
                 yield process, profile
             finally:
@@ -168,6 +217,12 @@ def launch_driver(executable, directory, log_path, processes):
 
 def webdriver_port(process, log_path):
     deadline = time.monotonic() + COMMAND_TIMEOUT
+    if process.fixed_port is not None:
+        while time.monotonic() < deadline and process.poll() is None:
+            with contextlib.suppress(OSError), socket.create_connection(("127.0.0.1", process.fixed_port), 0.2):
+                return process.fixed_port
+            time.sleep(0.05)
+        raise DriverError(f"WebDriver did not start (exit status: {process.poll()}); see {log_path}")
     with log_path.open("rb") as startup_log:
         while time.monotonic() < deadline and process.poll() is None:
             position = startup_log.tell()
@@ -182,9 +237,10 @@ def webdriver_port(process, log_path):
     raise DriverError(f"WebDriver did not start (exit status: {process.poll()}); see {log_path}")
 
 
-def open_session(port):
+def open_session(port, extra_capabilities=None):
     with contextlib.closing(http.client.HTTPConnection("127.0.0.1", port, timeout=COMMAND_TIMEOUT)) as client:
-        payload = json.dumps({"capabilities": {"alwaysMatch": {"webSocketUrl": True}}})
+        capabilities = {"webSocketUrl": True, **(extra_capabilities or {})}
+        payload = json.dumps({"capabilities": {"alwaysMatch": capabilities}})
         client.request("POST", "/session", payload, {"Content-Type": "application/json"})
         response = client.getresponse()
         value = json.load(response)["value"]
@@ -265,6 +321,15 @@ def sample_render(bidi, context, row, image_path, errors):
             row["body_element_count"] = result["result"]["value"]
     except errors as error:
         row["dom_error"] = str(error)
+    params["expression"] = (
+        "document.documentElement ? "
+        "[document.documentElement.scrollWidth, document.documentElement.scrollHeight].join('x') : ''"
+    )
+    with contextlib.suppress(*errors):
+        result = bidi.command("script.evaluate", params)
+        if result["type"] == "success" and result["result"]["type"] == "string" and result["result"]["value"]:
+            width, height = map(int, result["result"]["value"].split("x"))
+            row["document_size"] = {"width": width, "height": height}
     screenshot = bidi.command("browsingContext.captureScreenshot", {"context": context})
     data = base64.b64decode(screenshot["data"], validate=True)
     with open(image_path, "wb", opener=open_private_file) as image:
@@ -292,7 +357,10 @@ def capture(executable, directory, site, timeout, settle, processes=None):
     errors = (DriverError, OSError, WebSocketException, http.client.HTTPException)
     try:
         with launch_driver(executable, directory, log_path, processes or DriverProcesses()) as (process, profile):
-            endpoint = open_session(webdriver_port(process, log_path))
+            endpoint = open_session(
+                webdriver_port(process, log_path),
+                executable.capabilities(profile) if isinstance(executable, ChromeReference) else None,
+            )
             with connect(
                 endpoint,
                 proxy=None,
@@ -419,6 +487,48 @@ def compare(baseline, current):
                 changes.append({"url": url, "metric": metric, "direction": direction, "before": old, "after": new})
     changes.extend({"url": url, "metric": "coverage", "direction": "removed"} for url in old_sites)
     return changes
+
+
+def is_size_outlier(reference, value, factor=2):
+    return reference > 0 and (value * factor < reference or value > reference * factor)
+
+
+def reference_differences(reference, current):
+    """List sites where Ladybird's result differs from a reference browser that loaded the site successfully."""
+    if reference["settings"]["viewport"] != current["settings"]["viewport"]:
+        raise ValueError("The reference and Ladybird runs use different viewports")
+    reference_sites = {row["url"]: row for row in reference["sites"]}
+    differences = []
+    for site in current["sites"]:
+        expected = reference_sites.get(site["url"])
+        if expected is None or expected["status"] != "success" or site["status"] == "harness-error":
+            continue
+
+        def add(metric, before, after, site=site):
+            differences.append(
+                {"rank": site["rank"], "url": site["url"], "metric": metric, "reference": before, "ladybird": after}
+            )
+
+        if site["status"] != "success":
+            add("status", "success", site["status"])
+            continue
+        expected_count, count = expected["body_element_count"], site["body_element_count"]
+        if expected_count and count is not None and (count == 0 or is_large_body_drop(expected_count, count)):
+            add("body_element_count", expected_count, count)
+        expected_size, size = expected.get("document_size"), site.get("document_size")
+        if expected_size and size:
+            for dimension in ("width", "height"):
+                if is_size_outlier(expected_size[dimension], size[dimension]):
+                    add(f"document_{dimension}", expected_size[dimension], size[dimension])
+        if expected["console_errors"] is not None and site["console_errors"] is not None:
+            extra = sum(site["console_errors"].values()) - sum(expected["console_errors"].values())
+            if extra >= 5:
+                add(
+                    "total_console_errors",
+                    sum(expected["console_errors"].values()),
+                    sum(site["console_errors"].values()),
+                )
+    return differences
 
 
 def is_http_url(url):
@@ -574,10 +684,10 @@ def resolve_webdriver(path):
     return path
 
 
-def targets(urls):
+def targets(urls, site_list=DEFAULT_SITE_LIST):
     if urls:
         return "custom", list(enumerate(urls, start=1))
-    with (HERE / "tranco-top-100.csv").open(newline="") as snapshot:
+    with SITE_LISTS[site_list].open(newline="") as snapshot:
         source = snapshot.readline().removeprefix("# ").strip()
         return source, [(int(row["rank"]), f"https://{row['domain']}/") for row in csv.DictReader(snapshot)]
 
@@ -694,7 +804,7 @@ def write_json_atomically(output, data):
         Path(name).unlink(missing_ok=True)
 
 
-def run_ci(ladybird, output):
+def run_ci(ladybird, output, site_list=DEFAULT_SITE_LIST):
     if not ladybird.is_absolute() or not output.is_absolute():
         raise ValueError("--ladybird and --output must be absolute paths")
     if not ladybird.is_file() or not os.access(ladybird, os.X_OK):
@@ -719,11 +829,13 @@ def run_ci(ladybird, output):
             "unreported",
             "--output",
             str(details),
+            "--list",
+            site_list,
         ],
     )
     if status not in (0, 1):
         raise ValueError(f"Site smoke harness exited {status}; see {details}")
-    _, sites = targets(None)
+    _, sites = targets(None, site_list)
     results_file = details / "results.json"
     try:
         rows = json.loads(results_file.read_text())["sites"]
@@ -827,6 +939,8 @@ def run_gate(args, output, baseline):
             str(settings["navigation_timeout_s"]),
             "--settle",
             str(settings["settle_s"]),
+            "--list",
+            args.list,
         ],
     )
     try:
@@ -862,12 +976,16 @@ def main():
     )
     commands = parser.add_subparsers(dest="command", required=True)
     run = commands.add_parser("run", help="Capture a smoke run")
-    run.add_argument("--webdriver", type=Path, required=True, help="Built Ladybird WebDriver executable")
+    driver = run.add_mutually_exclusive_group(required=True)
+    driver.add_argument("--webdriver", type=Path, help="Built Ladybird WebDriver executable")
+    driver.add_argument("--chromedriver", type=Path, help="ChromeDriver for a headless Chrome reference run")
+    run.add_argument("--chrome", type=Path, help="Chrome executable matching --chromedriver")
     run.add_argument("--revision", required=True, help="Revision or build label for the supplied executable")
     run.add_argument(
         "--output", type=Path, required=True, help="New directory for results, screenshots and driver logs"
     )
     run.add_argument("--url", action="append", help="Use these URLs instead of the pinned list (repeatable)")
+    run.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
     run.add_argument("--jobs", type=int, default=4)
     run.add_argument("--timeout", type=float, default=25, help="Per-site navigation deadline in seconds")
     run.add_argument("--settle", type=float, default=2, help="Seconds to observe before taking each screenshot")
@@ -882,7 +1000,8 @@ def main():
         "gate", help="Build and run the LibWeb, LibJS, and pinned site regression checks (Linux)"
     )
     gate.add_argument("--output", type=Path, required=True)
-    gate.add_argument("--baseline", type=Path, default=HERE / "baseline.json")
+    gate.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
+    gate.add_argument("--baseline", type=Path, help="Baseline results (default: the pinned list's baseline)")
     gate.add_argument("--baseline-webdriver", type=Path, help="Baseline WebDriver for paired reruns")
     gate.add_argument("--cc", help="C compiler passed to Meta/ladybird.py")
     gate.add_argument("--cxx", help="C++ compiler passed to Meta/ladybird.py")
@@ -892,10 +1011,32 @@ def main():
     ci = commands.add_parser("ci", help="Run without building and emit the compact CI results")
     ci.add_argument("--ladybird", type=Path, required=True, help="Absolute path to Ladybird, next to WebDriver")
     ci.add_argument("--output", type=Path, required=True, help="Absolute path to the compact results JSON")
+    ci.add_argument("--list", choices=SITE_LISTS, default=DEFAULT_SITE_LIST, help="Pinned site list to run")
+    reference = commands.add_parser("reference", help="List differences from a reference browser run")
+    reference.add_argument("reference", type=Path, help="Results from a --chromedriver run")
+    reference.add_argument("current", type=Path, help="Ladybird results for the same sites")
+    reference.add_argument("--json", action="store_true", help="Print the differences as JSON")
     args = parser.parse_args()
+    if args.command == "reference":
+        try:
+            differences = reference_differences(
+                json.loads(args.reference.read_text()), json.loads(args.current.read_text())
+            )
+        except (KeyError, OSError, ValueError) as error:
+            reference.error(str(error))
+        if args.json:
+            print(json.dumps(differences, indent=2))
+        else:
+            print(f"Differences: {len(differences)}")
+            for difference in differences:
+                print(
+                    f"{difference['rank']:3d} {difference['url']} {difference['metric']}: "
+                    f"{difference['reference']} → {difference['ladybird']}"
+                )
+        return 0
     if args.command == "ci":
         try:
-            return run_ci(args.ladybird, args.output)
+            return run_ci(args.ladybird, args.output, args.list)
         except (OSError, ValueError) as error:
             ci.error(str(error))
     if args.command == "compare":
@@ -936,8 +1077,11 @@ def main():
         try:
             if args.baseline_webdriver is not None:
                 args.baseline_webdriver = resolve_webdriver(args.baseline_webdriver)
+            if args.baseline is None:
+                name = "baseline.json" if args.list == DEFAULT_SITE_LIST else f"baseline-{args.list}.json"
+                args.baseline = HERE / name
             baseline = json.loads(args.baseline.read_text())
-            source, sites = targets(None)
+            source, sites = targets(None, args.list)
             if (
                 baseline["schema_version"] != 1
                 or baseline["site_list"] != source
@@ -946,7 +1090,7 @@ def main():
                 or baseline["settings"]["viewport"] != VIEWPORT
             ):
                 raise ValueError(
-                    "The gate needs a complete baseline for the pinned top-100 list without harness errors"
+                    f"The gate needs a complete baseline for the pinned {args.list} list without harness errors"
                 )
             output = prepare_output(args.output)
         except (KeyError, OSError, ValueError) as error:
@@ -960,19 +1104,26 @@ def main():
             run.error(f"Require an HTTP(S) URL without credentials: {url}")
     if args.url and len(set(args.url)) != len(args.url):
         run.error("Each --url must be unique")
-    executable = args.webdriver.resolve()
-    if not executable.is_file() or not os.access(executable, os.X_OK):
-        run.error(f"Not an executable: {executable}")
+    if (args.chrome is None) != (args.chromedriver is None):
+        run.error("--chrome and --chromedriver must be supplied together")
+    try:
+        if args.chromedriver is not None:
+            executable = ChromeReference(resolve_webdriver(args.chromedriver), resolve_webdriver(args.chrome))
+        else:
+            executable = resolve_webdriver(args.webdriver)
+    except (DriverError, OSError, ValueError, subprocess.CalledProcessError) as error:
+        run.error(str(error))
     if connect is None:
         run.error("Install `websockets` as pinned in requirements.txt")
     try:
         output = prepare_output(args.output)
     except (OSError, ValueError) as error:
         run.error(str(error))
-    source, sites = targets(args.url)
+    source, sites = targets(args.url, args.list)
     result = {
         "schema_version": 1,
         "revision": args.revision,
+        "browser": "chrome" if isinstance(executable, ChromeReference) else "ladybird",
         "started_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "site_list": source,
         "settings": {
