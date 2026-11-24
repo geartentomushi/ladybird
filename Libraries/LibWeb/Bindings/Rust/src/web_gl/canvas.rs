@@ -25,6 +25,7 @@ pub(crate) enum TexImageSourceKind {
     HTMLImageElement,
     HTMLCanvasElement,
     OffscreenCanvas,
+    VideoFrame,
 }
 
 unsafe extern "C" {

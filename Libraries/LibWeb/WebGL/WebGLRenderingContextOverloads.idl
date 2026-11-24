@@ -3,9 +3,8 @@ typedef (ImageBitmap or
          HTMLImageElement or
          HTMLCanvasElement or
          HTMLVideoElement or
-         OffscreenCanvas
-         // FIXME: VideoFrame
-         ) TexImageSource;
+         OffscreenCanvas or
+         VideoFrame) TexImageSource;
 
 typedef (Int32Array or sequence<GLint>) Int32List;
 

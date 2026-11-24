@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<script src="../include.js"></script>
+<script>
+    // A single 16x16 solid red H.264 key frame, in Annex B format.
+    const keyFrame = Uint8Array.from(atob("AAAAAWdCwB7ZHsBEAAADAAQAAAMACDxYuSAAAAABaMuDyyAAAAEGBf//bNxF6b3m2Ui3lizYINkj7u94MjY0IC0gY29yZSAxNjMgcjMwNjAgNWRiNmFhNiAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMjEgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0wIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDE6MHgxMTEgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTAgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz0xIGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MCB3ZWlnaHRwPTAga2V5aW50PTI1MCBrZXlpbnRfbWluPTEgc2NlbmVjdXQ9NDAgaW50cmFfcmVmcmVzaD0wIHJjX2xvb2thaGVhZD00MCByYz1jcmYgbWJ0cmVlPTEgY3JmPTIzLjAgcWNvbXA9MC42MCBxcG1pbj0wIHFwbWF4PTY5IHFwc3RlcD00IGlwX3JhdGlvPTEuNDAgYXE9MToxLjAwAIAAAAFliIQFfEYoAAuMxwABOhjgADYNgA=="), c => c.charCodeAt(0));
+
+    asyncTest(async done => {
+        const frames = [];
+        const decoder = new VideoDecoder({
+            output: frame => frames.push(frame),
+            error: e => println(`Decoder error: ${e.name}`),
+        });
+        decoder.configure({ codec: "avc1.42c01e" });
+        decoder.decode(new EncodedVideoChunk({ type: "key", timestamp: 0, data: keyFrame }));
+        await decoder.flush();
+        const frame = frames[0];
+        println(`Frame: ${frame.codedWidth}x${frame.codedHeight}`);
+
+        const canvas = document.createElement("canvas");
+        const gl = canvas.getContext("webgl");
+        const texture = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, frame);
+        println(`texImage2D error: ${gl.getError()}`);
+
+        gl.bindFramebuffer(gl.FRAMEBUFFER, gl.createFramebuffer());
+        gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, texture, 0);
+        const pixel = new Uint8Array(4);
+        gl.readPixels(8, 8, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+        println(`Texel is red: ${pixel[0] > 200 && pixel[1] < 60 && pixel[2] < 60 && pixel[3] === 255}`);
+
+        frame.close();
+        decoder.close();
+        done();
+    });
+</script>

@@ -23,6 +23,7 @@
 #include <LibWeb/HTML/WindowOrWorkerGlobalScope.h>
 #include <LibWeb/Loader/ResourceLoader.h>
 #include <LibWeb/Page/Page.h>
+#include <LibWeb/WebCodecs/VideoFrame.h>
 #include <LibWeb/WebGL/WebGL2RenderingContext.h>
 #include <LibWeb/WebGL/WebGLRenderingContext.h>
 #include <LibWeb/WebGL/WebGLRenderingContextBase.h>
@@ -46,6 +47,7 @@ enum class TexImageSourceKind : u8 {
     HTMLImageElement,
     HTMLCanvasElement,
     OffscreenCanvas,
+    VideoFrame,
 };
 
 }
@@ -212,6 +214,12 @@ Gfx::DecodedImageFrame* web_webgl_texture_image_frame(void* source_wrapper, TexI
         break;
     case TexImageSourceKind::OffscreenCanvas:
         frame = Bindings::impl_from<HTML::OffscreenCanvas>(wrapper).get_srgb_frame_from_surface();
+        break;
+    case TexImageSourceKind::VideoFrame:
+        if (auto bitmap = Bindings::impl_from<WebCodecs::VideoFrame>(wrapper).bitmap()) {
+            if (auto video_frame = Gfx::DecodedImageFrame::create(*bitmap); !video_frame.is_error())
+                frame = video_frame.release_value();
+        }
         break;
     }
     // FIXME: Respect unpackColorSpace

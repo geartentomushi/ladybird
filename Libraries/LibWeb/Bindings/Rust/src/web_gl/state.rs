@@ -400,6 +400,10 @@ impl ContextState {
             TexImageSource::HTMLVideoElement(object) => format_and_type_upload_images
                 .then(|| capture_video_frame(object).map(Frame::Video))
                 .flatten(),
+            // FIXME: A closed VideoFrame should throw an InvalidStateError rather than upload nothing.
+            TexImageSource::VideoFrame(object) => format_and_type_upload_images
+                .then(|| texture_image_frame(object, TexImageSourceKind::VideoFrame).map(Frame::Image))
+                .flatten(),
         };
         if tex_image_source_is_not_origin_clean(source) {
             return Err(Exception::Dom(
@@ -517,5 +521,7 @@ fn tex_image_source_is_not_origin_clean(source: &TexImageSource) -> bool {
         }
         TexImageSource::HTMLVideoElement(object) => CanvasImageSourceKind::HTMLVideoElement.is_not_origin_clean(object),
         TexImageSource::OffscreenCanvas(object) => CanvasImageSourceKind::OffscreenCanvas.is_not_origin_clean(object),
+        // NB: The only VideoFrames are those a VideoDecoder outputs, and decoded chunks are always origin-clean.
+        TexImageSource::VideoFrame(_) => false,
     }
 }

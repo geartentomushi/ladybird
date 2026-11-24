@@ -27,7 +27,6 @@ use crate::html::image_bitmap::ImageBitmap;
 use crate::html::image_data::ImageData;
 
 /// https://registry.khronos.org/webgl/specs/latest/1.0/#5.14.8
-// FIXME: VideoFrame
 pub(crate) enum TexImageSource {
     ImageBitmap(Ref<ImageBitmap>),
     ImageData(Ref<ImageData>),
@@ -35,6 +34,7 @@ pub(crate) enum TexImageSource {
     HTMLCanvasElement(CppInterface),
     HTMLVideoElement(CppInterface),
     OffscreenCanvas(CppInterface),
+    VideoFrame(CppInterface),
 }
 
 pub(crate) enum Int32List {
