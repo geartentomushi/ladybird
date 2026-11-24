@@ -255,6 +255,30 @@ impl GridFormattingContext<'_> {
         //     their own groups, since track sizing treats their contributions differently.
         let mut groups: Vec<ItemGroup> = Vec::new();
         let baseline_shims = (!axis.is_column()).then(|| self.row_baseline_shims());
+        // NB: An auto-placed item can land in any track, so it shares its baseline with the items of its group.
+        let auto_placed_baselines: Vec<Option<CssPixels>> = self
+            .items
+            .iter()
+            .map(|&item| {
+                (!axis.is_column()
+                    && item.is_auto_placed_in_grid_lanes
+                    && self.item_participates_in_row_baseline_alignment(item)
+                    && !self.item_aligns_by_last_baseline(item)
+                    && self.item_contributes_to_track_sizing(item, Axis::Row))
+                .then(|| self.item_row_baseline_for_track_sizing(item))
+            })
+            .collect();
+        let mut shared_auto_placed_baselines: Vec<((usize, bool), CssPixels)> = Vec::new();
+        for (index, &item) in self.items.iter().enumerate() {
+            let Some(baseline) = auto_placed_baselines[index] else {
+                continue;
+            };
+            let key = (item.span(axis), self.item_facts(item).is_scroll_container());
+            match shared_auto_placed_baselines.iter_mut().find(|(group, _)| *group == key) {
+                Some((_, shared)) => *shared = (*shared).max(baseline),
+                None => shared_auto_placed_baselines.push((key, baseline)),
+            }
+        }
         for (index, item) in self.items.iter().copied().enumerate() {
             if !item.is_auto_placed_in_grid_lanes {
                 if self.grid_item_is_subgridded(item, axis) {
@@ -287,6 +311,14 @@ impl GridFormattingContext<'_> {
                 continue;
             }
             let is_scroll_container = self.item_facts(item).is_scroll_container();
+            let shim = auto_placed_baselines[index]
+                .and_then(|baseline| {
+                    shared_auto_placed_baselines
+                        .iter()
+                        .find(|(group, _)| *group == (span, is_scroll_container))
+                        .map(|(_, shared)| *shared - baseline)
+                })
+                .filter(|shim| *shim > CssPixels::default());
             let group_index = match groups
                 .iter()
                 .position(|group| group.span == span && group.is_scroll_container == is_scroll_container)
@@ -304,7 +336,10 @@ impl GridFormattingContext<'_> {
             for start in 0..start_count {
                 let mut placed = item;
                 placed.set_position(axis, start as i32, span);
-                let contribution = self.item_contribution(placed, axis, track_count);
+                let mut contribution = self.item_contribution(placed, axis, track_count);
+                if let Some(shim) = shim {
+                    contribution.add_baseline_shim(shim);
+                }
                 let virtual_items = &mut groups[group_index].virtual_items;
                 match virtual_items.get_mut(start) {
                     Some(virtual_item) => {
