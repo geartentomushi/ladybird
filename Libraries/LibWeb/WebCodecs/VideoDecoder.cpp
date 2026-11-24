@@ -8,6 +8,7 @@
 #include <AK/Array.h>
 #include <AK/CharacterTypes.h>
 #include <LibGC/Heap.h>
+#include <LibGC/RootVector.h>
 #include <LibJS/Runtime/ArrayBuffer.h>
 #include <LibMediaClient/Client.h>
 #include <LibWeb/Bindings/Wrappable.h>
@@ -488,11 +489,14 @@ void VideoDecoder::reset_video_decoder(GC::Ref<WebIDL::DOMException> exception)
     }
 
     // 6. For each promise in [[pending flush promises]]:
-    auto pending_flush_promises = move(m_pending_flush_promises);
+    GC::RootVector<GC::Ref<WebIDL::Promise>> pending_flush_promises;
+    for (auto const& pending_flush : m_pending_flush_promises)
+        pending_flush_promises.append(pending_flush.promise);
+    m_pending_flush_promises.clear();
     update_pending_flush_keep_alive();
-    for (auto& pending_flush : pending_flush_promises) {
+    for (auto& promise : pending_flush_promises) {
         // 1. Reject promise with exception.
-        WebIDL::reject_promise(*pending_flush.promise, exception);
+        WebIDL::reject_promise(promise, exception);
 
         // 2. Remove promise from [[pending flush promises]].
     }
