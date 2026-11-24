@@ -713,11 +713,8 @@ def linked_ladybird_libraries(executable, environment):
     return libraries
 
 
-def build_library_paths(driver):
-    driver = resolve_webdriver(driver)
-    environment = os.environ | {"LC_ALL": "C"}
-    # LibWebView's helper-process environment does not forward dynamic-loader overrides.
-    helper_environment = {name: value for name, value in environment.items() if not name.startswith("LD_")}
+def build_executables(driver):
+    yield "WebDriver", driver
     libexec = driver.parent.parent / "libexec"
     for name in ("Ladybird", "WebContent", "Hub", "ImageDecoder"):
         for directory in (libexec, driver.parent):
@@ -728,23 +725,49 @@ def build_library_paths(driver):
             if name in ("Hub", "ImageDecoder"):
                 continue
             raise ValueError(f"Cannot find {name} alongside {driver} or in {libexec}")
-        libraries = linked_ladybird_libraries(
+        yield name, executable
+
+
+def build_library_paths(executables):
+    environment = os.environ | {"LC_ALL": "C"}
+    # LibWebView's helper-process environment does not forward dynamic-loader overrides.
+    helper_environment = {name: value for name, value in environment.items() if not name.startswith("LD_")}
+    for name, executable in executables:
+        yield from linked_ladybird_libraries(
             executable.resolve(), helper_environment if name in ("WebContent", "ImageDecoder") else environment
         )
-        yield from libraries
-    yield from linked_ladybird_libraries(driver, environment)
+
+
+def same_build_file(baseline, candidate):
+    try:
+        return baseline.samefile(candidate)
+    except FileNotFoundError:
+        return baseline.resolve() == candidate.resolve()
 
 
 def validate_baseline_build(baseline, candidate_build):
     try:
         baseline = resolve_webdriver(baseline)
-        candidate_build = candidate_build.resolve()
-        libraries = list(build_library_paths(baseline))
-    except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+        executables = []
+        for name, path in build_executables(baseline):
+            for directory in ("bin", "libexec"):
+                candidate = candidate_build / directory / name
+                if same_build_file(path, candidate):
+                    raise ValueError(
+                        contaminated_baseline(
+                            f"the baseline's {name} is the same file as candidate output: {candidate}"
+                        )
+                    )
+            executables.append((name, path))
+        for name, path in build_library_paths(executables):
+            for filename in (name, path.name):
+                candidate = candidate_build / "lib" / filename
+                if same_build_file(path, candidate):
+                    raise ValueError(
+                        contaminated_baseline(f"the baseline resolves {name} to candidate output: {candidate}")
+                    )
+    except (OSError, subprocess.TimeoutExpired) as error:
         raise ValueError(f"Cannot verify baseline libraries: {error}. {BASELINE_GUIDANCE}") from error
-    for name, path in libraries:
-        if path.is_relative_to(candidate_build):
-            raise ValueError(contaminated_baseline(f"the baseline resolves {name} into the candidate build: {path}"))
     return baseline
 
 
@@ -761,7 +784,7 @@ def validate_build_pair(baseline, candidate):
 
     def libraries_by_identity(driver):
         libraries = {}
-        for name, path in build_library_paths(driver):
+        for name, path in build_library_paths(build_executables(driver)):
             info = path.stat()
             libraries[(info.st_dev, info.st_ino)] = (name, path)
         return libraries

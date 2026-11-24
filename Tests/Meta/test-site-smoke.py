@@ -682,16 +682,19 @@ class SiteSmokeTests(unittest.TestCase):
                 )
 
     @unittest.skipUnless(sys.platform == "linux", "requires Linux shared-library checks")
-    def test_gate_preflight_inspects_only_the_baseline_and_refuses_candidate_libraries(self):
+    def test_gate_preflight_accepts_nested_snapshot_but_refuses_candidate_library_inode(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             candidate = root / "Build/release"
             (candidate / "bin").mkdir(parents=True)
             (candidate / "bin/WebDriver").touch(mode=0o755)
-            before = root / "baseline/WebDriver"
-            before.parent.mkdir()
+            before = candidate / "snapshot/bin/WebDriver"
+            before.parent.mkdir(parents=True)
             before.touch(mode=0o755)
+            for name in ("Ladybird", "WebContent"):
+                before.with_name(name).touch(mode=0o755)
             path = before.parent / "liblagom-web.so.0"
+            path.touch()
             paths = Mock(return_value=[(path.name, path)])
             run_gate = Mock(return_value=0)
             argv = ["site-smoke.py", "gate", "--baseline-webdriver", str(before), "--output", str(root / "output")]
@@ -704,14 +707,45 @@ class SiteSmokeTests(unittest.TestCase):
                 contextlib.redirect_stderr(io.StringIO()) as errors,
             ):
                 self.assertEqual(smoke.main(), 0)
-                paths.assert_called_once_with(before)
+                paths.assert_called_once_with(
+                    [
+                        ("WebDriver", before),
+                        ("Ladybird", before.with_name("Ladybird")),
+                        ("WebContent", before.with_name("WebContent")),
+                    ]
+                )
                 run_gate.assert_called_once()
-                paths.return_value = [(path.name, candidate / "lib" / path.name)]
+                (candidate / "lib").mkdir()
+                os.link(path, candidate / "lib" / path.name)
                 with self.assertRaises(SystemExit) as failure:
                     smoke.main()
             self.assertEqual(failure.exception.code, 2)
-            self.assertIn("the baseline resolves liblagom-web.so.0 into the candidate build", errors.getvalue())
+            self.assertIn("the baseline resolves liblagom-web.so.0 to candidate output", errors.getvalue())
             run_gate.assert_called_once()
+
+    def test_gate_preflight_refuses_static_candidate_output_executable(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            candidate = root / "candidate"
+            baseline = root / "baseline"
+            (candidate / "bin").mkdir(parents=True)
+            (baseline / "bin").mkdir(parents=True)
+            for directory in (candidate / "bin", baseline / "bin"):
+                for name in ("WebDriver", "Ladybird", "WebContent", "Hub"):
+                    (directory / name).touch(mode=0o755)
+            driver = baseline / "bin/WebDriver"
+            paths = Mock(return_value=[])
+            with patch.dict(smoke.validate_baseline_build.__globals__, {"build_library_paths": paths}):
+                self.assertEqual(smoke.validate_baseline_build(driver, candidate), driver)
+                with self.assertRaisesRegex(
+                    ValueError, "the baseline's WebDriver is the same file as candidate output"
+                ):
+                    smoke.validate_baseline_build(candidate / "bin/WebDriver", candidate)
+                (baseline / "bin/Hub").unlink()
+                os.link(candidate / "bin/Hub", baseline / "bin/Hub")
+                with self.assertRaisesRegex(ValueError, "the baseline's Hub is the same file as candidate output"):
+                    smoke.validate_baseline_build(driver, candidate)
+            paths.assert_called_once()
 
     def test_gate_stops_after_build_when_build_pair_is_contaminated(self):
         args = SimpleNamespace(cc=None, cxx=None, build_jobs=None, baseline_webdriver=Path("baseline/WebDriver"))
