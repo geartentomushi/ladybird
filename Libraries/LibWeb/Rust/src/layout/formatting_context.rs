@@ -783,15 +783,17 @@ pub(crate) fn box_baseline_with_content_baselines(
     // baseline-source is auto (the initial value) a block-level or inline-level block container that is a scroll
     // container always has a last baseline set, whose baselines all correspond to its block-end margin edge". First
     // baseline sets always derive from content; so do flex and grid containers, which are not block containers.
-    // FIXME: Per CSS Align, a scroll container's content-derived baseline position should be clamped to its border
-    //        edge.
+    // NB: That exception covers block-level and inline-level boxes, not flex and grid items, whose baselines a scroll
+    //     container derives from its content like any other box's.
     // AD-HOC: A box with button layout derives its baselines from its content even when its overflow makes it a
     //         scroll container, rather than taking its block-end margin edge, so that a button with overflow: hidden
     //         sits on the line by the text it shows, as pages expect.
     //         https://html.spec.whatwg.org/multipage/rendering.html#button-layout
+    let is_flex_or_grid_item = facts.parent_is_flex_or_grid_container() && !facts.is_absolutely_positioned();
     let derive_baseline_from_content = baseline_set == BaselineSet::First
         || style.baseline_source() != crate::css::css_enums::baseline_source::AUTO
         || is_flex_or_grid_container
+        || is_flex_or_grid_item
         || facts.uses_button_layout()
         || !facts.is_scroll_container();
 
@@ -812,8 +814,8 @@ pub(crate) fn box_baseline_with_content_baselines(
         // https://drafts.csswg.org/css-align-3/#baseline-export
         // "if the position of a scroll container's first/last baseline is outside its border edge, that baseline's
         // position is clamped to the border edge."
-        // NB: Only a button takes a scroll container's baseline from its content here.
-        if facts.uses_button_layout() && facts.is_scroll_container() {
+        // FIXME: Clamp the content-derived baselines of other scroll containers, such as inline-blocks, too.
+        if (facts.uses_button_layout() || is_flex_or_grid_item) && facts.is_scroll_container() {
             let border_box_top = metrics.margin_top();
             let border_box_bottom = border_box_top + metrics.border_box_block_size(collapsed);
             return baseline.max(border_box_top).min(border_box_bottom);
