@@ -5,18 +5,24 @@
  */
 
 #include <LibGC/Heap.h>
+#include <LibJS/Runtime/NativeFunction.h>
 #include <LibWeb/CookieStore/CookieStore.h>
+#include <LibWeb/DOM/EventTarget.h>
+#include <LibWeb/DOM/IDLEventListener.h>
 #include <LibWeb/HTML/EventLoop/EventLoop.h>
+#include <LibWeb/HTML/EventNames.h>
 #include <LibWeb/HTML/Scripting/Environments.h>
 #include <LibWeb/HighResolutionTime/TimeOrigin.h>
 #include <LibWeb/Page/Page.h>
 #include <LibWeb/ServiceWorker/EventNames.h>
 #include <LibWeb/ServiceWorker/ExtendableEvent.h>
+#include <LibWeb/ServiceWorker/ExtendableMessageEvent.h>
 #include <LibWeb/ServiceWorker/Job.h>
 #include <LibWeb/ServiceWorker/ServiceWorker.h>
 #include <LibWeb/ServiceWorker/ServiceWorkerGlobalScope.h>
 #include <LibWeb/ServiceWorker/ServiceWorkerRegistration.h>
 #include <LibWeb/StorageAPI/StorageKey.h>
+#include <LibWeb/WebIDL/CallbackType.h>
 
 namespace Web::ServiceWorker {
 
@@ -34,6 +40,7 @@ void ServiceWorkerGlobalScope::visit_edges(Cell::Visitor& visitor)
     Base::visit_edges(visitor);
 
     visitor.visit(m_cookie_store);
+    visitor.visit(m_message_event_relay);
 }
 
 // https://w3c.github.io/ServiceWorker/#dom-serviceworkerglobalscope-oninstall
@@ -233,6 +240,43 @@ void ServiceWorkerGlobalScope::run_lifecycle_step(HTML::ServiceWorkerLifecycleSt
         // FIXME: Time out events that are extended for too long.
         event->wait_for_extend_lifetime_promises(realm, on_complete);
     }));
+}
+
+// https://w3c.github.io/ServiceWorker/#dom-serviceworker-postmessage-message-options (step 6)
+GC::Ref<DOM::EventTarget> ServiceWorkerGlobalScope::message_event_relay()
+{
+    if (m_message_event_relay)
+        return *m_message_event_relay;
+
+    // NB: The inside port fires MessageEvents. The service worker fires functional events named message and
+    //     messageerror using ExtendableMessageEvent instead, so the relay fires one for each MessageEvent it receives.
+    auto& realm = this->realm();
+    m_message_event_relay = DOM::EventTarget::create();
+    for (auto const& event_name : { HTML::EventNames::message, HTML::EventNames::messageerror }) {
+        auto listener_function = JS::NativeFunction::create(
+            realm, GC::create_function(GC::Heap::the(), GC::captures(*this, event_name), [](ServiceWorkerGlobalScope& self, Utf16FlyString& event_name, JS::VM& vm) -> JS::ThrowCompletionOr<JS::Value> {
+                auto& message_event = vm.argument(0).as_object();
+
+                // 1. Let e be the result of creating an event named message, using ExtendableMessageEvent.
+                // 2. Initialize e's data, origin, source and ports from the message.
+                // FIXME: Make the source a Client, and the origin the origin of the client that posted the message.
+                ExtendableMessageEvent::Init init;
+                init.data = TRY(message_event.get(JS::PropertyKey { "data"_utf16_fly_string }));
+                init.origin = HTML::relevant_settings_object(self).origin().serialize();
+                init.source = TRY(message_event.get(JS::PropertyKey { "source"_utf16_fly_string }));
+                init.ports = TRY(message_event.get(JS::PropertyKey { "ports"_utf16_fly_string }));
+                auto event = ExtendableMessageEvent::create(self.realm(), event_name, init);
+                event->set_is_trusted(true);
+
+                // 3. Dispatch e at the service worker's global object.
+                self.dispatch_event(event);
+                return JS::js_undefined();
+            }),
+            0, Utf16FlyString {}, &realm);
+        auto callback = GC::Heap::the().allocate<WebIDL::CallbackType>(*listener_function, realm);
+        m_message_event_relay->add_event_listener_without_options(event_name, *DOM::IDLEventListener::create(*callback));
+    }
+    return *m_message_event_relay;
 }
 
 }

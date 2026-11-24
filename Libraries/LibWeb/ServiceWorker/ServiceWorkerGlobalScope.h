@@ -45,6 +45,10 @@ public:
 
     void set_up_service_worker(HTML::ServiceWorkerRegistrationSnapshot const&);
 
+    // The message event target of the service worker's inside port. It fires the messages that arrive there at this
+    // global as ExtendableMessageEvents.
+    GC::Ref<DOM::EventTarget> message_event_relay();
+
     // Runs a step of the service worker's lifecycle that its registration asked for from another agent.
     void run_lifecycle_step(HTML::ServiceWorkerLifecycleStep, GC::Ref<GC::Function<void(bool succeeded)>> on_complete);
 
@@ -58,6 +62,7 @@ private:
     void did_finish_install(bool succeeded);
 
     GC::Ptr<CookieStore::CookieStore> m_cookie_store;
+    GC::Ptr<DOM::EventTarget> m_message_event_relay;
 
     // NB: The service worker registration and the service worker live in the agent of the client that registered the
     //     service worker. This agent keeps its own copy of both, which follows the lifecycle steps run on it.
